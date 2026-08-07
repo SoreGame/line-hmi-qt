@@ -25,21 +25,126 @@
   <property name="windowTitle">
    <string>Панель управления линией · SCARA HMI</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">QMainWindow { background:#EEF0F3; }</string>
+  </property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="QLabel" name="screenLabel">
+   <widget class="QWidget" name="bgRoot">
     <property name="geometry">
      <rect>
-      <x>50</x>
-      <y>-130</y>
+      <x>0</x>
+      <y>0</y>
       <width>1920</width>
       <height>1080</height>
      </rect>
     </property>
-    <property name="scaledContents">
-     <bool>true</bool>
+    <property name="styleSheet">
+     <string notr="true">background:#EEF0F3;</string>
+    </property>
+   </widget>
+   <widget class="QFrame" name="headerBar">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>0</y>
+      <width>1920</width>
+      <height>72</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#FFFFFF; border:none; border-bottom:1px solid #DBDEE3;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::NoFrame</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelTitle">
+    <property name="geometry">
+     <rect>
+      <x>24</x>
+      <y>22</y>
+      <width>304</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Панель управления линией</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:18px; font-weight:600;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="statusReady">
+    <property name="geometry">
+     <rect>
+      <x>344</x>
+      <y>20</y>
+      <width>157</width>
+      <height>33</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●  Готовность · OK</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#EDF7F0; border:1px solid #59AD6B; border-radius:16px; color:#2E8C47; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:12px; font-weight:600; padding-left:10px;</string>
     </property>
     <property name="alignment">
-     <set>Qt::AlignmentFlag::AlignCenter</set>
+     <set>Qt::AlignmentFlag::AlignVCenter|Qt::AlignmentFlag::AlignLeft</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="statusPlc">
+    <property name="geometry">
+     <rect>
+      <x>999</x>
+      <y>20</y>
+      <width>108</width>
+      <height>33</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●  ПЛК · OK</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#EDF7F0; border:1px solid #59AD6B; border-radius:16px; color:#2E8C47; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:12px; font-weight:600; padding-left:10px;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignVCenter|Qt::AlignmentFlag::AlignLeft</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="statusRobot">
+    <property name="geometry">
+     <rect>
+      <x>1117</x>
+      <y>20</y>
+      <width>120</width>
+      <height>33</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●  Робот · OK</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#EDF7F0; border:1px solid #59AD6B; border-radius:16px; color:#2E8C47; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:12px; font-weight:600; padding-left:10px;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignVCenter|Qt::AlignmentFlag::AlignLeft</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelClock">
+    <property name="geometry">
+     <rect>
+      <x>1735</x>
+      <y>25</y>
+      <width>43</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>13:11</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:16px; font-weight:600;</string>
     </property>
    </widget>
    <widget class="QPushButton" name="btnAdmin">
@@ -51,17 +156,950 @@
       <height>40</height>
      </rect>
     </property>
+    <property name="text">
+     <string>Админ</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton{background:#FFFFFF; color:#1F2126; border:1px solid #DBDEE3; border-radius:8px; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px; font-weight:600;} QPushButton:pressed{background:#F0F2F5;}</string>
+    </property>
     <property name="cursor">
      <cursorShape>PointingHandCursor</cursorShape>
     </property>
     <property name="focusPolicy">
      <enum>Qt::FocusPolicy::NoFocus</enum>
     </property>
-    <property name="text">
-     <string/>
+   </widget>
+   <widget class="QFrame" name="panelCameras">
+    <property name="geometry">
+     <rect>
+      <x>12</x>
+      <y>84</y>
+      <width>380</width>
+      <height>610</height>
+     </rect>
     </property>
-    <property name="flat">
+    <property name="styleSheet">
+     <string notr="true">background:#FFFFFF; border:1px solid #DBDEE3; border-radius:10px;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelCamerasTitle">
+    <property name="geometry">
+     <rect>
+      <x>22</x>
+      <y>94</y>
+      <width>200</width>
+      <height>15</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Камеры CV · 16:9</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:12px; font-weight:600;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelCvPosTitle">
+    <property name="geometry">
+     <rect>
+      <x>22</x>
+      <y>117</y>
+      <width>200</width>
+      <height>13</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Позиционирование</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="imgCvPosition">
+    <property name="geometry">
+     <rect>
+      <x>22</x>
+      <y>134</y>
+      <width>360</width>
+      <height>202</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>OK                    13:10:52
+
+
+        16:9</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#1A1D22; border:1px solid #2A2F36; border-radius:8px; color:#8B9098;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignTop|Qt::AlignmentFlag::AlignLeft</set>
+    </property>
+    <property name="scaledContents">
      <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelCvOutTitle">
+    <property name="geometry">
+     <rect>
+      <x>22</x>
+      <y>344</y>
+      <width>200</width>
+      <height>13</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Контроль выдачи</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="imgCvOutput">
+    <property name="geometry">
+     <rect>
+      <x>22</x>
+      <y>361</y>
+      <width>360</width>
+      <height>202</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>OK                    13:10:52
+
+
+        16:9</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#1A1D22; border:1px solid #2A2F36; border-radius:8px; color:#8B9098;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignTop|Qt::AlignmentFlag::AlignLeft</set>
+    </property>
+    <property name="scaledContents">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QFrame" name="panelSchema">
+    <property name="geometry">
+     <rect>
+      <x>404</x>
+      <y>84</y>
+      <width>1092</width>
+      <height>610</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#FFFFFF; border:1px solid #DBDEE3; border-radius:10px;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelSchemaTitle">
+    <property name="geometry">
+     <rect>
+      <x>414</x>
+      <y>94</y>
+      <width>200</width>
+      <height>15</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Схема линии</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:12px; font-weight:600;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelFlow">
+    <property name="geometry">
+     <rect>
+      <x>1380</x>
+      <y>95</y>
+      <width>106</width>
+      <height>13</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Поток: Бункер 1 + 2</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:11px;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignVCenter</set>
+    </property>
+   </widget>
+   <widget class="QFrame" name="bunker1">
+    <property name="geometry">
+     <rect>
+      <x>454</x>
+      <y>137</y>
+      <width>200</width>
+      <height>64</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#EDF7F0; border:2px solid #59AD6B; border-radius:8px;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="bunker1Title">
+    <property name="geometry">
+     <rect>
+      <x>464</x>
+      <y>159</y>
+      <width>90</width>
+      <height>19</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Б  Бункер 1</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-weight:600; font-size:13px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="bunker1Led">
+    <property name="geometry">
+     <rect>
+      <x>601</x>
+      <y>163</y>
+      <width>43</width>
+      <height>12</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>● Готов</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QFrame" name="bunker2">
+    <property name="geometry">
+     <rect>
+      <x>850</x>
+      <y>137</y>
+      <width>200</width>
+      <height>64</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#EDF7F0; border:2px solid #59AD6B; border-radius:8px;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="bunker2Title">
+    <property name="geometry">
+     <rect>
+      <x>860</x>
+      <y>159</y>
+      <width>90</width>
+      <height>19</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Б  Бункер 2</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-weight:600; font-size:13px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="bunker2Led">
+    <property name="geometry">
+     <rect>
+      <x>997</x>
+      <y>163</y>
+      <width>43</width>
+      <height>12</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>● Готов</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QFrame" name="bunker3">
+    <property name="geometry">
+     <rect>
+      <x>1246</x>
+      <y>137</y>
+      <width>200</width>
+      <height>64</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#F3F4F6; border:2px solid #C5C9D0; border-radius:8px;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="bunker3Title">
+    <property name="geometry">
+     <rect>
+      <x>1256</x>
+      <y>159</y>
+      <width>90</width>
+      <height>19</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Б  Бункер 3</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-weight:600; font-size:13px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="bunker3Led">
+    <property name="geometry">
+     <rect>
+      <x>1362</x>
+      <y>163</y>
+      <width>74</width>
+      <height>12</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>● Не в потоке</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QFrame" name="lineB1Down">
+    <property name="geometry">
+     <rect>
+      <x>552</x>
+      <y>201</y>
+      <width>3</width>
+      <height>26</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#8C949E; border:none;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::NoFrame</enum>
+    </property>
+   </widget>
+   <widget class="QFrame" name="lineB2Down">
+    <property name="geometry">
+     <rect>
+      <x>948</x>
+      <y>201</y>
+      <width>3</width>
+      <height>26</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#8C949E; border:none;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::NoFrame</enum>
+    </property>
+   </widget>
+   <widget class="QFrame" name="lineB3Down">
+    <property name="geometry">
+     <rect>
+      <x>1344</x>
+      <y>201</y>
+      <width>2</width>
+      <height>26</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#C5C9D0; border:none;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::NoFrame</enum>
+    </property>
+   </widget>
+   <widget class="QFrame" name="lineB1B2">
+    <property name="geometry">
+     <rect>
+      <x>554</x>
+      <y>226</y>
+      <width>396</width>
+      <height>3</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#8C949E; border:none;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::NoFrame</enum>
+    </property>
+   </widget>
+   <widget class="QFrame" name="lineB2B3">
+    <property name="geometry">
+     <rect>
+      <x>950</x>
+      <y>226</y>
+      <width>396</width>
+      <height>2</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#C5C9D0; border:none;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::NoFrame</enum>
+    </property>
+   </widget>
+   <widget class="QFrame" name="lineRailRobot">
+    <property name="geometry">
+     <rect>
+      <x>908</x>
+      <y>227</y>
+      <width>3</width>
+      <height>50</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#8C949E; border:none;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::NoFrame</enum>
+    </property>
+   </widget>
+   <widget class="QFrame" name="lineRobotWeld">
+    <property name="geometry">
+     <rect>
+      <x>1090</x>
+      <y>350</y>
+      <width>20</width>
+      <height>3</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#8C949E; border:none;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::NoFrame</enum>
+    </property>
+   </widget>
+   <widget class="QFrame" name="lineRobotOut">
+    <property name="geometry">
+     <rect>
+      <x>908</x>
+      <y>427</y>
+      <width>3</width>
+      <height>40</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#8C949E; border:none;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::NoFrame</enum>
+    </property>
+   </widget>
+   <widget class="QFrame" name="lineOutRail">
+    <property name="geometry">
+     <rect>
+      <x>830</x>
+      <y>466</y>
+      <width>220</width>
+      <height>3</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#8C949E; border:none;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::NoFrame</enum>
+    </property>
+   </widget>
+   <widget class="QFrame" name="lineToOk">
+    <property name="geometry">
+     <rect>
+      <x>828</x>
+      <y>467</y>
+      <width>3</width>
+      <height>30</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#8C949E; border:none;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::NoFrame</enum>
+    </property>
+   </widget>
+   <widget class="QFrame" name="lineToNg">
+    <property name="geometry">
+     <rect>
+      <x>1048</x>
+      <y>467</y>
+      <width>3</width>
+      <height>30</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#8C949E; border:none;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::NoFrame</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelFeed">
+    <property name="geometry">
+     <rect>
+      <x>918</x>
+      <y>231</y>
+      <width>89</width>
+      <height>15</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>подача · Б1+Б2</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QFrame" name="nodeRobot">
+    <property name="geometry">
+     <rect>
+      <x>730</x>
+      <y>277</y>
+      <width>360</width>
+      <height>150</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#EDF7F0; border:2px solid #59AD6B; border-radius:10px;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="nodeRobotTitle">
+    <property name="geometry">
+     <rect>
+      <x>742</x>
+      <y>287</y>
+      <width>120</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Р  Робот</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-size:16px; font-weight:700;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="nodeRobotState">
+    <property name="geometry">
+     <rect>
+      <x>1035</x>
+      <y>291</y>
+      <width>50</width>
+      <height>13</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Готов</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:12px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="subCtrl">
+    <property name="geometry">
+     <rect>
+      <x>742</x>
+      <y>323</y>
+      <width>80</width>
+      <height>35</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●
+Ctrl</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:11px;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignHCenter|Qt::AlignmentFlag::AlignTop</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="subBehaviour">
+    <property name="geometry">
+     <rect>
+      <x>827</x>
+      <y>323</y>
+      <width>80</width>
+      <height>35</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●
+Behaviour</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:11px;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignHCenter|Qt::AlignmentFlag::AlignTop</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="subVision1">
+    <property name="geometry">
+     <rect>
+      <x>912</x>
+      <y>323</y>
+      <width>80</width>
+      <height>35</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●
+Vision 1</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:11px;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignHCenter|Qt::AlignmentFlag::AlignTop</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="subVision2">
+    <property name="geometry">
+     <rect>
+      <x>997</x>
+      <y>323</y>
+      <width>80</width>
+      <height>35</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●
+Vision 2</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:11px;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignHCenter|Qt::AlignmentFlag::AlignTop</set>
+    </property>
+   </widget>
+   <widget class="QFrame" name="nodeWelding">
+    <property name="geometry">
+     <rect>
+      <x>1110</x>
+      <y>277</y>
+      <width>280</width>
+      <height>150</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#EDF7F0; border:2px solid #59AD6B; border-radius:10px;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="nodeWeldingTitle">
+    <property name="geometry">
+     <rect>
+      <x>1120</x>
+      <y>287</y>
+      <width>120</width>
+      <height>19</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>С  Сварка</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-size:15px; font-weight:700;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="nodeWeldingState">
+    <property name="geometry">
+     <rect>
+      <x>1329</x>
+      <y>290</y>
+      <width>50</width>
+      <height>12</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>● Готов</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="nodeWeldingHint">
+    <property name="geometry">
+     <rect>
+      <x>1120</x>
+      <y>312</y>
+      <width>160</width>
+      <height>12</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Давление · 5 клапанов</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="valve1">
+    <property name="geometry">
+     <rect>
+      <x>1120</x>
+      <y>330</y>
+      <width>48</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●
+К1</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:11px;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignHCenter|Qt::AlignmentFlag::AlignTop</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="valve2">
+    <property name="geometry">
+     <rect>
+      <x>1172</x>
+      <y>330</y>
+      <width>48</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●
+К2</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:11px;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignHCenter|Qt::AlignmentFlag::AlignTop</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="valve3">
+    <property name="geometry">
+     <rect>
+      <x>1224</x>
+      <y>330</y>
+      <width>48</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●
+К3</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:11px;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignHCenter|Qt::AlignmentFlag::AlignTop</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="valve4">
+    <property name="geometry">
+     <rect>
+      <x>1276</x>
+      <y>330</y>
+      <width>48</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●
+К4</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:11px;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignHCenter|Qt::AlignmentFlag::AlignTop</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="valve5">
+    <property name="geometry">
+     <rect>
+      <x>1328</x>
+      <y>330</y>
+      <width>48</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●
+К5</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:11px;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignHCenter|Qt::AlignmentFlag::AlignTop</set>
+    </property>
+   </widget>
+   <widget class="QFrame" name="basketOk">
+    <property name="geometry">
+     <rect>
+      <x>730</x>
+      <y>497</y>
+      <width>200</width>
+      <height>120</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#EDF7F0; border:2px solid #59AD6B; border-radius:10px;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="basketOkTitle">
+    <property name="geometry">
+     <rect>
+      <x>730</x>
+      <y>531</y>
+      <width>200</width>
+      <height>13</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Годные</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:12px; font-weight:600;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignHCenter</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="basketOkCount">
+    <property name="geometry">
+     <rect>
+      <x>730</x>
+      <y>551</y>
+      <width>200</width>
+      <height>34</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>1 248</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-size:28px; font-weight:700;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignHCenter</set>
+    </property>
+   </widget>
+   <widget class="QFrame" name="basketScrap">
+    <property name="geometry">
+     <rect>
+      <x>950</x>
+      <y>497</y>
+      <width>200</width>
+      <height>120</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#FDECEC; border:2px solid #C73333; border-radius:10px;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="basketScrapTitle">
+    <property name="geometry">
+     <rect>
+      <x>950</x>
+      <y>531</y>
+      <width>200</width>
+      <height>13</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Брак</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#C73333; font-size:12px; font-weight:600;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignHCenter</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="basketScrapCount">
+    <property name="geometry">
+     <rect>
+      <x>950</x>
+      <y>551</y>
+      <width>200</width>
+      <height>34</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>7</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-size:28px; font-weight:700;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignHCenter</set>
+    </property>
+   </widget>
+   <widget class="QFrame" name="panelRight">
+    <property name="geometry">
+     <rect>
+      <x>1508</x>
+      <y>84</y>
+      <width>400</width>
+      <height>610</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#FFFFFF; border:1px solid #DBDEE3; border-radius:10px;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelProgram">
+    <property name="geometry">
+     <rect>
+      <x>1520</x>
+      <y>96</y>
+      <width>100</width>
+      <height>15</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Программа</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:12px; font-weight:600;</string>
     </property>
    </widget>
    <widget class="QPushButton" name="btnProg1">
@@ -73,17 +1111,19 @@
       <height>78</height>
      </rect>
     </property>
+    <property name="text">
+     <string>Деталь 1
+Выбрано
+поток Б1+Б2</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton{background:#E6F0FF; border:2px solid #4C8CE6; border-radius:10px; text-align:center; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px; font-weight:600; color:#1F2126;}</string>
+    </property>
     <property name="cursor">
      <cursorShape>PointingHandCursor</cursorShape>
     </property>
     <property name="focusPolicy">
      <enum>Qt::FocusPolicy::NoFocus</enum>
-    </property>
-    <property name="text">
-     <string/>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
     </property>
    </widget>
    <widget class="QPushButton" name="btnProg2">
@@ -95,17 +1135,35 @@
       <height>78</height>
      </rect>
     </property>
+    <property name="text">
+     <string>Деталь 2
+Доступно
+поток Б1+Б3</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton{background:#F7F8FA; border:1px solid #DBDEE3; border-radius:10px; text-align:center; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px; font-weight:600; color:#1F2126;}</string>
+    </property>
     <property name="cursor">
      <cursorShape>PointingHandCursor</cursorShape>
     </property>
     <property name="focusPolicy">
      <enum>Qt::FocusPolicy::NoFocus</enum>
     </property>
-    <property name="text">
-     <string/>
+   </widget>
+   <widget class="QLabel" name="labelControls">
+    <property name="geometry">
+     <rect>
+      <x>1520</x>
+      <y>235</y>
+      <width>100</width>
+      <height>15</height>
+     </rect>
     </property>
-    <property name="flat">
-     <bool>true</bool>
+    <property name="text">
+     <string>Управление</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:12px; font-weight:600;</string>
     </property>
    </widget>
    <widget class="QPushButton" name="btnStart">
@@ -117,17 +1175,17 @@
       <height>68</height>
      </rect>
     </property>
+    <property name="text">
+     <string>СТАРТ</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton{background:#388F51; color:white; border:none; border-radius:10px; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:20px; font-weight:700;} QPushButton:pressed{background:#2F7A44;} QPushButton:disabled{background:#A9B0B8;}</string>
+    </property>
     <property name="cursor">
      <cursorShape>PointingHandCursor</cursorShape>
     </property>
     <property name="focusPolicy">
      <enum>Qt::FocusPolicy::NoFocus</enum>
-    </property>
-    <property name="text">
-     <string/>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
     </property>
    </widget>
    <widget class="QPushButton" name="btnPause">
@@ -139,17 +1197,17 @@
       <height>58</height>
      </rect>
     </property>
+    <property name="text">
+     <string>ПАУЗА</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton{background:#1F66B8; color:white; border:none; border-radius:10px; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:18px; font-weight:700;} QPushButton:pressed{background:#1A5699;} QPushButton:disabled{background:#A9B0B8;}</string>
+    </property>
     <property name="cursor">
      <cursorShape>PointingHandCursor</cursorShape>
     </property>
     <property name="focusPolicy">
      <enum>Qt::FocusPolicy::NoFocus</enum>
-    </property>
-    <property name="text">
-     <string/>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
     </property>
    </widget>
    <widget class="QPushButton" name="btnStop">
@@ -161,21 +1219,888 @@
       <height>58</height>
      </rect>
     </property>
+    <property name="text">
+     <string>СТОП</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton{background:#C72929; color:white; border:none; border-radius:10px; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:18px; font-weight:700;} QPushButton:pressed{background:#A82222;} QPushButton:disabled{background:#A9B0B8;}</string>
+    </property>
     <property name="cursor">
      <cursorShape>PointingHandCursor</cursorShape>
     </property>
     <property name="focusPolicy">
      <enum>Qt::FocusPolicy::NoFocus</enum>
     </property>
-    <property name="text">
-     <string/>
+   </widget>
+   <widget class="QLabel" name="labelKpi">
+    <property name="geometry">
+     <rect>
+      <x>1520</x>
+      <y>500</y>
+      <width>100</width>
+      <height>15</height>
+     </rect>
     </property>
-    <property name="flat">
-     <bool>true</bool>
+    <property name="text">
+     <string>Показатели</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:12px; font-weight:600;</string>
     </property>
    </widget>
+   <widget class="QFrame" name="kpiCycleRow">
+    <property name="geometry">
+     <rect>
+      <x>1520</x>
+      <y>525</y>
+      <width>376</width>
+      <height>35</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#F7F8FA; border:1px solid #E6E8EC; border-radius:8px;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="kpiCycleLabel">
+    <property name="geometry">
+     <rect>
+      <x>1532</x>
+      <y>534</y>
+      <width>120</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Время цикла</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="kpiCycleValue">
+    <property name="geometry">
+     <rect>
+      <x>1770</x>
+      <y>533</y>
+      <width>114</width>
+      <height>19</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>4.8 с</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-size:15px; font-weight:700;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignVCenter</set>
+    </property>
+   </widget>
+   <widget class="QFrame" name="kpiOutputRow">
+    <property name="geometry">
+     <rect>
+      <x>1520</x>
+      <y>566</y>
+      <width>376</width>
+      <height>35</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#F7F8FA; border:1px solid #E6E8EC; border-radius:8px;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="kpiOutputLabel">
+    <property name="geometry">
+     <rect>
+      <x>1532</x>
+      <y>575</y>
+      <width>120</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Выдача</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="kpiOutputValue">
+    <property name="geometry">
+     <rect>
+      <x>1770</x>
+      <y>574</y>
+      <width>114</width>
+      <height>19</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>1 248</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-size:15px; font-weight:700;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignVCenter</set>
+    </property>
+   </widget>
+   <widget class="QFrame" name="kpiScrapRow">
+    <property name="geometry">
+     <rect>
+      <x>1520</x>
+      <y>607</y>
+      <width>376</width>
+      <height>35</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#F7F8FA; border:1px solid #E6E8EC; border-radius:8px;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="kpiScrapLabel">
+    <property name="geometry">
+     <rect>
+      <x>1532</x>
+      <y>616</y>
+      <width>120</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Брак</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="kpiScrapValue">
+    <property name="geometry">
+     <rect>
+      <x>1770</x>
+      <y>615</y>
+      <width>114</width>
+      <height>19</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>7</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-size:15px; font-weight:700;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignVCenter</set>
+    </property>
+   </widget>
+   <widget class="QFrame" name="kpiUptimeRow">
+    <property name="geometry">
+     <rect>
+      <x>1520</x>
+      <y>648</y>
+      <width>376</width>
+      <height>35</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#F7F8FA; border:1px solid #E6E8EC; border-radius:8px;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="kpiUptimeLabel">
+    <property name="geometry">
+     <rect>
+      <x>1532</x>
+      <y>657</y>
+      <width>120</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Uptime</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="kpiUptimeValue">
+    <property name="geometry">
+     <rect>
+      <x>1770</x>
+      <y>656</y>
+      <width>114</width>
+      <height>19</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>03:42:15</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-size:15px; font-weight:700;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignVCenter</set>
+    </property>
+   </widget>
+   <widget class="QFrame" name="panelLog">
+    <property name="geometry">
+     <rect>
+      <x>12</x>
+      <y>706</y>
+      <width>1896</width>
+      <height>362</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background:#FFFFFF; border:1px solid #DBDEE3; border-radius:10px;</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelLog">
+    <property name="geometry">
+     <rect>
+      <x>26</x>
+      <y>718</y>
+      <width>200</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Журнал событий</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:12px; font-weight:600;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelLogScroll">
+    <property name="geometry">
+     <rect>
+      <x>1832</x>
+      <y>718</y>
+      <width>62</width>
+      <height>15</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>листать ↓</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:11px;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignRight</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logDot0">
+    <property name="geometry">
+     <rect>
+      <x>36</x>
+      <y>750</y>
+      <width>8</width>
+      <height>8</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:10px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logTime0">
+    <property name="geometry">
+     <rect>
+      <x>54</x>
+      <y>746</y>
+      <width>64</width>
+      <height>15</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>13:10:58</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logMsg0">
+    <property name="geometry">
+     <rect>
+      <x>128</x>
+      <y>746</y>
+      <width>1756</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Система готова · Деталь 1 · поток Б1+Б2</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logDot1">
+    <property name="geometry">
+     <rect>
+      <x>36</x>
+      <y>782</y>
+      <width>8</width>
+      <height>8</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:10px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logTime1">
+    <property name="geometry">
+     <rect>
+      <x>54</x>
+      <y>778</y>
+      <width>64</width>
+      <height>15</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>13:10:55</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logMsg1">
+    <property name="geometry">
+     <rect>
+      <x>128</x>
+      <y>778</y>
+      <width>1756</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Бункер 1: готов</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logDot2">
+    <property name="geometry">
+     <rect>
+      <x>36</x>
+      <y>814</y>
+      <width>8</width>
+      <height>8</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:10px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logTime2">
+    <property name="geometry">
+     <rect>
+      <x>54</x>
+      <y>810</y>
+      <width>64</width>
+      <height>15</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>13:10:55</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logMsg2">
+    <property name="geometry">
+     <rect>
+      <x>128</x>
+      <y>810</y>
+      <width>1756</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Бункер 2: готов</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logDot3">
+    <property name="geometry">
+     <rect>
+      <x>36</x>
+      <y>846</y>
+      <width>8</width>
+      <height>8</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:10px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logTime3">
+    <property name="geometry">
+     <rect>
+      <x>54</x>
+      <y>842</y>
+      <width>64</width>
+      <height>15</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>13:10:54</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logMsg3">
+    <property name="geometry">
+     <rect>
+      <x>128</x>
+      <y>842</y>
+      <width>1756</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Бункер 3 не в потоке этой программы</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logDot4">
+    <property name="geometry">
+     <rect>
+      <x>36</x>
+      <y>878</y>
+      <width>8</width>
+      <height>8</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:10px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logTime4">
+    <property name="geometry">
+     <rect>
+      <x>54</x>
+      <y>874</y>
+      <width>64</width>
+      <height>15</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>13:10:52</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logMsg4">
+    <property name="geometry">
+     <rect>
+      <x>128</x>
+      <y>874</y>
+      <width>1756</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Робот: ctrl / behaviour / vision OK</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logDot5">
+    <property name="geometry">
+     <rect>
+      <x>36</x>
+      <y>910</y>
+      <width>8</width>
+      <height>8</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:10px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logTime5">
+    <property name="geometry">
+     <rect>
+      <x>54</x>
+      <y>906</y>
+      <width>64</width>
+      <height>15</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>13:10:52</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logMsg5">
+    <property name="geometry">
+     <rect>
+      <x>128</x>
+      <y>906</y>
+      <width>1756</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Сварка: давление К1–К5 OK</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logDot6">
+    <property name="geometry">
+     <rect>
+      <x>36</x>
+      <y>942</y>
+      <width>8</width>
+      <height>8</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:10px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logTime6">
+    <property name="geometry">
+     <rect>
+      <x>54</x>
+      <y>938</y>
+      <width>64</width>
+      <height>15</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>13:10:50</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logMsg6">
+    <property name="geometry">
+     <rect>
+      <x>128</x>
+      <y>938</y>
+      <width>1756</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>CV позиционирование: кадр решения OK</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logDot7">
+    <property name="geometry">
+     <rect>
+      <x>36</x>
+      <y>974</y>
+      <width>8</width>
+      <height>8</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:10px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logTime7">
+    <property name="geometry">
+     <rect>
+      <x>54</x>
+      <y>970</y>
+      <width>64</width>
+      <height>15</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>13:10:50</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logMsg7">
+    <property name="geometry">
+     <rect>
+      <x>128</x>
+      <y>970</y>
+      <width>1756</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>CV контроль выдачи: кадр решения OK</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logDot8">
+    <property name="geometry">
+     <rect>
+      <x>36</x>
+      <y>1006</y>
+      <width>8</width>
+      <height>8</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:10px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logTime8">
+    <property name="geometry">
+     <rect>
+      <x>54</x>
+      <y>1002</y>
+      <width>64</width>
+      <height>15</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>13:08:01</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logMsg8">
+    <property name="geometry">
+     <rect>
+      <x>128</x>
+      <y>1002</y>
+      <width>1756</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Цикл #1247 завершён · 4.9 с</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logDot9">
+    <property name="geometry">
+     <rect>
+      <x>36</x>
+      <y>1038</y>
+      <width>8</width>
+      <height>8</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>●</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#2E8C47; font-size:10px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logTime9">
+    <property name="geometry">
+     <rect>
+      <x>54</x>
+      <y>1034</y>
+      <width>64</width>
+      <height>15</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>13:07:30</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:11px;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="logMsg9">
+    <property name="geometry">
+     <rect>
+      <x>128</x>
+      <y>1034</y>
+      <width>1756</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Старт цикла #1247</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:#1F2126; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px;</string>
+    </property>
+   </widget>
+   <zorder>bgRoot</zorder>
+   <zorder>headerBar</zorder>
+   <zorder>labelTitle</zorder>
+   <zorder>statusReady</zorder>
+   <zorder>statusPlc</zorder>
+   <zorder>statusRobot</zorder>
+   <zorder>labelClock</zorder>
+   <zorder>btnAdmin</zorder>
+   <zorder>panelCameras</zorder>
+   <zorder>labelCamerasTitle</zorder>
+   <zorder>labelCvPosTitle</zorder>
+   <zorder>imgCvPosition</zorder>
+   <zorder>labelCvOutTitle</zorder>
+   <zorder>imgCvOutput</zorder>
+   <zorder>panelSchema</zorder>
+   <zorder>labelSchemaTitle</zorder>
+   <zorder>labelFlow</zorder>
+   <zorder>bunker1</zorder>
+   <zorder>bunker1Title</zorder>
+   <zorder>bunker1Led</zorder>
+   <zorder>bunker2</zorder>
+   <zorder>bunker2Title</zorder>
+   <zorder>bunker2Led</zorder>
+   <zorder>bunker3</zorder>
+   <zorder>bunker3Title</zorder>
+   <zorder>bunker3Led</zorder>
+   <zorder>lineB1Down</zorder>
+   <zorder>lineB2Down</zorder>
+   <zorder>lineB3Down</zorder>
+   <zorder>lineB1B2</zorder>
+   <zorder>lineB2B3</zorder>
+   <zorder>lineRailRobot</zorder>
+   <zorder>lineRobotWeld</zorder>
+   <zorder>lineRobotOut</zorder>
+   <zorder>lineOutRail</zorder>
+   <zorder>lineToOk</zorder>
+   <zorder>lineToNg</zorder>
+   <zorder>labelFeed</zorder>
+   <zorder>nodeRobot</zorder>
+   <zorder>nodeRobotTitle</zorder>
+   <zorder>nodeRobotState</zorder>
+   <zorder>subCtrl</zorder>
+   <zorder>subBehaviour</zorder>
+   <zorder>subVision1</zorder>
+   <zorder>subVision2</zorder>
+   <zorder>nodeWelding</zorder>
+   <zorder>nodeWeldingTitle</zorder>
+   <zorder>nodeWeldingState</zorder>
+   <zorder>nodeWeldingHint</zorder>
+   <zorder>valve1</zorder>
+   <zorder>valve2</zorder>
+   <zorder>valve3</zorder>
+   <zorder>valve4</zorder>
+   <zorder>valve5</zorder>
+   <zorder>basketOk</zorder>
+   <zorder>basketOkTitle</zorder>
+   <zorder>basketOkCount</zorder>
+   <zorder>basketScrap</zorder>
+   <zorder>basketScrapTitle</zorder>
+   <zorder>basketScrapCount</zorder>
+   <zorder>panelRight</zorder>
+   <zorder>labelProgram</zorder>
+   <zorder>btnProg1</zorder>
+   <zorder>btnProg2</zorder>
+   <zorder>labelControls</zorder>
+   <zorder>btnStart</zorder>
+   <zorder>btnPause</zorder>
+   <zorder>btnStop</zorder>
+   <zorder>labelKpi</zorder>
+   <zorder>kpiCycleRow</zorder>
+   <zorder>kpiCycleLabel</zorder>
+   <zorder>kpiCycleValue</zorder>
+   <zorder>kpiOutputRow</zorder>
+   <zorder>kpiOutputLabel</zorder>
+   <zorder>kpiOutputValue</zorder>
+   <zorder>kpiScrapRow</zorder>
+   <zorder>kpiScrapLabel</zorder>
+   <zorder>kpiScrapValue</zorder>
+   <zorder>kpiUptimeRow</zorder>
+   <zorder>kpiUptimeLabel</zorder>
+   <zorder>kpiUptimeValue</zorder>
+   <zorder>panelLog</zorder>
+   <zorder>labelLog</zorder>
+   <zorder>labelLogScroll</zorder>
+   <zorder>logDot0</zorder>
+   <zorder>logTime0</zorder>
+   <zorder>logMsg0</zorder>
+   <zorder>logDot1</zorder>
+   <zorder>logTime1</zorder>
+   <zorder>logMsg1</zorder>
+   <zorder>logDot2</zorder>
+   <zorder>logTime2</zorder>
+   <zorder>logMsg2</zorder>
+   <zorder>logDot3</zorder>
+   <zorder>logTime3</zorder>
+   <zorder>logMsg3</zorder>
+   <zorder>logDot4</zorder>
+   <zorder>logTime4</zorder>
+   <zorder>logMsg4</zorder>
+   <zorder>logDot5</zorder>
+   <zorder>logTime5</zorder>
+   <zorder>logMsg5</zorder>
+   <zorder>logDot6</zorder>
+   <zorder>logTime6</zorder>
+   <zorder>logMsg6</zorder>
+   <zorder>logDot7</zorder>
+   <zorder>logTime7</zorder>
+   <zorder>logMsg7</zorder>
+   <zorder>logDot8</zorder>
+   <zorder>logTime8</zorder>
+   <zorder>logMsg8</zorder>
+   <zorder>logDot9</zorder>
+   <zorder>logTime9</zorder>
+   <zorder>logMsg9</zorder>
   </widget>
  </widget>
- <resources/>
+ <resources>
+  <include location="../resources.qrc"/>
+ </resources>
  <connections/>
 </ui>
