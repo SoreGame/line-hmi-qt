@@ -1,0 +1,79 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-Debug-fe9dcd1934b6c628e618.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.16"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "line-hmi-qt",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "line-hmi-qt::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-line-hmi-qt-Debug-0e330ebb496e6d332ca2.json",
+					"name" : "line-hmi-qt",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "line-hmi-qt_autogen::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-line-hmi-qt_autogen-Debug-0fd21c0c9ec4e00aaba8.json",
+					"name" : "line-hmi-qt_autogen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "line-hmi-qt_autogen_timestamp_deps::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-line-hmi-qt_autogen_timestamp_deps-Debug-b82b5c1f09c7294565ca.json",
+					"name" : "line-hmi-qt_autogen_timestamp_deps",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/egor/repos/robot/line-hmi-qt/build/Desktop-Debug",
+		"source" : "/home/egor/repos/robot/line-hmi-qt"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 7
+	}
+}

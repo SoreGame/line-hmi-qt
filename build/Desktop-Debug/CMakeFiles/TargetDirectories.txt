@@ -1,0 +1,9 @@
+/home/egor/repos/robot/line-hmi-qt/build/Desktop-Debug/CMakeFiles/line-hmi-qt.dir
+/home/egor/repos/robot/line-hmi-qt/build/Desktop-Debug/CMakeFiles/edit_cache.dir
+/home/egor/repos/robot/line-hmi-qt/build/Desktop-Debug/CMakeFiles/rebuild_cache.dir
+/home/egor/repos/robot/line-hmi-qt/build/Desktop-Debug/CMakeFiles/list_install_components.dir
+/home/egor/repos/robot/line-hmi-qt/build/Desktop-Debug/CMakeFiles/install.dir
+/home/egor/repos/robot/line-hmi-qt/build/Desktop-Debug/CMakeFiles/install/local.dir
+/home/egor/repos/robot/line-hmi-qt/build/Desktop-Debug/CMakeFiles/install/strip.dir
+/home/egor/repos/robot/line-hmi-qt/build/Desktop-Debug/CMakeFiles/line-hmi-qt_autogen_timestamp_deps.dir
+/home/egor/repos/robot/line-hmi-qt/build/Desktop-Debug/CMakeFiles/line-hmi-qt_autogen.dir

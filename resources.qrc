@@ -1,0 +1,33 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/screens">
+        <file alias="screen_ready_d1.png">assets/screen_ready_d1.png</file>
+        <file alias="screen_ready_d2.png">assets/screen_ready_d2.png</file>
+        <file alias="screen_run_d1.png">assets/screen_run_d1.png</file>
+        <file alias="screen_run_d2.png">assets/screen_run_d2.png</file>
+        <file alias="screen_pause_d1.png">assets/screen_pause_d1.png</file>
+        <file alias="screen_pause_d2.png">assets/screen_pause_d2.png</file>
+    </qresource>
+    <qresource prefix="/elements">
+        <file alias="btn_start.png">assets/btn_start.png</file>
+        <file alias="btn_start_disabled.png">assets/btn_start_disabled.png</file>
+        <file alias="btn_pause.png">assets/btn_pause.png</file>
+        <file alias="btn_stop.png">assets/btn_stop.png</file>
+        <file alias="btn_prog_d1_selected.png">assets/btn_prog_d1_selected.png</file>
+        <file alias="btn_prog_d1_idle.png">assets/btn_prog_d1_idle.png</file>
+        <file alias="btn_prog_d2_selected.png">assets/btn_prog_d2_selected.png</file>
+        <file alias="btn_prog_d2_idle.png">assets/btn_prog_d2_idle.png</file>
+        <file alias="btn_prog_locked.png">assets/btn_prog_locked.png</file>
+        <file alias="btn_admin.png">assets/btn_admin.png</file>
+        <file alias="status_ready_ok.png">assets/status_ready_ok.png</file>
+        <file alias="status_ready_run.png">assets/status_ready_run.png</file>
+        <file alias="status_ready_pause.png">assets/status_ready_pause.png</file>
+        <file alias="node_bunker_ready.png">assets/node_bunker_ready.png</file>
+        <file alias="node_robot_ready.png">assets/node_robot_ready.png</file>
+        <file alias="node_welding_ready.png">assets/node_welding_ready.png</file>
+        <file alias="img_basket_ok.png">assets/img_basket_ok.png</file>
+        <file alias="img_basket_scrap.png">assets/img_basket_scrap.png</file>
+        <file alias="img_cv_position_frame.png">assets/img_cv_position_frame.png</file>
+        <file alias="img_cv_output_frame.png">assets/img_cv_output_frame.png</file>
+    </qresource>
+</RCC>
