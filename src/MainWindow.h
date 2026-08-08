@@ -2,12 +2,16 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QFutureWatcher>
+#include <QString>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;
 }
 QT_END_NAMESPACE
+
+class NatsClient;
 
 class MainWindow : public QMainWindow
 {
@@ -33,9 +37,16 @@ private:
     void applyProgramVisuals();
     void applyModeVisuals();
 
+    // NATS: старт скрипта, привязанного к выбранной детали.
+    QString scriptFilenameForProgram(Program p) const;
+    void startSelectedProgramScript();
+
     Ui::MainWindow *ui = nullptr;
     Mode m_mode = Mode::Ready;
     Program m_program = Program::Detail1;
+
+    NatsClient *m_nats = nullptr;
+    QFutureWatcher<QString> *m_execWatcher = nullptr;
 };
 
 #endif // MAINWINDOW_H
