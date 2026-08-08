@@ -7,7 +7,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Concurrent Network)
 
 qt_add_executable(line-hmi-qt
     src/main.cpp
@@ -16,12 +16,12 @@ qt_add_executable(line-hmi-qt
     src/MainWindow.ui
     src/NatsClient.cpp
     src/NatsClient.h
+    src/PlcClient.cpp
+    src/PlcClient.h
     resources.qrc
-    src/Natsclient.h
-    src/Natsclient.cpp
 )
 
-target_link_libraries(line-hmi-qt PRIVATE Qt6::Widgets Qt6::Concurrent)
+target_link_libraries(line-hmi-qt PRIVATE Qt6::Widgets Qt6::Concurrent Qt6::Network)
 
 # --- nats.c как git-сабмодуль ----------------------------------------------
 # Подключить сабмодуль (один раз, из корня репозитория):

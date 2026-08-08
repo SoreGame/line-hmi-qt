@@ -1,9 +1,0 @@
-/home/egor/repos/robot/line-hmi-qt/build/CMakeFiles/line-hmi-qt.dir
-/home/egor/repos/robot/line-hmi-qt/build/CMakeFiles/edit_cache.dir
-/home/egor/repos/robot/line-hmi-qt/build/CMakeFiles/rebuild_cache.dir
-/home/egor/repos/robot/line-hmi-qt/build/CMakeFiles/list_install_components.dir
-/home/egor/repos/robot/line-hmi-qt/build/CMakeFiles/install.dir
-/home/egor/repos/robot/line-hmi-qt/build/CMakeFiles/install/local.dir
-/home/egor/repos/robot/line-hmi-qt/build/CMakeFiles/install/strip.dir
-/home/egor/repos/robot/line-hmi-qt/build/CMakeFiles/line-hmi-qt_autogen_timestamp_deps.dir
-/home/egor/repos/robot/line-hmi-qt/build/CMakeFiles/line-hmi-qt_autogen.dir
