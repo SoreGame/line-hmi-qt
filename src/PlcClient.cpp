@@ -63,12 +63,6 @@ protected:
                     msleep(500);
                     continue;
                 }
-                // #region agent log
-                agentDbg("D", "PlcClient.cpp:connectOk", "tcp connected",
-                         QStringLiteral("{\"host\":\"%1\",\"port\":%2}")
-                             .arg(m_host)
-                             .arg(m_port));
-                // #endregion
                 sock.setSocketOption(QAbstractSocket::LowDelayOption, 1);
             }
 
@@ -142,20 +136,9 @@ private:
             return false;
 
         QByteArray reply;
-        if (!readExact(sock, &reply, PlcClient::kStatusSize, kPingTimeoutMs)) {
-            // #region agent log
-            agentDbg("D", "PlcClient.cpp:pingPong", "status read failed",
-                     QStringLiteral("{\"want\":%1,\"got\":%2}")
-                         .arg(PlcClient::kStatusSize)
-                         .arg(reply.size()));
-            // #endregion
+        if (!readExact(sock, &reply, PlcClient::kStatusSize, kPingTimeoutMs))
             return false;
-        }
 
-        // #region agent log
-        agentDbg("C", "PlcClient.cpp:pingPong", "status ok",
-                 QStringLiteral("{\"bytes\":%1}").arg(reply.size()));
-        // #endregion
         applyIncoming(reply.left(PlcClient::kStatusSize));
         m_owner->m_lastOkMs.store(QDateTime::currentMSecsSinceEpoch(),
                                   std::memory_order_relaxed);
