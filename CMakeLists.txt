@@ -9,7 +9,7 @@ set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Concurrent Network)
 
-qt_add_executable(line-hmi-qt
+qt_add_executable(line-hmi-qt MANUAL_FINALIZATION
     src/main.cpp
     src/MainWindow.cpp
     src/MainWindow.h
@@ -18,10 +18,45 @@ qt_add_executable(line-hmi-qt
     src/NatsClient.h
     src/PlcClient.cpp
     src/PlcClient.h
+    src/PrepOverlay.cpp
+    src/PrepOverlay.h
+    src/RecoveryOverlay.cpp
+    src/RecoveryOverlay.h
+    src/ConnectionSettings.cpp
+    src/ConnectionSettings.h
+    src/AdminPanel.cpp
+    src/AdminPanel.h
     resources.qrc
 )
 
 target_link_libraries(line-hmi-qt PRIVATE Qt6::Widgets Qt6::Concurrent Qt6::Network)
+
+if (ANDROID)
+    set_target_properties(line-hmi-qt PROPERTIES
+        QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
+        QT_ANDROID_PACKAGE_NAME "org.scara.linehmi"
+        QT_ANDROID_APP_NAME "SCARA HMI"
+        QT_ANDROID_VERSION_CODE 1
+        QT_ANDROID_VERSION_NAME "1.0"
+        QT_ANDROID_MIN_SDK_VERSION 26
+        QT_ANDROID_TARGET_SDK_VERSION 34
+        QT_ANDROID_ABIS "arm64-v8a"
+    )
+
+    set(ANDROID_ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android/assets")
+    file(MAKE_DIRECTORY "${ANDROID_ASSETS_DIR}")
+    add_custom_command(
+        OUTPUT "${ANDROID_ASSETS_DIR}/config.json"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/config.json"
+            "${ANDROID_ASSETS_DIR}/config.json"
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/config.json"
+        COMMENT "Copy config.json to Android assets"
+    )
+    add_custom_target(copy_android_config
+        DEPENDS "${ANDROID_ASSETS_DIR}/config.json")
+    add_dependencies(line-hmi-qt copy_android_config)
+endif()
 
 # --- nats.c как git-сабмодуль ----------------------------------------------
 # Подключить сабмодуль (один раз, из корня репозитория):
@@ -45,6 +80,9 @@ set(NATS_BUILD_STREAMING   OFF CACHE BOOL "" FORCE)
 set(NATS_BUILD_EXAMPLES    OFF CACHE BOOL "" FORCE)
 set(NATS_BUILD_TESTS       OFF CACHE BOOL "" FORCE)
 set(NATS_BUILD_WITH_TLS    OFF CACHE BOOL "" FORCE)
+if (ANDROID)
+    set(NATS_BUILD_LIB_SHARED OFF CACHE BOOL "" FORCE)
+endif()
 
 add_subdirectory(nats.c EXCLUDE_FROM_ALL)
 
@@ -74,4 +112,19 @@ target_include_directories(line-hmi-qt PRIVATE
 )
 # ---------------------------------------------------------------------------
 
-install(TARGETS line-hmi-qt RUNTIME DESTINATION bin)
+qt_finalize_executable(line-hmi-qt)
+
+if (ANDROID)
+    add_dependencies(line-hmi-qt_make_apk copy_android_config)
+endif()
+
+if (NOT ANDROID)
+    add_custom_command(TARGET line-hmi-qt POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/config.json"
+            "$<TARGET_FILE_DIR:line-hmi-qt>/config.json"
+        COMMENT "Copy config.json next to line-hmi-qt"
+    )
+    install(TARGETS line-hmi-qt RUNTIME DESTINATION bin)
+    install(FILES config.json DESTINATION bin)
+endif()

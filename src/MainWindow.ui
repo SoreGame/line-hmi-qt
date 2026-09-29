@@ -79,7 +79,7 @@
      <rect>
       <x>344</x>
       <y>20</y>
-      <width>157</width>
+      <width>210</width>
       <height>33</height>
      </rect>
     </property>
@@ -87,13 +87,16 @@
      <string>●  Готовность · OK</string>
     </property>
     <property name="styleSheet">
-     <string notr="true">background:#EDF7F0; border:1px solid #59AD6B; border-radius:16px; color:#2E8C47; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:12px; font-weight:600; padding-left:10px;</string>
+     <string notr="true">background:#EDF7F0; border:1px solid #59AD6B; border-radius:16px; color:#2E8C47; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:12px; font-weight:600;</string>
     </property>
     <property name="alignment">
-     <set>Qt::AlignmentFlag::AlignVCenter|Qt::AlignmentFlag::AlignLeft</set>
+     <set>Qt::AlignmentFlag::AlignCenter</set>
     </property>
    </widget>
    <widget class="QLabel" name="statusPlc">
+    <property name="visible">
+     <bool>false</bool>
+    </property>
     <property name="geometry">
      <rect>
       <x>999</x>
@@ -113,6 +116,9 @@
     </property>
    </widget>
    <widget class="QLabel" name="statusRobot">
+    <property name="visible">
+     <bool>false</bool>
+    </property>
     <property name="geometry">
      <rect>
       <x>1117</x>
@@ -132,6 +138,9 @@
     </property>
    </widget>
    <widget class="QLabel" name="statusNats">
+    <property name="visible">
+     <bool>false</bool>
+    </property>
     <property name="geometry">
      <rect>
       <x>1247</x>
@@ -153,10 +162,10 @@
    <widget class="QLabel" name="labelClock">
     <property name="geometry">
      <rect>
-      <x>1735</x>
-      <y>25</y>
-      <width>43</width>
-      <height>22</height>
+      <x>1648</x>
+      <y>22</y>
+      <width>130</width>
+      <height>28</height>
      </rect>
     </property>
     <property name="text">
@@ -164,6 +173,9 @@
     </property>
     <property name="styleSheet">
      <string notr="true">color:#1F2126; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:16px; font-weight:600;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignVCenter</set>
     </property>
    </widget>
    <widget class="QPushButton" name="btnAdmin">
@@ -301,13 +313,13 @@
     <property name="geometry">
      <rect>
       <x>464</x>
-      <y>159</y>
-      <width>90</width>
-      <height>19</height>
+      <y>156</y>
+      <width>78</width>
+      <height>24</height>
      </rect>
     </property>
     <property name="text">
-     <string>Б  Бункер 1</string>
+     <string>Бункер 1</string>
     </property>
     <property name="styleSheet">
      <string notr="true">color:#1F2126; font-weight:600; font-size:13px;</string>
@@ -316,10 +328,10 @@
    <widget class="QLabel" name="bunker1Led">
     <property name="geometry">
      <rect>
-      <x>601</x>
-      <y>163</y>
-      <width>43</width>
-      <height>12</height>
+      <x>544</x>
+      <y>156</y>
+      <width>100</width>
+      <height>24</height>
      </rect>
     </property>
     <property name="text">
@@ -327,6 +339,9 @@
     </property>
     <property name="styleSheet">
      <string notr="true">color:#2E8C47; font-size:11px;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignVCenter</set>
     </property>
    </widget>
    <widget class="QFrame" name="bunker2">
@@ -349,13 +364,13 @@
     <property name="geometry">
      <rect>
       <x>860</x>
-      <y>159</y>
-      <width>90</width>
-      <height>19</height>
+      <y>156</y>
+      <width>78</width>
+      <height>24</height>
      </rect>
     </property>
     <property name="text">
-     <string>Б  Бункер 2</string>
+     <string>Бункер 2</string>
     </property>
     <property name="styleSheet">
      <string notr="true">color:#1F2126; font-weight:600; font-size:13px;</string>
@@ -364,10 +379,10 @@
    <widget class="QLabel" name="bunker2Led">
     <property name="geometry">
      <rect>
-      <x>997</x>
-      <y>163</y>
-      <width>43</width>
-      <height>12</height>
+      <x>940</x>
+      <y>156</y>
+      <width>100</width>
+      <height>24</height>
      </rect>
     </property>
     <property name="text">
@@ -375,6 +390,9 @@
     </property>
     <property name="styleSheet">
      <string notr="true">color:#2E8C47; font-size:11px;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignVCenter</set>
     </property>
    </widget>
    <widget class="QFrame" name="bunker3">
@@ -397,13 +415,13 @@
     <property name="geometry">
      <rect>
       <x>1256</x>
-      <y>159</y>
-      <width>90</width>
-      <height>19</height>
+      <y>156</y>
+      <width>78</width>
+      <height>24</height>
      </rect>
     </property>
     <property name="text">
-     <string>Б  Бункер 3</string>
+     <string>Бункер 3</string>
     </property>
     <property name="styleSheet">
      <string notr="true">color:#737880; font-weight:600; font-size:13px;</string>
@@ -412,10 +430,10 @@
    <widget class="QLabel" name="bunker3Led">
     <property name="geometry">
      <rect>
-      <x>1362</x>
-      <y>163</y>
-      <width>74</width>
-      <height>12</height>
+      <x>1336</x>
+      <y>156</y>
+      <width>100</width>
+      <height>24</height>
      </rect>
     </property>
     <property name="text">
@@ -423,6 +441,9 @@
     </property>
     <property name="styleSheet">
      <string notr="true">color:#737880; font-size:11px;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignVCenter</set>
     </property>
    </widget>
    <widget class="QFrame" name="lineB1Down">
@@ -556,9 +577,9 @@
    <widget class="QFrame" name="lineOutRail">
     <property name="geometry">
      <rect>
-      <x>830</x>
+      <x>780</x>
       <y>466</y>
-      <width>220</width>
+      <width>340</width>
       <height>3</height>
      </rect>
     </property>
@@ -572,7 +593,7 @@
    <widget class="QFrame" name="lineToOk">
     <property name="geometry">
      <rect>
-      <x>828</x>
+      <x>778</x>
       <y>467</y>
       <width>3</width>
       <height>30</height>
@@ -588,7 +609,7 @@
    <widget class="QFrame" name="lineToNg">
     <property name="geometry">
      <rect>
-      <x>1048</x>
+      <x>1118</x>
       <y>467</y>
       <width>3</width>
       <height>30</height>
@@ -643,7 +664,7 @@
      </rect>
     </property>
     <property name="text">
-     <string>Р  Робот</string>
+     <string>Робот</string>
     </property>
     <property name="styleSheet">
      <string notr="true">color:#1F2126; font-size:16px; font-weight:700;</string>
@@ -652,10 +673,10 @@
    <widget class="QLabel" name="nodeRobotState">
     <property name="geometry">
      <rect>
-      <x>1035</x>
-      <y>291</y>
-      <width>50</width>
-      <height>13</height>
+      <x>960</x>
+      <y>286</y>
+      <width>118</width>
+      <height>24</height>
      </rect>
     </property>
     <property name="text">
@@ -663,6 +684,9 @@
     </property>
     <property name="styleSheet">
      <string notr="true">color:#2E8C47; font-size:12px;</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignVCenter</set>
     </property>
    </widget>
    <widget class="QLabel" name="subCtrl">
@@ -771,7 +795,7 @@ Vision 2</string>
      </rect>
     </property>
     <property name="text">
-     <string>С  Сварка</string>
+     <string>ПЛК</string>
     </property>
     <property name="styleSheet">
      <string notr="true">color:#1F2126; font-size:15px; font-weight:700;</string>
@@ -780,9 +804,9 @@ Vision 2</string>
    <widget class="QLabel" name="nodeWeldingState">
     <property name="geometry">
      <rect>
-      <x>1329</x>
+      <x>1288</x>
       <y>290</y>
-      <width>50</width>
+      <width>90</width>
       <height>12</height>
      </rect>
     </property>
@@ -798,12 +822,12 @@ Vision 2</string>
      <rect>
       <x>1120</x>
       <y>312</y>
-      <width>160</width>
-      <height>12</height>
+      <width>220</width>
+      <height>16</height>
      </rect>
     </property>
     <property name="text">
-     <string>Давление · 5 клапанов</string>
+     <string>Буфер перед стартом</string>
     </property>
     <property name="styleSheet">
      <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:11px;</string>
@@ -813,14 +837,14 @@ Vision 2</string>
     <property name="geometry">
      <rect>
       <x>1120</x>
-      <y>330</y>
-      <width>48</width>
-      <height>31</height>
+      <y>332</y>
+      <width>62</width>
+      <height>36</height>
      </rect>
     </property>
     <property name="text">
      <string>●
-К1</string>
+Ламели</string>
     </property>
     <property name="styleSheet">
      <string notr="true">color:#2E8C47; font-size:11px;</string>
@@ -832,15 +856,15 @@ Vision 2</string>
    <widget class="QLabel" name="valve2">
     <property name="geometry">
      <rect>
-      <x>1172</x>
-      <y>330</y>
-      <width>48</width>
-      <height>31</height>
+      <x>1184</x>
+      <y>332</y>
+      <width>62</width>
+      <height>36</height>
      </rect>
     </property>
     <property name="text">
      <string>●
-К2</string>
+Гуси</string>
     </property>
     <property name="styleSheet">
      <string notr="true">color:#2E8C47; font-size:11px;</string>
@@ -852,15 +876,15 @@ Vision 2</string>
    <widget class="QLabel" name="valve3">
     <property name="geometry">
      <rect>
-      <x>1224</x>
-      <y>330</y>
-      <width>48</width>
-      <height>31</height>
+      <x>1248</x>
+      <y>332</y>
+      <width>62</width>
+      <height>36</height>
      </rect>
     </property>
     <property name="text">
      <string>●
-К3</string>
+Б. гуси</string>
     </property>
     <property name="styleSheet">
      <string notr="true">color:#2E8C47; font-size:11px;</string>
@@ -872,15 +896,15 @@ Vision 2</string>
    <widget class="QLabel" name="valve4">
     <property name="geometry">
      <rect>
-      <x>1276</x>
-      <y>330</y>
-      <width>48</width>
-      <height>31</height>
+      <x>1312</x>
+      <y>332</y>
+      <width>62</width>
+      <height>36</height>
      </rect>
     </property>
     <property name="text">
      <string>●
-К4</string>
+Сварка</string>
     </property>
     <property name="styleSheet">
      <string notr="true">color:#2E8C47; font-size:11px;</string>
@@ -890,6 +914,9 @@ Vision 2</string>
     </property>
    </widget>
    <widget class="QLabel" name="valve5">
+    <property name="visible">
+     <bool>false</bool>
+    </property>
     <property name="geometry">
      <rect>
       <x>1328</x>
@@ -912,7 +939,7 @@ Vision 2</string>
    <widget class="QFrame" name="basketOk">
     <property name="geometry">
      <rect>
-      <x>730</x>
+      <x>680</x>
       <y>497</y>
       <width>200</width>
       <height>120</height>
@@ -928,7 +955,7 @@ Vision 2</string>
    <widget class="QLabel" name="basketOkTitle">
     <property name="geometry">
      <rect>
-      <x>730</x>
+      <x>680</x>
       <y>531</y>
       <width>200</width>
       <height>13</height>
@@ -947,7 +974,7 @@ Vision 2</string>
    <widget class="QLabel" name="basketOkCount">
     <property name="geometry">
      <rect>
-      <x>730</x>
+      <x>680</x>
       <y>551</y>
       <width>200</width>
       <height>34</height>
@@ -966,14 +993,14 @@ Vision 2</string>
    <widget class="QFrame" name="basketScrap">
     <property name="geometry">
      <rect>
-      <x>950</x>
+      <x>1020</x>
       <y>497</y>
       <width>200</width>
       <height>120</height>
      </rect>
     </property>
     <property name="styleSheet">
-     <string notr="true">background:#FDECEC; border:2px solid #C73333; border-radius:10px;</string>
+     <string notr="true">background:#F3F4F6; border:2px solid #C5C9D0; border-radius:10px;</string>
     </property>
     <property name="frameShape">
      <enum>QFrame::StyledPanel</enum>
@@ -982,7 +1009,7 @@ Vision 2</string>
    <widget class="QLabel" name="basketScrapTitle">
     <property name="geometry">
      <rect>
-      <x>950</x>
+      <x>1020</x>
       <y>531</y>
       <width>200</width>
       <height>13</height>
@@ -992,7 +1019,7 @@ Vision 2</string>
      <string>Брак</string>
     </property>
     <property name="styleSheet">
-     <string notr="true">color:#C73333; font-size:12px; font-weight:600;</string>
+     <string notr="true">color:#737880; font-size:12px; font-weight:600;</string>
     </property>
     <property name="alignment">
      <set>Qt::AlignmentFlag::AlignHCenter</set>
@@ -1001,7 +1028,7 @@ Vision 2</string>
    <widget class="QLabel" name="basketScrapCount">
     <property name="geometry">
      <rect>
-      <x>950</x>
+      <x>1020</x>
       <y>551</y>
       <width>200</width>
       <height>34</height>
@@ -1135,7 +1162,7 @@ Vision 2</string>
      <enum>Qt::FocusPolicy::NoFocus</enum>
     </property>
    </widget>
-   <widget class="QPushButton" name="btnPause">
+   <widget class="QPushButton" name="btnStop">
     <property name="geometry">
      <rect>
       <x>1520</x>
@@ -1145,10 +1172,10 @@ Vision 2</string>
      </rect>
     </property>
     <property name="text">
-     <string>ПАУЗА</string>
+     <string>СТОП</string>
     </property>
     <property name="styleSheet">
-     <string notr="true">QPushButton{background:#1F66B8; color:white; border:none; border-radius:10px; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:18px; font-weight:700;} QPushButton:pressed{background:#1A5699;} QPushButton:disabled{background:#A9B0B8;}</string>
+     <string notr="true">QPushButton{background:#C45C1A; color:white; border:none; border-radius:10px; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:18px; font-weight:700;} QPushButton:pressed{background:#A34C16;} QPushButton:disabled{background:#A9B0B8;}</string>
     </property>
     <property name="cursor">
      <cursorShape>PointingHandCursor</cursorShape>
@@ -1157,20 +1184,20 @@ Vision 2</string>
      <enum>Qt::FocusPolicy::NoFocus</enum>
     </property>
    </widget>
-   <widget class="QPushButton" name="btnStop">
+   <widget class="QPushButton" name="btnEmergencyStop">
     <property name="geometry">
      <rect>
       <x>1520</x>
       <y>406</y>
       <width>376</width>
-      <height>58</height>
+      <height>68</height>
      </rect>
     </property>
     <property name="text">
-     <string>СТОП</string>
+     <string>EMERGENCY STOP</string>
     </property>
     <property name="styleSheet">
-     <string notr="true">QPushButton{background:#C72929; color:white; border:none; border-radius:10px; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:18px; font-weight:700;} QPushButton:pressed{background:#A82222;} QPushButton:disabled{background:#A9B0B8;}</string>
+     <string notr="true">QPushButton{background:#C72929; color:white; border:2px solid #8B1A1A; border-radius:10px; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:18px; font-weight:800; letter-spacing:1px;} QPushButton:pressed{background:#A82222;} QPushButton:disabled{background:#A9B0B8; border-color:#A9B0B8;}</string>
     </property>
     <property name="cursor">
      <cursorShape>PointingHandCursor</cursorShape>
@@ -1542,8 +1569,8 @@ Vision 2</string>
    <zorder>btnProg2</zorder>
    <zorder>labelControls</zorder>
    <zorder>btnStart</zorder>
-   <zorder>btnPause</zorder>
    <zorder>btnStop</zorder>
+   <zorder>btnEmergencyStop</zorder>
    <zorder>labelKpi</zorder>
    <zorder>kpiCycleRow</zorder>
    <zorder>kpiCycleLabel</zorder>

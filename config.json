@@ -1,0 +1,13 @@
+{
+    "plc": {
+        "ip": "127.0.0.1",
+        "port": 1502,
+        "_ready_comment": "Кадр 60 int16 (120 байт, little-endian) после запроса [203,0,0,0]. ПЛК готов, если пакет пришёл. Байт маски 00 не проверяется. Vision 1/2: int16[45]/[46] == 1. Предподготовка: ламели 24, гуси 25, сварка 26..45 (байты). 1 = готово. int16[50] = грибок (1 = нажат). int16[51..59] = подозрения (1 = показать). Маска legacy 100 байт допустима.",
+        "ready_mask": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0000ffffffffffffffff",
+        "ready_value": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "server": {
+        "ip": "127.0.0.1",
+        "port": 4222
+    }
+}

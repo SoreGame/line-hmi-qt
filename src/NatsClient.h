@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QJsonObject>
 #include <QString>
+#include <QVector>
 
 #include <atomic>
 #include <nats.h>
@@ -45,8 +46,27 @@ public:
     // Как Stop в robot-gui: motion + behaviour + script.
     bool publishStopCommand(QString *errorOut = nullptr) const;
 
+    bool publishMotionStart(QString *errorOut = nullptr) const;
+    bool publishMotionStop(QString *errorOut = nullptr) const;
+    bool publishMoveOffset(double x, double y, double z, double r, QString *errorOut = nullptr) const;
+
     // Строка прогресса из KV "script.progress" (после паузы/стопа).
     bool fetchScriptProgressLine(int *lineOut, QString *errorOut = nullptr) const;
+
+    // Точки из KV bucket "robot_points" (тот же, что Robot Data Table в robot-gui).
+    struct RobotPoint {
+        QString kvKey;
+        QString name;
+        double x = 0;
+        double y = 0;
+        double z = 0;
+        double r = 0;
+    };
+
+    bool openRobotPointsKv(QString *errorOut = nullptr);
+    bool fetchRobotPoints(QVector<RobotPoint> *out, QString *errorOut = nullptr) const;
+    bool saveRobotPointPose(const QString &kvKey, double x, double y, double z, double r,
+                            QString *errorOut = nullptr) const;
 
     // Слушает motion.status, behaviour.status и script.status.
     bool startModuleWatch(QString *errorOut = nullptr);
@@ -61,7 +81,8 @@ public:
 
 signals:
     // Приходит из потока NATS — подключайте QueuedConnection (по умолчанию Auto).
-    void scriptStatusReceived(bool running, bool completed, int line);
+    void scriptStatusReceived(bool running, bool completed, int line, const QString &filename);
+    void motionPoseReceived(double x, double y, double z, double r, bool running);
 
 private:
     bool publishJson(const char *subject, const QJsonObject &obj, QString *errorOut) const;
@@ -72,6 +93,7 @@ private:
 
     natsConnection *m_conn = nullptr;
     kvStore *m_kv = nullptr;
+    kvStore *m_robotPointsKv = nullptr;
     natsSubscription *m_motionSub = nullptr;
     natsSubscription *m_behaviourSub = nullptr;
     natsSubscription *m_scriptStatusSub = nullptr;
