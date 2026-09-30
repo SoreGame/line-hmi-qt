@@ -1154,6 +1154,18 @@ void MainWindow::on_btnStart_clicked()
     if (m_prepArming || m_prep)
         return;
 
+    // Отправка управляющей команды 7,2 перед стандартной подготовительной командой
+    {
+        QByteArray cmd;
+        cmd.append(static_cast<char>(7));
+        cmd.append(static_cast<char>(2));
+        appendLog(LogLevel::Info,
+                  QStringLiteral("Команда ПЛК (start) · %1 байт · %2")
+                      .arg(cmd.size())
+                      .arg(QString::fromLatin1(cmd.toHex(' '))));
+        m_plc->sendCommand(cmd);
+    }
+
     const QByteArray frame = PlcClient::prepStartCommand();
     m_prepArming = true;
     ui->btnStart->setEnabled(false);
@@ -1510,6 +1522,18 @@ void MainWindow::on_btnProg1_clicked()
         return;
     m_program = Program::Detail1;
     appendLog(LogLevel::Info, QStringLiteral("Выбрана Деталь 1 · поток Б1+Б2"));
+    // Отправляем команду выбора детали: 7,1,1
+    {
+        QByteArray cmd;
+        cmd.append(static_cast<char>(7));
+        cmd.append(static_cast<char>(1));
+        cmd.append(static_cast<char>(1));
+        appendLog(LogLevel::Info,
+                  QStringLiteral("Команда ПЛК (select part) · %1 байт · %2")
+                      .arg(cmd.size())
+                      .arg(QString::fromLatin1(cmd.toHex(' '))));
+        m_plc->sendCommand(cmd);
+    }
     refreshUi();
 }
 
@@ -1521,6 +1545,18 @@ void MainWindow::on_btnProg2_clicked()
         return;
     m_program = Program::Detail2;
     appendLog(LogLevel::Info, QStringLiteral("Выбрана Деталь 2 · поток Б1+Б3"));
+    // Отправляем команду выбора детали: 7,1,2
+    {
+        QByteArray cmd;
+        cmd.append(static_cast<char>(7));
+        cmd.append(static_cast<char>(1));
+        cmd.append(static_cast<char>(2));
+        appendLog(LogLevel::Info,
+                  QStringLiteral("Команда ПЛК (select part) · %1 байт · %2")
+                      .arg(cmd.size())
+                      .arg(QString::fromLatin1(cmd.toHex(' '))));
+        m_plc->sendCommand(cmd);
+    }
     refreshUi();
 }
 
