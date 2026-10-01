@@ -166,6 +166,8 @@ bool readConfigFile(const QString &path, ConnectionSettings *out)
         out->hmiAutostart = system.value(QStringLiteral("hmiAutostart")).toBool(false);
     if (system.contains(QStringLiteral("showCursor")))
         out->showCursor = system.value(QStringLiteral("showCursor")).toBool(true);
+    if (system.contains(QStringLiteral("ignoreLoadCell")))
+        out->ignoreLoadCell = system.value(QStringLiteral("ignoreLoadCell")).toBool(false);
 
     return true;
 }
@@ -201,6 +203,7 @@ bool writeConfigFile(const QString &path, const ConnectionSettings &cfg)
     system.insert(QStringLiteral("autostart"), cfg.autostart);
     system.insert(QStringLiteral("hmiAutostart"), cfg.hmiAutostart);
     system.insert(QStringLiteral("showCursor"), cfg.showCursor);
+    system.insert(QStringLiteral("ignoreLoadCell"), cfg.ignoreLoadCell);
     root.insert(QStringLiteral("system"), system);
 
     const QDir dir = QFileInfo(path).absoluteDir();

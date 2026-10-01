@@ -1168,10 +1168,14 @@ void MainWindow::on_btnStart_clicked()
     if (m_prepArming || m_prep)
         return;
 
-    const QByteArray frame = PlcClient::controlCommand(2);
+    const bool ignoreLoadCell = ConnectionSettings::load().ignoreLoadCell;
+    const QByteArray frame = PlcClient::startCommand(ignoreLoadCell);
     m_prepArming = true;
     ui->btnStart->setEnabled(false);
-    appendLog(LogLevel::Info, QStringLiteral("Команда старта на ПЛК · 7 2"));
+    appendLog(LogLevel::Info,
+              ignoreLoadCell
+                  ? QStringLiteral("Команда старта на ПЛК · 7 1 1 0")
+                  : QStringLiteral("Команда старта на ПЛК · 7 1 1 1"));
     m_plcAcks.append(PlcAck::Start);
     m_plc->sendCommand(frame);
 }

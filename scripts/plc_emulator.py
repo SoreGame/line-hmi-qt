@@ -26,12 +26,14 @@ Set alarms from the server console, or from a client:
   [205, 0, 0, 0]          — clear e-stop and all suspicions
 
 HMI prep start used to be 10 zero bytes. That frame is still accepted and
-starts the same fill simulation. The panel now sends [7, 2, 0, 0] instead.
+starts the same fill simulation. Старт с пульта теперь [7, 1, 1, 0] или
+[7, 1, 1, 1] — тоже запускает заполнение. [7, 2, 0, 0] оставлен как старый старт.
 
 HMI commands, 4 bytes, no reply. Tag 7:
-  [7, 1, 1, 0]  — деталь 1
+  [7, 1, 1, 0]  — старт, тензодатчик игнорируется (тот же кадр, что выбор детали 1)
+  [7, 1, 1, 1]  — старт, тензодатчик учитывается
   [7, 1, 2, 0]  — деталь 2
-  [7, 2, 0, 0]  — старт (та же симуляция заполнения, что у prep-start)
+  [7, 2, 0, 0]  — старый старт
   [7, 3, 0, 0]  — стоп
   [7, 4, 0, 0]  — аварийный стоп
   [7, 5, 0, 0]  — выход из аварийного стопа
@@ -383,6 +385,14 @@ def handle_client(conn: socket.socket, addr: tuple[str, int], state: PlcState) -
                 frame = bytes(pending)
                 pending.clear()
                 sub = frame[1]
+                # Старт пульта: [7, 1, 1, 0] игнорирует тензодатчик, [7, 1, 1, 1] — нет.
+                # [7, 1, 1, 0] совпадает с выбором детали 1.
+                is_start = frame[1] == 1 and frame[2] == 1 and frame[3] in (0, 1)
+                if is_start:
+                    flag = "ignore-on" if frame[3] == 0 else "ignore-off"
+                    print(f"[plc] {peer} hmi start {flag} {list(frame)}", flush=True)
+                    state.begin_prep_fill()
+                    continue
                 names = {
                     1: "program",
                     2: "start",

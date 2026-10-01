@@ -49,6 +49,7 @@ private slots:
     void onHmiAutostartToggled(bool enabled);
     void onRemoteAutostartToggled(bool enabled);
     void onShowCursorToggled(bool enabled);
+    void onIgnoreLoadCellToggled(bool enabled);
     void onStepChanged(int index);
     void onPlcStateChanged();
 
@@ -71,6 +72,7 @@ private:
     void updateMotionPowerButton();
     void refreshPlcBufferLog();
     void fitPlcLogPanel();
+    void fitTogglesPanel();
     double currentStep() const;
     QPushButton *makeJogButton(const QString &text, QWidget *parent);
     void showEvent(QShowEvent *event) override;
@@ -103,6 +105,7 @@ private:
     int m_page = 0;
 
     QFrame *m_networkPanel = nullptr;
+    QFrame *m_togglesPanel = nullptr;
     QFrame *m_jogPanel = nullptr;
     int m_leftColW = 420;
     int m_layoutW = kWidth;
@@ -116,6 +119,7 @@ private:
     QPushButton *m_btnHmiAutostart = nullptr;
     QPushButton *m_btnRemoteAutostart = nullptr;
     QPushButton *m_btnShowCursor = nullptr;
+    QPushButton *m_btnIgnoreLoadCell = nullptr;
     QLabel *m_droX = nullptr;
     QLabel *m_droY = nullptr;
     QLabel *m_droZ = nullptr;

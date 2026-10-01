@@ -333,50 +333,6 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     panelLay->addWidget(sectionTitle);
     panelLay->addWidget(rowNats);
     panelLay->addWidget(rowPlc);
-
-    const bool hmiOn = QFile::exists(
-        QStringLiteral("/etc/systemd/system/getty@tty1.service.d/autologin.conf"));
-    m_btnHmiAutostart = new QPushButton(networkPanel);
-    m_btnHmiAutostart->setCheckable(true);
-    m_btnHmiAutostart->setChecked(hmiOn);
-    m_btnHmiAutostart->setCursor(Qt::PointingHandCursor);
-    m_btnHmiAutostart->setFocusPolicy(Qt::NoFocus);
-    m_btnHmiAutostart->setMinimumHeight(44);
-    setToggleCaption(m_btnHmiAutostart,
-                     QStringLiteral("Автозапуск пульта на этом компьютере"),
-                     hmiOn);
-
-    m_btnRemoteAutostart = new QPushButton(networkPanel);
-    m_btnRemoteAutostart->setCheckable(true);
-    m_btnRemoteAutostart->setChecked(initial.autostart);
-    m_btnRemoteAutostart->setCursor(Qt::PointingHandCursor);
-    m_btnRemoteAutostart->setFocusPolicy(Qt::NoFocus);
-    m_btnRemoteAutostart->setMinimumHeight(44);
-    setToggleCaption(m_btnRemoteAutostart,
-                     QStringLiteral("Автозапуск системы на NATS-хосте"),
-                     initial.autostart);
-
-    m_btnShowCursor = new QPushButton(networkPanel);
-    m_btnShowCursor->setCheckable(true);
-    m_btnShowCursor->setChecked(initial.showCursor);
-    m_btnShowCursor->setCursor(Qt::PointingHandCursor);
-    m_btnShowCursor->setFocusPolicy(Qt::NoFocus);
-    m_btnShowCursor->setMinimumHeight(44);
-    setToggleCaption(m_btnShowCursor,
-                     QStringLiteral("Курсор мыши"),
-                     initial.showCursor);
-
-    auto *targetHint = new QLabel(
-        QStringLiteral("Пульт включается на этой панели. Автозапуск системы — на компьютере с NATS-хостом."),
-        networkPanel);
-    targetHint->setWordWrap(true);
-    targetHint->setStyleSheet(QStringLiteral(
-        "QLabel { color:#737880; font-size:11px; background:transparent; border:none; }"));
-
-    panelLay->addWidget(m_btnHmiAutostart);
-    panelLay->addWidget(m_btnRemoteAutostart);
-    panelLay->addWidget(m_btnShowCursor);
-    panelLay->addWidget(targetHint);
     panelLay->addStretch(1);
 
     // --- Jog / motion --------------------------------------------------
@@ -732,6 +688,79 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     tableLay->addWidget(m_pager);
     tableLay->addStretch(1);
 
+    m_togglesPanel = new QFrame(this);
+    m_togglesPanel->setObjectName(QStringLiteral("togglesPanel"));
+    m_togglesPanel->setStyleSheet(QStringLiteral(
+        "QFrame#togglesPanel {"
+        "  background:#FFFFFF;"
+        "  border:1px solid #DBDEE3;"
+        "  border-radius:8px;"
+        "}"));
+
+    auto *togglesTitle = new QLabel(QStringLiteral("Переключатели"), m_togglesPanel);
+    togglesTitle->setStyleSheet(QStringLiteral(
+        "QLabel {"
+        "  font-family:\"Inter\",\"Segoe UI\",sans-serif;"
+        "  font-size:13px; font-weight:600; color:#1F2126;"
+        "  background:transparent; border:none;"
+        "}"));
+
+    const auto makeToggle = [](QPushButton *button) {
+        button->setCheckable(true);
+        button->setCursor(Qt::PointingHandCursor);
+        button->setFocusPolicy(Qt::NoFocus);
+        button->setMinimumHeight(44);
+        button->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    };
+
+    const bool hmiOn = QFile::exists(
+        QStringLiteral("/etc/systemd/system/getty@tty1.service.d/autologin.conf"));
+    m_btnHmiAutostart = new QPushButton(m_togglesPanel);
+    makeToggle(m_btnHmiAutostart);
+    m_btnHmiAutostart->setChecked(hmiOn);
+    setToggleCaption(m_btnHmiAutostart,
+                     QStringLiteral("Автозапуск пульта на этом компьютере"),
+                     hmiOn);
+
+    m_btnRemoteAutostart = new QPushButton(m_togglesPanel);
+    makeToggle(m_btnRemoteAutostart);
+    m_btnRemoteAutostart->setChecked(initial.autostart);
+    setToggleCaption(m_btnRemoteAutostart,
+                     QStringLiteral("Автозапуск системы на NATS-хосте"),
+                     initial.autostart);
+
+    m_btnShowCursor = new QPushButton(m_togglesPanel);
+    makeToggle(m_btnShowCursor);
+    m_btnShowCursor->setChecked(initial.showCursor);
+    setToggleCaption(m_btnShowCursor,
+                     QStringLiteral("Курсор мыши"),
+                     initial.showCursor);
+
+    m_btnIgnoreLoadCell = new QPushButton(m_togglesPanel);
+    makeToggle(m_btnIgnoreLoadCell);
+    m_btnIgnoreLoadCell->setChecked(initial.ignoreLoadCell);
+    setToggleCaption(m_btnIgnoreLoadCell,
+                     QStringLiteral("Игнорирование тензодатчика"),
+                     initial.ignoreLoadCell);
+
+    auto *targetHint = new QLabel(
+        QStringLiteral("Пульт включается на этой панели. Автозапуск системы — на компьютере с NATS-хостом. "
+                       "Игнорирование тензодатчика: вкл — старт 7 1 1 0, выкл — 7 1 1 1."),
+        m_togglesPanel);
+    targetHint->setWordWrap(true);
+    targetHint->setStyleSheet(QStringLiteral(
+        "QLabel { color:#737880; font-size:11px; background:transparent; border:none; }"));
+
+    auto *togglesLay = new QVBoxLayout(m_togglesPanel);
+    togglesLay->setContentsMargins(12, 10, 12, 12);
+    togglesLay->setSpacing(8);
+    togglesLay->addWidget(togglesTitle);
+    togglesLay->addWidget(m_btnHmiAutostart);
+    togglesLay->addWidget(m_btnRemoteAutostart);
+    togglesLay->addWidget(m_btnShowCursor);
+    togglesLay->addWidget(m_btnIgnoreLoadCell);
+    togglesLay->addWidget(targetHint);
+
     const int tableX = 12 + m_leftColW + 12;
     m_tablePanel->move(tableX, 64);
     updatePager();
@@ -746,6 +775,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     connect(m_btnHmiAutostart, &QPushButton::toggled, this, &AdminPanel::onHmiAutostartToggled);
     connect(m_btnRemoteAutostart, &QPushButton::toggled, this, &AdminPanel::onRemoteAutostartToggled);
     connect(m_btnShowCursor, &QPushButton::toggled, this, &AdminPanel::onShowCursorToggled);
+    connect(m_btnIgnoreLoadCell, &QPushButton::toggled, this, &AdminPanel::onIgnoreLoadCellToggled);
     connect(m_btnRefresh, &QPushButton::clicked, this, &AdminPanel::onRefreshClicked);
     connect(m_btnPrevPage, &QPushButton::clicked, this, [this]() { goToPage(m_page - 1); });
     connect(m_btnNextPage, &QPushButton::clicked, this, [this]() { goToPage(m_page + 1); });
@@ -784,6 +814,7 @@ ConnectionSettings AdminPanel::networkSettings() const
     c.autostart = m_btnRemoteAutostart && m_btnRemoteAutostart->isChecked();
     c.hmiAutostart = m_btnHmiAutostart && m_btnHmiAutostart->isChecked();
     c.showCursor = m_btnShowCursor && m_btnShowCursor->isChecked();
+    c.ignoreLoadCell = m_btnIgnoreLoadCell && m_btnIgnoreLoadCell->isChecked();
     return c;
 }
 
@@ -917,6 +948,15 @@ void AdminPanel::onShowCursorToggled(bool enabled)
 {
     ConnectionSettings::applyShowCursor(enabled);
     setToggleCaption(m_btnShowCursor, QStringLiteral("Курсор мыши"), enabled);
+    ConnectionSettings cfg = networkSettings();
+    cfg.save();
+}
+
+void AdminPanel::onIgnoreLoadCellToggled(bool enabled)
+{
+    setToggleCaption(m_btnIgnoreLoadCell,
+                     QStringLiteral("Игнорирование тензодатчика"),
+                     enabled);
     ConnectionSettings cfg = networkSettings();
     cfg.save();
 }
@@ -1110,7 +1150,17 @@ void AdminPanel::fitTablePanel()
     if (m_jogPanel) {
         m_jogPanel->setGeometry(12, 64 + sharedH + 12, m_leftColW, m_jogPanel->height());
     }
+    fitTogglesPanel();
     fitPlcLogPanel();
+}
+
+void AdminPanel::fitTogglesPanel()
+{
+    if (!m_togglesPanel || !m_tablePanel)
+        return;
+    const QRect table = m_tablePanel->geometry();
+    const int h = qMax(m_togglesPanel->sizeHint().height(), 1);
+    m_togglesPanel->setGeometry(table.x(), table.bottom() + 1 + 12, table.width(), h);
 }
 
 void AdminPanel::fitPlcLogPanel()

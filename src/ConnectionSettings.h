@@ -19,6 +19,8 @@ struct ConnectionSettings {
     bool hmiAutostart = false;
     // Курсор мыши. По умолчанию включён; в админке можно выключить для киоска.
     bool showCursor = true;
+    // Игнорирование тензодатчика. Вкл → старт [7,1,1,0], выкл → [7,1,1,1].
+    bool ignoreLoadCell = false;
 
     QString natsUrl() const;
     QString plcEndpoint() const;

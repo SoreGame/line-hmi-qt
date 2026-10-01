@@ -235,6 +235,17 @@ QByteArray PlcClient::controlCommand(int code)
     return QByteArray(bytes, sizeof(bytes));
 }
 
+QByteArray PlcClient::startCommand(bool ignoreLoadCell)
+{
+    const char bytes[] = {
+        7,
+        1,
+        1,
+        static_cast<char>(ignoreLoadCell ? 0 : 1),
+    };
+    return QByteArray(bytes, sizeof(bytes));
+}
+
 QByteArray PlcClient::programSelectCommand(int program)
 {
     const char bytes[] = {
