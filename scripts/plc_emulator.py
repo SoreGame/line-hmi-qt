@@ -25,9 +25,16 @@ Set alarms from the server console, or from a client:
   [204, index, value, 0]  — set int16 index (50..59) to 0/1
   [205, 0, 0, 0]          — clear e-stop and all suspicions
 
-HMI prep start: client sends exactly 10 bytes on the same connection.
-No reply and no valve change — the next ping stays aligned. Content is
-a placeholder (zeros) until the real payload is defined.
+HMI prep start used to be 10 zero bytes. That frame is still accepted and
+starts the same fill simulation. The panel now sends [7, 2, 0, 0] instead.
+
+HMI commands, 4 bytes, no reply. Tag 7:
+  [7, 1, 1, 0]  — деталь 1
+  [7, 1, 2, 0]  — деталь 2
+  [7, 2, 0, 0]  — старт (та же симуляция заполнения, что у prep-start)
+  [7, 3, 0, 0]  — стоп
+  [7, 4, 0, 0]  — аварийный стоп
+  [7, 5, 0, 0]  — выход из аварийного стопа
 
 After prep-start the emulator simulates filling (for PrepOverlay):
   ~1s → ламели (byte 24 = 1)
@@ -79,6 +86,7 @@ STATUS_INT_BYTES = 2
 STATUS_SIZE = STATUS_INT_COUNT * STATUS_INT_BYTES  # 120
 PREP_COMMAND_SIZE = 10
 PING_FRAME = bytes((203, 0, 0, 0))
+PROGRAM_SELECT_TAG = 7
 SET_STATUS_TAG = 204
 CLEAR_ALARMS_TAG = 205
 # Временно: флаги камер в кадре статуса. 1 = камера работает.
@@ -370,6 +378,23 @@ def handle_client(conn: socket.socket, addr: tuple[str, int], state: PlcState) -
                 state.begin_prep_fill()
                 if not pending:
                     continue
+
+            if len(pending) == 4 and pending[0] == PROGRAM_SELECT_TAG:
+                frame = bytes(pending)
+                pending.clear()
+                sub = frame[1]
+                names = {
+                    1: "program",
+                    2: "start",
+                    3: "stop",
+                    4: "e-stop",
+                    5: "e-stop-exit",
+                }
+                name = names.get(sub, "unknown")
+                print(f"[plc] {peer} hmi {name} {list(frame)}", flush=True)
+                if sub == 2:
+                    state.begin_prep_fill()
+                continue
 
             if len(pending) == 4 and pending[0] == 203:
                 frame = bytes(pending)

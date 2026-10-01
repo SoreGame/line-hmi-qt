@@ -102,6 +102,7 @@ private:
     QVector<NatsClient::RobotPoint> m_points;
     int m_page = 0;
 
+    QFrame *m_networkPanel = nullptr;
     QFrame *m_jogPanel = nullptr;
     int m_leftColW = 420;
     int m_layoutW = kWidth;

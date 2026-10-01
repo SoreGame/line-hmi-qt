@@ -276,7 +276,8 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     headerLay->addWidget(btnApply);
 
     // --- Network panel: компактный блок в углу -------------------------
-    auto *networkPanel = new QFrame(this);
+    m_networkPanel = new QFrame(this);
+    auto *networkPanel = m_networkPanel;
     networkPanel->setObjectName(QStringLiteral("networkPanel"));
     networkPanel->setStyleSheet(QStringLiteral(
         "QFrame#networkPanel {"
@@ -376,10 +377,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     panelLay->addWidget(m_btnRemoteAutostart);
     panelLay->addWidget(m_btnShowCursor);
     panelLay->addWidget(targetHint);
-
-    networkPanel->adjustSize();
-    const QSize hint = networkPanel->sizeHint();
-    networkPanel->setGeometry(12, 64, qMax(hint.width(), 380), hint.height());
+    panelLay->addStretch(1);
 
     // --- Jog / motion --------------------------------------------------
     m_jogPanel = new QFrame(this);
@@ -543,10 +541,9 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
 
     m_jogPanel->adjustSize();
     const QSize jogHint = m_jogPanel->sizeHint();
-    m_leftColW = qMax(qMax(networkPanel->width(), jogHint.width()), 420);
+    m_leftColW = qMax(qMax(networkPanel->sizeHint().width(), jogHint.width()), 420);
     networkPanel->layout()->activate();
-    networkPanel->adjustSize();
-    const int netH = qMax(networkPanel->sizeHint().height(), 360);
+    const int netH = networkPanel->sizeHint().height();
     networkPanel->setGeometry(12, 64, m_leftColW, netH);
     const int jogY = 64 + netH + 12;
     const int jogH = qMax(jogHint.height(), 320);
@@ -733,6 +730,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     tableLay->addWidget(tableHeader);
     tableLay->addWidget(m_table);
     tableLay->addWidget(m_pager);
+    tableLay->addStretch(1);
 
     const int tableX = 12 + m_leftColW + 12;
     m_tablePanel->move(tableX, 64);
@@ -1103,8 +1101,15 @@ void AdminPanel::fitTablePanel()
     const int tableX = 12 + m_leftColW + 12;
     const int panelW = colsW + 2;
     const int panelH = kHeaderBar + tableH + pagerH + 2;
+    const int netH = m_networkPanel ? m_networkPanel->sizeHint().height() : panelH;
+    const int sharedH = qMax(panelH, netH);
 
-    m_tablePanel->setGeometry(tableX, 64, panelW, panelH);
+    m_tablePanel->setGeometry(tableX, 64, panelW, sharedH);
+    if (m_networkPanel)
+        m_networkPanel->setGeometry(12, 64, m_leftColW, sharedH);
+    if (m_jogPanel) {
+        m_jogPanel->setGeometry(12, 64 + sharedH + 12, m_leftColW, m_jogPanel->height());
+    }
     fitPlcLogPanel();
 }
 

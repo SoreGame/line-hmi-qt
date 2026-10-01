@@ -208,6 +208,20 @@ MainWindow::MainWindow(QWidget *parent)
     });
     connect(m_plc, &PlcClient::commandFinished, this,
             [this](bool ok, const QString &error) {
+        if (m_plcAcks.isEmpty())
+            return;
+        const PlcAck ack = m_plcAcks.takeFirst();
+        if (ack == PlcAck::Program || ack == PlcAck::Control) {
+            if (!ok) {
+                appendLog(LogLevel::Err,
+                          error.isEmpty()
+                              ? QStringLiteral("ПЛК не принял команду")
+                              : error);
+            } else if (ack == PlcAck::Program) {
+                appendLog(LogLevel::Ok, QStringLiteral("ПЛК: выбор программы отправлен"));
+            }
+            return;
+        }
         if (!m_prepArming)
             return;
         m_prepArming = false;
@@ -1082,7 +1096,7 @@ void MainWindow::applyProgramVisuals()
     ui->lineRailRobot->setStyleSheet(QString::fromUtf8(lineActive));
     ui->lineRailRobot->setFixedWidth(3);
 
-    const bool canChangeProg = (m_mode == Mode::Ready) && modulesReady();
+    const bool canChangeProg = (m_mode == Mode::Ready) && !m_prep && !m_prepArming && !m_recovery;
     ui->btnProg1->setEnabled(canChangeProg);
     ui->btnProg2->setEnabled(canChangeProg);
 }
@@ -1101,8 +1115,8 @@ void MainWindow::applyModeVisuals()
             ui->statusReady->setStyleSheet(QString::fromUtf8(kPillInit));
         }
         ui->btnStart->setEnabled(canStart && !m_prepArming && !m_prep && !m_recovery);
-        ui->btnProg1->setEnabled(canStart);
-        ui->btnProg2->setEnabled(canStart);
+        ui->btnProg1->setEnabled(!m_prepArming && !m_prep && !m_recovery);
+        ui->btnProg2->setEnabled(!m_prepArming && !m_prep && !m_recovery);
         ui->btnStop->setEnabled(false);
         ui->btnStop->setText(QStringLiteral("СТОП"));
         ui->btnEmergencyStop->setEnabled(true);
@@ -1154,13 +1168,11 @@ void MainWindow::on_btnStart_clicked()
     if (m_prepArming || m_prep)
         return;
 
-    const QByteArray frame = PlcClient::prepStartCommand();
+    const QByteArray frame = PlcClient::controlCommand(2);
     m_prepArming = true;
     ui->btnStart->setEnabled(false);
-    appendLog(LogLevel::Info,
-              QStringLiteral("Команда старта на ПЛК · %1 байт · %2")
-                  .arg(frame.size())
-                  .arg(QString::fromLatin1(frame.toHex(' '))));
+    appendLog(LogLevel::Info, QStringLiteral("Команда старта на ПЛК · 7 2"));
+    m_plcAcks.append(PlcAck::Start);
     m_plc->sendCommand(frame);
 }
 
@@ -1408,25 +1420,21 @@ void MainWindow::maybeEnterRecoveryFromPlc()
     if (!rising)
         return;
 
-    if (m_mode == Mode::Recovery && m_recovery) {
-        if (m_recovery->isExitRunning())
-            m_recovery->abortExitToChecklist();
-        return;
-    }
-
     enterRecovery(QStringLiteral("EMERGENCY STOP · ПЛК"));
 }
 
 void MainWindow::enterRecovery(const QString &reason)
 {
+    if (m_execWatcher && m_execWatcher->isRunning())
+        return;
+
+    sendPlcControl(4);
+
     if (m_mode == Mode::Recovery && m_recovery) {
         if (m_recovery->isExitRunning())
             m_recovery->abortExitToChecklist();
         return;
     }
-
-    if (m_execWatcher && m_execWatcher->isRunning())
-        return;
 
     closePrepOverlay();
     m_prepArming = false;
@@ -1478,6 +1486,7 @@ void MainWindow::onRecoveryFinished()
         return;
     }
 
+    sendPlcControl(5);
     appendLog(LogLevel::Ok, QStringLiteral("Восстановление завершено — можно запускать снова"));
 }
 
@@ -1487,6 +1496,7 @@ void MainWindow::on_btnStop_clicked()
         return;
     m_stopAfterCycle = true;
     appendLog(LogLevel::Info, QStringLiteral("Стоп · после текущего цикла"));
+    sendPlcControl(3);
     refreshUi();
 }
 
@@ -1494,34 +1504,41 @@ void MainWindow::on_btnEmergencyStop_clicked()
 {
     if (m_execWatcher && m_execWatcher->isRunning())
         return;
-    if (m_mode == Mode::Recovery && m_recovery) {
-        if (m_recovery->isExitRunning())
-            m_recovery->abortExitToChecklist();
-        return;
-    }
     enterRecovery(QStringLiteral("EMERGENCY STOP"));
+}
+
+void MainWindow::selectProgram(Program program)
+{
+    if (m_mode != Mode::Ready || m_prep || m_prepArming || m_recovery)
+        return;
+
+    m_program = program;
+    const int id = program == Program::Detail1 ? 1 : 2;
+    const QByteArray frame = PlcClient::programSelectCommand(id);
+    appendLog(LogLevel::Info,
+              program == Program::Detail1
+                  ? QStringLiteral("Выбрана Деталь 1 · поток Б1+Б2 · ПЛК 7 1 1")
+                  : QStringLiteral("Выбрана Деталь 2 · поток Б1+Б3 · ПЛК 7 1 2"));
+    m_plcAcks.append(PlcAck::Program);
+    m_plc->sendCommand(frame);
+    refreshUi();
+}
+
+void MainWindow::sendPlcControl(int code)
+{
+    appendLog(LogLevel::Info, QStringLiteral("ПЛК · 7 %1").arg(code));
+    m_plcAcks.append(PlcAck::Control);
+    m_plc->sendCommand(PlcClient::controlCommand(code));
 }
 
 void MainWindow::on_btnProg1_clicked()
 {
-    if (m_mode != Mode::Ready || !modulesReady())
-        return;
-    if (m_program == Program::Detail1)
-        return;
-    m_program = Program::Detail1;
-    appendLog(LogLevel::Info, QStringLiteral("Выбрана Деталь 1 · поток Б1+Б2"));
-    refreshUi();
+    selectProgram(Program::Detail1);
 }
 
 void MainWindow::on_btnProg2_clicked()
 {
-    if (m_mode != Mode::Ready || !modulesReady())
-        return;
-    if (m_program == Program::Detail2)
-        return;
-    m_program = Program::Detail2;
-    appendLog(LogLevel::Info, QStringLiteral("Выбрана Деталь 2 · поток Б1+Б3"));
-    refreshUi();
+    selectProgram(Program::Detail2);
 }
 
 void MainWindow::on_btnAdmin_clicked()

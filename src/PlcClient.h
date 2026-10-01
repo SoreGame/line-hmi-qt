@@ -62,10 +62,13 @@ public:
     // Обнуляет в маске байты, которые проверяются отдельно (камеры, предподготовка).
     static void excludeLiveSignals(QByteArray *mask);
 
-    // Кадр, который пульт шлёт на ПЛК по «Старт», до окна предподготовки.
-    // Ровно 10 байт. Содержимое пока нулевое — подставим, когда будет известно.
-    static constexpr int kPrepCommandSize = 10;
-    static QByteArray prepStartCommand();
+    // Короткие команды пульта, 4 байта: [7, code, 0, 0].
+    // 2 — старт, 3 — стоп, 4 — аварийный стоп, 5 — выход из аварийного стопа.
+    static QByteArray controlCommand(int code);
+
+    // Выбор программы на пульте. 4 байта, как остальные короткие команды:
+    // [7, 1, 1, 0] — деталь 1, [7, 1, 2, 0] — деталь 2.
+    static QByteArray programSelectCommand(int program);
 
     // No successful ping-pong for this long ⇒ PLC is down.
     static constexpr qint64 kTimeoutMs = 3000;

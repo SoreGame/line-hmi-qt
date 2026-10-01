@@ -224,9 +224,26 @@ PlcClient::PlcClient(QObject *parent)
 {
 }
 
-QByteArray PlcClient::prepStartCommand()
+QByteArray PlcClient::controlCommand(int code)
 {
-    return QByteArray(kPrepCommandSize, 0);
+    const char bytes[] = {
+        7,
+        static_cast<char>(code),
+        0,
+        0,
+    };
+    return QByteArray(bytes, sizeof(bytes));
+}
+
+QByteArray PlcClient::programSelectCommand(int program)
+{
+    const char bytes[] = {
+        7,
+        1,
+        static_cast<char>(program),
+        0,
+    };
+    return QByteArray(bytes, sizeof(bytes));
 }
 
 void PlcClient::excludeLiveSignals(QByteArray *mask)

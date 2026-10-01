@@ -53,6 +53,8 @@ private:
     enum class Mode { Ready, Run, Recovery };
     enum class Program { Detail1, Detail2 };
     enum class LogLevel { Info, Ok, Warn, Err };
+    // Очередь кадров на ПЛК: commandFinished приходит в том же порядке.
+    enum class PlcAck { Program, Start, Control };
 
     struct LogEntry {
         QDateTime time;
@@ -61,6 +63,8 @@ private:
     };
 
     void refreshUi();
+    void selectProgram(Program program);
+    void sendPlcControl(int code);
     void applyProgramVisuals();
     void applyModeVisuals();
     void updateNatsStatusIndicator();
@@ -126,6 +130,7 @@ private:
     QPointer<PrepOverlay> m_prep;
     QPointer<RecoveryOverlay> m_recovery;
     bool m_prepArming = false;
+    QVector<PlcAck> m_plcAcks;
     // Стоп основной программы: дожать текущий цикл и не запускать следующий.
     bool m_stopAfterCycle = false;
     QFutureWatcher<QString> *m_execWatcher = nullptr;
