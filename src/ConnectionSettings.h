@@ -6,10 +6,10 @@
 #include <QtGlobal>
 
 struct ConnectionSettings {
-    QString natsHost = QStringLiteral("127.0.0.1");
+    QString natsHost = QStringLiteral("192.168.11.170");
     quint16 natsPort = 4222;
-    QString plcHost = QStringLiteral("127.0.0.1");
-    quint16 plcPort = 1502;
+    QString plcHost = QStringLiteral("192.168.58.88");
+    quint16 plcPort = 2025;
     // 120 байт: 60 int16 (старые конфиги на 100 байт тоже принимаются).
     // Маска 0x00 — байт не проверяется.
     QByteArray plcReadyMask;

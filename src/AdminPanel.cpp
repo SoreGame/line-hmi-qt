@@ -310,7 +310,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     m_plcHost = new QLineEdit(initial.plcHost, networkPanel);
     m_plcPort = new QSpinBox(networkPanel);
     m_plcPort->setRange(1, 65535);
-    m_plcPort->setValue(initial.plcPort > 0 ? initial.plcPort : 1502);
+    m_plcPort->setValue(initial.plcPort > 0 ? initial.plcPort : 2025);
     m_plcPort->setFixedWidth(88);
 
     for (QWidget *w : {static_cast<QWidget *>(m_natsHost),

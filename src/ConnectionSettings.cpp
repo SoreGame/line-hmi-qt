@@ -118,13 +118,13 @@ void takePlcPattern(const QJsonObject &plc, const char *key, const QByteArray &f
 ConnectionSettings normalize(ConnectionSettings c)
 {
     if (c.natsHost.isEmpty())
-        c.natsHost = QStringLiteral("127.0.0.1");
+        c.natsHost = QStringLiteral("192.168.11.170");
     if (c.natsPort == 0)
         c.natsPort = 4222;
     if (c.plcHost.isEmpty())
-        c.plcHost = QStringLiteral("127.0.0.1");
+        c.plcHost = QStringLiteral("192.168.58.88");
     if (c.plcPort == 0)
-        c.plcPort = 1502;
+        c.plcPort = 2025;
     if (c.plcReadyMask.size() != kPlcStatusSize)
         c.plcReadyMask = defaultPlcMask();
     if (c.plcReadyValue.size() != kPlcStatusSize)
