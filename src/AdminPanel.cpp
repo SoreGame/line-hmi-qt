@@ -1380,7 +1380,7 @@ void AdminPanel::refreshArduinoPorts(const QString &preferred)
     } else if (!current.isEmpty()) {
         m_arduinoPort->setEditText(current);
     } else {
-        m_arduinoPort->setEditText(QStringLiteral("/dev/ttyUSB1"));
+        m_arduinoPort->setEditText(QStringLiteral("/dev/ttyUSB0"));
     }
     m_arduinoPort->blockSignals(false);
 }
