@@ -9,5 +9,10 @@
     "server": {
         "ip": "127.0.0.1",
         "port": 4222
+    },
+    "arduino": {
+        "port": "/dev/ttyUSB1",
+        "threshold": 1100000,
+        "unitsPerKg": 100000
     }
 }

@@ -1,10 +1,12 @@
 #include "AdminPanel.h"
+#include "ArduinoLink.h"
 #include "PlcClient.h"
 
 #include <QAbstractItemView>
 #include <QAbstractScrollArea>
 #include <QApplication>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDateTime>
 #include <QDoubleSpinBox>
 #include <QFile>
@@ -35,17 +37,22 @@
 #include <QWidget>
 #include <QtConcurrent/QtConcurrent>
 
+#if defined(LINE_HMI_HAS_SERIALPORT)
+#include <QSerialPortInfo>
+#endif
+
 namespace {
 
 const char *kFieldStyle =
-    "QLineEdit, QSpinBox, QDoubleSpinBox {"
+    "QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {"
     "  background:#FFFFFF; color:#1F2126;"
     "  border:1px solid #DBDEE3; border-radius:6px;"
     "  padding:2px 6px; min-height:26px; max-height:26px;"
     "  font-family:\"Inter\",\"Segoe UI\",sans-serif; font-size:12px;"
     "}"
     "QSpinBox::up-button, QSpinBox::down-button,"
-    "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width:16px; }";
+    "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width:16px; }"
+    "QComboBox::drop-down { width:20px; border:none; }";
 
 const char *kPrimaryBtn =
     "QPushButton {"
@@ -761,6 +768,113 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     togglesLay->addWidget(m_btnIgnoreLoadCell);
     togglesLay->addWidget(targetHint);
 
+    // --- Arduino -------------------------------------------------------
+    m_arduinoPanel = new QFrame(this);
+    m_arduinoPanel->setObjectName(QStringLiteral("arduinoPanel"));
+    m_arduinoPanel->setStyleSheet(QStringLiteral(
+        "QFrame#arduinoPanel {"
+        "  background:#FFFFFF;"
+        "  border:1px solid #DBDEE3;"
+        "  border-radius:8px;"
+        "}"));
+
+    auto *arduinoTitle = new QLabel(QStringLiteral("Тензодатчик"), m_arduinoPanel);
+    arduinoTitle->setStyleSheet(QStringLiteral(
+        "QLabel {"
+        "  font-family:\"Inter\",\"Segoe UI\",sans-serif;"
+        "  font-size:13px; font-weight:600; color:#1F2126;"
+        "  background:transparent; border:none;"
+        "}"));
+
+    m_arduinoValue = new QLabel(QStringLiteral("—"), m_arduinoPanel);
+    m_arduinoValue->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    m_arduinoValue->setStyleSheet(QStringLiteral(
+        "QLabel {"
+        "  font-family:\"Inter\",\"Segoe UI\",sans-serif;"
+        "  font-size:28px; font-weight:700; color:#1F2126;"
+        "  background:transparent; border:none;"
+        "}"));
+
+    m_arduinoKg = new QLabel(QStringLiteral("— кг"), m_arduinoPanel);
+    m_arduinoKg->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    m_arduinoKg->setStyleSheet(QStringLiteral(
+        "QLabel {"
+        "  font-family:\"Inter\",\"Segoe UI\",sans-serif;"
+        "  font-size:18px; font-weight:600; color:#3A3F4A;"
+        "  background:transparent; border:none;"
+        "}"));
+
+    auto *valueCaption = new QLabel(QStringLiteral("Текущее значение"), m_arduinoPanel);
+    valueCaption->setStyleSheet(QStringLiteral(
+        "QLabel { font-size:11px; color:#737880; background:transparent; border:none; }"));
+
+    m_arduinoStatus = new QLabel(QStringLiteral("Тензодатчик не подключен"), m_arduinoPanel);
+    m_arduinoStatus->setWordWrap(true);
+    m_arduinoStatus->setStyleSheet(QStringLiteral(
+        "QLabel { font-size:12px; font-weight:600; color:#B42318; background:transparent; border:none; }"));
+
+    m_arduinoPort = new QComboBox(m_arduinoPanel);
+    m_arduinoPort->setEditable(true);
+    m_arduinoPort->setInsertPolicy(QComboBox::NoInsert);
+    m_arduinoPort->setStyleSheet(QLatin1String(kFieldStyle));
+    m_arduinoPort->setMinimumHeight(28);
+
+    m_btnArduinoReconnect = new QPushButton(QStringLiteral("Открыть"), m_arduinoPanel);
+    m_btnArduinoReconnect->setStyleSheet(QLatin1String(kCompactBtn));
+    m_btnArduinoReconnect->setCursor(Qt::PointingHandCursor);
+    m_btnArduinoReconnect->setFocusPolicy(Qt::NoFocus);
+    m_btnArduinoReconnect->setFixedHeight(28);
+
+    auto *portRow = new QWidget(m_arduinoPanel);
+    auto *portLay = new QHBoxLayout(portRow);
+    portLay->setContentsMargins(0, 0, 0, 0);
+    portLay->setSpacing(8);
+    portLay->addWidget(m_arduinoPort, 1);
+    portLay->addWidget(m_btnArduinoReconnect, 0);
+
+    m_arduinoThreshold = new QSpinBox(m_arduinoPanel);
+    m_arduinoThreshold->setRange(ArduinoLink::kMinValue, ArduinoLink::kMaxValue);
+    m_arduinoThreshold->setValue(ArduinoLink::clampValue(initial.arduinoThreshold));
+    m_arduinoThreshold->setStyleSheet(QLatin1String(kFieldStyle));
+
+    m_btnArduinoSend = new QPushButton(QStringLiteral("Отправить"), m_arduinoPanel);
+    m_btnArduinoSend->setStyleSheet(QLatin1String(kPrimaryBtn));
+    m_btnArduinoSend->setCursor(Qt::PointingHandCursor);
+    m_btnArduinoSend->setFocusPolicy(Qt::NoFocus);
+    m_btnArduinoSend->setMinimumHeight(32);
+
+    auto *thresholdRow = new QWidget(m_arduinoPanel);
+    auto *thresholdLay = new QHBoxLayout(thresholdRow);
+    thresholdLay->setContentsMargins(0, 0, 0, 0);
+    thresholdLay->setSpacing(8);
+    thresholdLay->addWidget(m_arduinoThreshold, 1);
+    thresholdLay->addWidget(m_btnArduinoSend, 0);
+    thresholdRow->setMinimumHeight(36);
+
+    m_arduinoUnitsPerKg = new QDoubleSpinBox(m_arduinoPanel);
+    m_arduinoUnitsPerKg->setDecimals(1);
+    m_arduinoUnitsPerKg->setRange(0.1, 1e9);
+    m_arduinoUnitsPerKg->setSingleStep(1000.0);
+    m_arduinoUnitsPerKg->setValue(initial.arduinoUnitsPerKg > 0.0 ? initial.arduinoUnitsPerKg : 100000.0);
+    m_arduinoUnitsPerKg->setStyleSheet(QLatin1String(kFieldStyle));
+
+    auto *arduinoLay = new QVBoxLayout(m_arduinoPanel);
+    arduinoLay->setContentsMargins(12, 10, 12, 14);
+    arduinoLay->setSpacing(8);
+    arduinoLay->setSizeConstraint(QLayout::SetMinimumSize);
+    arduinoLay->addWidget(arduinoTitle);
+    arduinoLay->addWidget(valueCaption);
+    arduinoLay->addWidget(m_arduinoValue);
+    arduinoLay->addWidget(m_arduinoKg);
+    arduinoLay->addWidget(m_arduinoStatus);
+    arduinoLay->addWidget(makeLabeledField(QStringLiteral("Порт"), portRow, m_arduinoPanel));
+    arduinoLay->addWidget(makeLabeledField(QStringLiteral("Порог (сырое)"), thresholdRow, m_arduinoPanel));
+    arduinoLay->addWidget(makeLabeledField(QStringLiteral("Отсчётов на кг"), m_arduinoUnitsPerKg, m_arduinoPanel));
+
+    m_arduino = new ArduinoLink(this);
+    refreshArduinoPorts(initial.arduinoPort);
+    reconnectArduino();
+
     const int tableX = 12 + m_leftColW + 12;
     m_tablePanel->move(tableX, 64);
     updatePager();
@@ -783,6 +897,12 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
             this, &AdminPanel::onPointsLoaded);
     connect(m_saveWatcher, &QFutureWatcher<QString>::finished,
             this, &AdminPanel::onPointSaved);
+    connect(m_arduino, &ArduinoLink::valueChanged, this, &AdminPanel::onArduinoValue);
+    connect(m_arduino, &ArduinoLink::linkChanged, this, &AdminPanel::onArduinoLinkChanged);
+    connect(m_btnArduinoSend, &QPushButton::clicked, this, &AdminPanel::onArduinoSendThreshold);
+    connect(m_btnArduinoReconnect, &QPushButton::clicked, this, &AdminPanel::onArduinoPortEdited);
+    connect(m_arduinoUnitsPerKg, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
+            [this](double) { updateArduinoKgDisplay(); });
 
     QTimer::singleShot(0, this, &AdminPanel::onRefreshClicked);
 }
@@ -815,6 +935,28 @@ ConnectionSettings AdminPanel::networkSettings() const
     c.hmiAutostart = m_btnHmiAutostart && m_btnHmiAutostart->isChecked();
     c.showCursor = m_btnShowCursor && m_btnShowCursor->isChecked();
     c.ignoreLoadCell = m_btnIgnoreLoadCell && m_btnIgnoreLoadCell->isChecked();
+    if (m_arduinoPort) {
+        QString port;
+        const int idx = m_arduinoPort->currentIndex();
+        if (idx >= 0) {
+            const QVariant data = m_arduinoPort->itemData(idx);
+            if (data.isValid() && !data.toString().trimmed().isEmpty()
+                && m_arduinoPort->currentText() == m_arduinoPort->itemText(idx)) {
+                port = data.toString().trimmed();
+            }
+        }
+        if (port.isEmpty())
+            port = m_arduinoPort->currentText().trimmed();
+        if (port.contains(QStringLiteral(" — ")))
+            port = port.section(QStringLiteral(" — "), 0, 0).trimmed();
+        c.arduinoPort = port;
+    }
+    if (m_arduinoThreshold)
+        c.arduinoThreshold = ArduinoLink::clampValue(m_arduinoThreshold->value());
+    if (m_arduinoUnitsPerKg) {
+        const double scale = m_arduinoUnitsPerKg->value();
+        c.arduinoUnitsPerKg = scale > 0.0 ? scale : 100000.0;
+    }
     return c;
 }
 
@@ -970,6 +1112,8 @@ void AdminPanel::onApplyClicked()
                              QStringLiteral("Укажите хост NATS и ПЛК"));
         return;
     }
+    if (m_arduino)
+        m_arduino->sendThreshold(cfg.arduinoThreshold);
     emit applyRequested(cfg);
 }
 
@@ -1158,9 +1302,175 @@ void AdminPanel::fitTogglesPanel()
 {
     if (!m_togglesPanel || !m_tablePanel)
         return;
+    if (m_togglesPanel->layout())
+        m_togglesPanel->layout()->activate();
+    if (m_arduinoPanel && m_arduinoPanel->layout())
+        m_arduinoPanel->layout()->activate();
+
     const QRect table = m_tablePanel->geometry();
-    const int h = qMax(m_togglesPanel->sizeHint().height(), 1);
+    const int togglesH = qMax(m_togglesPanel->minimumSizeHint().height(),
+                              m_togglesPanel->sizeHint().height());
+    int arduinoH = 0;
+    if (m_arduinoPanel) {
+        arduinoH = qMax(m_arduinoPanel->minimumSizeHint().height(),
+                        m_arduinoPanel->sizeHint().height());
+        // Рамка QFrame (1px) не всегда входит в sizeHint — иначе режется низ.
+        arduinoH += 4;
+    }
+    const int h = qMax(togglesH, arduinoH);
     m_togglesPanel->setGeometry(table.x(), table.bottom() + 1 + 12, table.width(), h);
+    fitArduinoPanel();
+}
+
+void AdminPanel::fitArduinoPanel()
+{
+    if (!m_arduinoPanel || !m_togglesPanel)
+        return;
+    if (m_arduinoPanel->layout())
+        m_arduinoPanel->layout()->activate();
+
+    const QRect toggles = m_togglesPanel->geometry();
+    const int w = qMax(340, m_arduinoPanel->sizeHint().width());
+    int needH = qMax(m_arduinoPanel->minimumSizeHint().height(),
+                     m_arduinoPanel->sizeHint().height())
+                + 4;
+    const int h = qMax(toggles.height(), needH);
+    const int x = toggles.right() + 1 + 12;
+    m_arduinoPanel->setGeometry(x, toggles.y(), w, h);
+    if (h > toggles.height())
+        m_togglesPanel->setGeometry(toggles.x(), toggles.y(), toggles.width(), h);
+    m_arduinoPanel->raise();
+}
+
+void AdminPanel::refreshArduinoPorts(const QString &preferred)
+{
+    if (!m_arduinoPort)
+        return;
+
+    const QString current = preferred.trimmed().isEmpty()
+                                ? m_arduinoPort->currentText().trimmed()
+                                : preferred.trimmed();
+    m_arduinoPort->blockSignals(true);
+    m_arduinoPort->clear();
+
+#if defined(LINE_HMI_HAS_SERIALPORT)
+    const auto ports = QSerialPortInfo::availablePorts();
+    for (const QSerialPortInfo &info : ports) {
+        QString label = info.portName();
+        if (!info.description().isEmpty())
+            label += QStringLiteral(" — %1").arg(info.description());
+        m_arduinoPort->addItem(label, info.systemLocation());
+    }
+#endif
+
+    int idx = -1;
+    for (int i = 0; i < m_arduinoPort->count(); ++i) {
+        const QString sys = m_arduinoPort->itemData(i).toString();
+        const QString shortName = QFileInfo(sys).fileName();
+        const QString text = m_arduinoPort->itemText(i);
+        if (sys == current || shortName == current || text == current
+            || text.startsWith(current + QLatin1String(" — "))
+            || text.startsWith(shortName + QLatin1String(" — "))) {
+            idx = i;
+            break;
+        }
+    }
+    if (idx >= 0) {
+        m_arduinoPort->setCurrentIndex(idx);
+    } else if (!current.isEmpty()) {
+        m_arduinoPort->setEditText(current);
+    } else {
+        m_arduinoPort->setEditText(QStringLiteral("/dev/ttyUSB1"));
+    }
+    m_arduinoPort->blockSignals(false);
+}
+
+void AdminPanel::reconnectArduino()
+{
+    if (!m_arduino || !m_arduinoPort)
+        return;
+
+    QString port;
+    const int idx = m_arduinoPort->currentIndex();
+    if (idx >= 0) {
+        const QVariant data = m_arduinoPort->itemData(idx);
+        if (data.isValid() && !data.toString().trimmed().isEmpty()
+            && m_arduinoPort->currentText() == m_arduinoPort->itemText(idx)) {
+            port = data.toString().trimmed();
+        }
+    }
+    if (port.isEmpty())
+        port = m_arduinoPort->currentText().trimmed();
+    if (port.contains(QStringLiteral(" — ")))
+        port = port.section(QStringLiteral(" — "), 0, 0).trimmed();
+
+    m_arduinoValue->setText(QStringLiteral("—"));
+    m_arduinoHasValue = false;
+    if (m_arduinoKg)
+        m_arduinoKg->setText(QStringLiteral("— кг"));
+    m_arduino->open(port);
+    if (m_arduinoThreshold)
+        m_arduino->sendThreshold(m_arduinoThreshold->value());
+}
+
+void AdminPanel::updateArduinoKgDisplay()
+{
+    if (!m_arduinoKg)
+        return;
+    if (!m_arduinoHasValue) {
+        m_arduinoKg->setText(QStringLiteral("— кг"));
+        return;
+    }
+    const double scale = m_arduinoUnitsPerKg ? m_arduinoUnitsPerKg->value() : 0.0;
+    if (scale <= 0.0) {
+        m_arduinoKg->setText(QStringLiteral("— кг"));
+        return;
+    }
+    const double kg = static_cast<double>(m_arduinoLastRaw) / scale;
+    m_arduinoKg->setText(QStringLiteral("%1 кг").arg(kg, 0, 'f', 2));
+}
+
+void AdminPanel::onArduinoValue(qint32 value)
+{
+    m_arduinoLastRaw = value;
+    m_arduinoHasValue = true;
+    if (m_arduinoValue)
+        m_arduinoValue->setText(QString::number(value));
+    updateArduinoKgDisplay();
+}
+
+void AdminPanel::onArduinoLinkChanged(bool linked, const QString &message)
+{
+    if (!m_arduinoStatus)
+        return;
+    m_arduinoStatus->setText(message);
+    m_arduinoStatus->setStyleSheet(linked
+                                       ? QStringLiteral(
+                                             "QLabel { font-size:12px; font-weight:600; color:#067647; "
+                                             "background:transparent; border:none; }")
+                                       : QStringLiteral(
+                                             "QLabel { font-size:12px; font-weight:600; color:#B42318; "
+                                             "background:transparent; border:none; }"));
+    if (!linked) {
+        m_arduinoHasValue = false;
+        if (m_arduinoValue)
+            m_arduinoValue->setText(QStringLiteral("—"));
+        if (m_arduinoKg)
+            m_arduinoKg->setText(QStringLiteral("— кг"));
+    }
+}
+
+void AdminPanel::onArduinoSendThreshold()
+{
+    if (!m_arduino || !m_arduinoThreshold)
+        return;
+    m_arduino->sendThreshold(m_arduinoThreshold->value());
+}
+
+void AdminPanel::onArduinoPortEdited()
+{
+    refreshArduinoPorts(m_arduinoPort ? m_arduinoPort->currentText() : QString());
+    reconnectArduino();
 }
 
 void AdminPanel::fitPlcLogPanel()

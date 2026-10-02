@@ -8,6 +8,9 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Concurrent Network)
+if (NOT ANDROID)
+    find_package(Qt6 REQUIRED COMPONENTS SerialPort)
+endif()
 
 qt_add_executable(line-hmi-qt MANUAL_FINALIZATION
     src/main.cpp
@@ -24,12 +27,18 @@ qt_add_executable(line-hmi-qt MANUAL_FINALIZATION
     src/RecoveryOverlay.h
     src/ConnectionSettings.cpp
     src/ConnectionSettings.h
+    src/ArduinoLink.cpp
+    src/ArduinoLink.h
     src/AdminPanel.cpp
     src/AdminPanel.h
     resources.qrc
 )
 
 target_link_libraries(line-hmi-qt PRIVATE Qt6::Widgets Qt6::Concurrent Qt6::Network)
+if (NOT ANDROID)
+    target_link_libraries(line-hmi-qt PRIVATE Qt6::SerialPort)
+    target_compile_definitions(line-hmi-qt PRIVATE LINE_HMI_HAS_SERIALPORT=1)
+endif()
 
 if (ANDROID)
     set_target_properties(line-hmi-qt PROPERTIES

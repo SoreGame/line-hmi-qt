@@ -21,6 +21,11 @@ struct ConnectionSettings {
     bool showCursor = true;
     // Игнорирование тензодатчика. Вкл → старт [7,1,1,0], выкл → [7,1,1,1].
     bool ignoreLoadCell = false;
+    // COM-порт Arduino (пусто — не открывать). Порог уходит командой T <int>.
+    QString arduinoPort = QStringLiteral("/dev/ttyUSB1");
+    qint32 arduinoThreshold = 1100000;
+    // кг = сырое / arduinoUnitsPerKg (после тарирования датчика).
+    double arduinoUnitsPerKg = 100000.0;
 
     QString natsUrl() const;
     QString plcEndpoint() const;

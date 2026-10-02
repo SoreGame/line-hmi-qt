@@ -8,8 +8,11 @@
 #include <QFutureWatcher>
 #include <QVector>
 
+class ArduinoLink;
 class PlcClient;
 class QCheckBox;
+class QComboBox;
+class QDoubleSpinBox;
 class QFrame;
 class QLabel;
 class QLineEdit;
@@ -52,6 +55,10 @@ private slots:
     void onIgnoreLoadCellToggled(bool enabled);
     void onStepChanged(int index);
     void onPlcStateChanged();
+    void onArduinoValue(qint32 value);
+    void onArduinoLinkChanged(bool linked, const QString &message);
+    void onArduinoSendThreshold();
+    void onArduinoPortEdited();
 
 private:
     struct PointsLoadResult {
@@ -73,6 +80,10 @@ private:
     void refreshPlcBufferLog();
     void fitPlcLogPanel();
     void fitTogglesPanel();
+    void fitArduinoPanel();
+    void refreshArduinoPorts(const QString &preferred);
+    void reconnectArduino();
+    void updateArduinoKgDisplay();
     double currentStep() const;
     QPushButton *makeJogButton(const QString &text, QWidget *parent);
     void showEvent(QShowEvent *event) override;
@@ -85,6 +96,7 @@ private:
 
     NatsClient *m_nats = nullptr;
     PlcClient *m_plc = nullptr;
+    ArduinoLink *m_arduino = nullptr;
     QLineEdit *m_natsHost = nullptr;
     QSpinBox *m_natsPort = nullptr;
     QLineEdit *m_plcHost = nullptr;
@@ -106,11 +118,23 @@ private:
 
     QFrame *m_networkPanel = nullptr;
     QFrame *m_togglesPanel = nullptr;
+    QFrame *m_arduinoPanel = nullptr;
     QFrame *m_jogPanel = nullptr;
     int m_leftColW = 420;
     int m_layoutW = kWidth;
     int m_layoutH = kHeight;
     bool m_fullScreenApplied = false;
+
+    QLabel *m_arduinoValue = nullptr;
+    QLabel *m_arduinoKg = nullptr;
+    QLabel *m_arduinoStatus = nullptr;
+    QComboBox *m_arduinoPort = nullptr;
+    QSpinBox *m_arduinoThreshold = nullptr;
+    QDoubleSpinBox *m_arduinoUnitsPerKg = nullptr;
+    QPushButton *m_btnArduinoSend = nullptr;
+    QPushButton *m_btnArduinoReconnect = nullptr;
+    qint32 m_arduinoLastRaw = 0;
+    bool m_arduinoHasValue = false;
 
     QFutureWatcher<PointsLoadResult> *m_loadWatcher = nullptr;
     QFutureWatcher<QString> *m_saveWatcher = nullptr;

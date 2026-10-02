@@ -169,6 +169,21 @@ bool readConfigFile(const QString &path, ConnectionSettings *out)
     if (system.contains(QStringLiteral("ignoreLoadCell")))
         out->ignoreLoadCell = system.value(QStringLiteral("ignoreLoadCell")).toBool(false);
 
+    const QJsonObject arduino = root.value(QStringLiteral("arduino")).toObject();
+    if (!arduino.isEmpty()) {
+        if (arduino.contains(QStringLiteral("port")))
+            out->arduinoPort = arduino.value(QStringLiteral("port")).toString(out->arduinoPort).trimmed();
+        if (arduino.contains(QStringLiteral("threshold"))) {
+            const int raw = arduino.value(QStringLiteral("threshold")).toInt(out->arduinoThreshold);
+            out->arduinoThreshold = qBound(-10000, raw, 1500000);
+        }
+        if (arduino.contains(QStringLiteral("unitsPerKg"))) {
+            const double scale = arduino.value(QStringLiteral("unitsPerKg")).toDouble(out->arduinoUnitsPerKg);
+            if (scale > 0.0)
+                out->arduinoUnitsPerKg = scale;
+        }
+    }
+
     return true;
 }
 
@@ -205,6 +220,12 @@ bool writeConfigFile(const QString &path, const ConnectionSettings &cfg)
     system.insert(QStringLiteral("showCursor"), cfg.showCursor);
     system.insert(QStringLiteral("ignoreLoadCell"), cfg.ignoreLoadCell);
     root.insert(QStringLiteral("system"), system);
+
+    QJsonObject arduino = root.value(QStringLiteral("arduino")).toObject();
+    arduino.insert(QStringLiteral("port"), cfg.arduinoPort);
+    arduino.insert(QStringLiteral("threshold"), cfg.arduinoThreshold);
+    arduino.insert(QStringLiteral("unitsPerKg"), cfg.arduinoUnitsPerKg);
+    root.insert(QStringLiteral("arduino"), arduino);
 
     const QDir dir = QFileInfo(path).absoluteDir();
     if (!dir.exists() && !QDir().mkpath(dir.absolutePath()))
