@@ -27,6 +27,8 @@ qt_add_executable(line-hmi-qt MANUAL_FINALIZATION
     src/RecoveryOverlay.h
     src/ConnectionSettings.cpp
     src/ConnectionSettings.h
+    src/RuntimeState.cpp
+    src/RuntimeState.h
     src/ArduinoLink.cpp
     src/ArduinoLink.h
     src/AdminPanel.cpp

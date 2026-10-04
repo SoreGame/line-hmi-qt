@@ -1,0 +1,36 @@
+#!/bin/sh
+xset s off
+xset -dpms
+xset s noblank
+
+# DP-1 EDID often appears a few seconds after X. `xrandr --auto` returns 0 even
+# when the output is disconnected, so we must wait for "DP-1 connected" and a
+# real 1920x1080 mode — otherwise Qt starts on a dummy 1024x768 and the panel
+# stays black.
+output=DP-1
+logdir="${HOME}/.local/share/SCARA/line-hmi-qt"
+mkdir -p "${logdir}"
+log="${logdir}/xrandr-boot.log"
+ensure="${HOME}/line-hmi-qt/scripts/ensure-display.sh"
+
+if [ -x "${ensure}" ]; then
+    "${ensure}" --output "${output}" --wait 30 --log "${log}" || true
+    # Late hotplug after Qt is already running (survives exec via nohup).
+    nohup "${ensure}" --output "${output}" --wait 120 --log "${log}" >/dev/null 2>&1 &
+fi
+
+xsetroot -solid black
+unset QT_SCALE_FACTOR
+unset QT_AUTO_SCREEN_SCALE_FACTOR
+# blank pointer: touchscreen has no mouse cursor
+if [ ! -f "$HOME/.blank.xbm" ]; then
+cat > "$HOME/.blank.xbm" << 'XBM'
+#define blank_width 1
+#define blank_height 1
+#define blank_x_hot 0
+#define blank_y_hot 0
+static unsigned char blank_bits[] = { 0x00 };
+XBM
+fi
+xsetroot -cursor "$HOME/.blank.xbm" "$HOME/.blank.xbm"
+exec "$HOME/line-hmi-qt/build/line-hmi-qt"

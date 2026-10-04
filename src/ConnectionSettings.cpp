@@ -10,6 +10,10 @@
 #include <QJsonObject>
 #include <QStandardPaths>
 
+#ifdef Q_OS_UNIX
+#include <unistd.h>
+#endif
+
 namespace {
 
 QString bundledConfigPath()
@@ -29,9 +33,10 @@ QStringList configSearchPaths()
 #ifdef Q_OS_ANDROID
     paths << bundledConfigPath();
 #else
+    // Сначала локальные настройки — cmake copy config.json их не затирает.
+    paths << writableConfigPath();
     paths << QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("config.json"));
     paths << QDir::current().filePath(QStringLiteral("config.json"));
-    paths << writableConfigPath();
 #endif
     paths.removeDuplicates();
     return paths;
@@ -129,6 +134,14 @@ ConnectionSettings normalize(ConnectionSettings c)
         c.plcReadyMask = defaultPlcMask();
     if (c.plcReadyValue.size() != kPlcStatusSize)
         c.plcReadyValue = defaultPlcValue();
+    if (c.plcStatusBytes < kLegacyStatusSize)
+        c.plcStatusBytes = kLegacyStatusSize;
+    if (c.plcStatusBytes > kPlcStatusSize)
+        c.plcStatusBytes = kPlcStatusSize;
+    if (c.plcStatusBytes % 2 != 0)
+        c.plcStatusBytes += 1;
+    if (c.plcStatusBytes > kPlcStatusSize)
+        c.plcStatusBytes = kPlcStatusSize;
     return c;
 }
 
@@ -157,6 +170,8 @@ bool readConfigFile(const QString &path, ConnectionSettings *out)
         out->plcPort = static_cast<quint16>(plc.value(QStringLiteral("port")).toInt(out->plcPort));
         takePlcPattern(plc, "ready_mask", defaultPlcMask(), &out->plcReadyMask, &out->plcPatternWarning);
         takePlcPattern(plc, "ready_value", defaultPlcValue(), &out->plcReadyValue, &out->plcPatternWarning);
+        if (plc.contains(QStringLiteral("status_bytes")))
+            out->plcStatusBytes = plc.value(QStringLiteral("status_bytes")).toInt(out->plcStatusBytes);
     }
 
     const QJsonObject system = root.value(QStringLiteral("system")).toObject();
@@ -168,6 +183,8 @@ bool readConfigFile(const QString &path, ConnectionSettings *out)
         out->showCursor = system.value(QStringLiteral("showCursor")).toBool(true);
     if (system.contains(QStringLiteral("ignoreLoadCell")))
         out->ignoreLoadCell = system.value(QStringLiteral("ignoreLoadCell")).toBool(false);
+    if (system.contains(QStringLiteral("ignoreLaunchLocks")))
+        out->ignoreLaunchLocks = system.value(QStringLiteral("ignoreLaunchLocks")).toBool(false);
 
     const QJsonObject arduino = root.value(QStringLiteral("arduino")).toObject();
     if (!arduino.isEmpty()) {
@@ -210,6 +227,7 @@ bool writeConfigFile(const QString &path, const ConnectionSettings &cfg)
         plc.insert(QStringLiteral("ready_mask"), encodeHex100(cfg.plcReadyMask));
     if (cfg.plcReadyValue.size() == kPlcStatusSize)
         plc.insert(QStringLiteral("ready_value"), encodeHex100(cfg.plcReadyValue));
+    plc.insert(QStringLiteral("status_bytes"), cfg.plcStatusBytes);
 
     root.insert(QStringLiteral("server"), server);
     root.insert(QStringLiteral("plc"), plc);
@@ -219,6 +237,7 @@ bool writeConfigFile(const QString &path, const ConnectionSettings &cfg)
     system.insert(QStringLiteral("hmiAutostart"), cfg.hmiAutostart);
     system.insert(QStringLiteral("showCursor"), cfg.showCursor);
     system.insert(QStringLiteral("ignoreLoadCell"), cfg.ignoreLoadCell);
+    system.insert(QStringLiteral("ignoreLaunchLocks"), cfg.ignoreLaunchLocks);
     root.insert(QStringLiteral("system"), system);
 
     QJsonObject arduino = root.value(QStringLiteral("arduino")).toObject();
@@ -236,6 +255,12 @@ bool writeConfigFile(const QString &path, const ConnectionSettings &cfg)
         return false;
 
     file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    file.flush();
+#ifdef Q_OS_UNIX
+    const int fd = file.handle();
+    if (fd >= 0)
+        ::fsync(fd);
+#endif
     return true;
 }
 
@@ -283,8 +308,18 @@ ConnectionSettings ConnectionSettings::load()
         ConnectionSettings parsed;
         if (!readConfigFile(path, &parsed))
             continue;
+        parsed = normalize(parsed);
+#ifndef Q_OS_ANDROID
+        const QString persist = writableConfigPath();
+        if (path != persist) {
+            QDir().mkpath(QFileInfo(persist).absolutePath());
+            writeConfigFile(persist, parsed);
+        }
+        loadedConfigPath() = persist;
+#else
         loadedConfigPath() = path;
-        return normalize(parsed);
+#endif
+        return parsed;
     }
 
     return normalize(cfg);
@@ -295,10 +330,8 @@ void ConnectionSettings::save() const
 #ifdef Q_OS_ANDROID
     return;
 #else
-    QString path = loadedConfigPath();
-    if (path.isEmpty())
-        path = writableConfigPath();
-
+    const QString path = writableConfigPath();
+    QDir().mkpath(QFileInfo(path).absolutePath());
     if (writeConfigFile(path, *this))
         loadedConfigPath() = path;
 #endif

@@ -15,12 +15,16 @@ struct ConnectionSettings {
     QByteArray plcReadyMask;
     QByteArray plcReadyValue;
     QString plcPatternWarning;
+    // Ожидаемый размер статус-кадра ПЛК в байтах (100 = 50 int16, 120 = 60 int16).
+    int plcStatusBytes = 120;
     bool autostart = false;
     bool hmiAutostart = false;
     // Курсор мыши. По умолчанию включён; в админке можно выключить для киоска.
     bool showCursor = true;
     // Игнорирование тензодатчика. Вкл → старт [7,1,1,0], выкл → [7,1,1,1].
     bool ignoreLoadCell = false;
+    // Игнорировать блокировки старта (ПЛК, vision, CTRL, буфер и т.д.).
+    bool ignoreLaunchLocks = false;
     // COM-порт Arduino (пусто — не открывать). Порог уходит командой T <int>.
     QString arduinoPort = QStringLiteral("/dev/ttyUSB0");
     qint32 arduinoThreshold = 1100000;

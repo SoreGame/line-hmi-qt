@@ -53,12 +53,15 @@ private slots:
     void onRemoteAutostartToggled(bool enabled);
     void onShowCursorToggled(bool enabled);
     void onIgnoreLoadCellToggled(bool enabled);
+    void onIgnoreLaunchLocksToggled(bool enabled);
     void onStepChanged(int index);
     void onPlcStateChanged();
     void onArduinoValue(qint32 value);
     void onArduinoLinkChanged(bool linked, const QString &message);
     void onArduinoSendThreshold();
     void onArduinoPortEdited();
+    void onArduinoCalibrate();
+    void onArduinoResetCalibration();
 
 private:
     struct PointsLoadResult {
@@ -84,6 +87,7 @@ private:
     void refreshArduinoPorts(const QString &preferred);
     void reconnectArduino();
     void updateArduinoKgDisplay();
+    void updateArduinoCalibHint();
     double currentStep() const;
     QPushButton *makeJogButton(const QString &text, QWidget *parent);
     void showEvent(QShowEvent *event) override;
@@ -101,6 +105,8 @@ private:
     QSpinBox *m_natsPort = nullptr;
     QLineEdit *m_plcHost = nullptr;
     QSpinBox *m_plcPort = nullptr;
+    QSpinBox *m_plcStatusBytes = nullptr;
+    QLabel *m_plcLogTitle = nullptr;
     QPlainTextEdit *m_plcBufferLog = nullptr;
     QLabel *m_plcBufferStatus = nullptr;
     QFrame *m_plcLogPanel = nullptr;
@@ -128,13 +134,20 @@ private:
     QLabel *m_arduinoValue = nullptr;
     QLabel *m_arduinoKg = nullptr;
     QLabel *m_arduinoStatus = nullptr;
+    QLabel *m_arduinoCalibHint = nullptr;
     QComboBox *m_arduinoPort = nullptr;
     QSpinBox *m_arduinoThreshold = nullptr;
     QDoubleSpinBox *m_arduinoUnitsPerKg = nullptr;
+    QDoubleSpinBox *m_arduinoKnownKg = nullptr;
     QPushButton *m_btnArduinoSend = nullptr;
     QPushButton *m_btnArduinoReconnect = nullptr;
+    QPushButton *m_btnArduinoCalibrate = nullptr;
+    QPushButton *m_btnArduinoResetCalib = nullptr;
     qint32 m_arduinoLastRaw = 0;
     bool m_arduinoHasValue = false;
+    double m_arduinoUnitsPerKgBaseline = 100000.0;
+    double m_arduinoCalibScaleSum = 0.0;
+    int m_arduinoCalibPoints = 0;
 
     QFutureWatcher<PointsLoadResult> *m_loadWatcher = nullptr;
     QFutureWatcher<QString> *m_saveWatcher = nullptr;
@@ -144,6 +157,7 @@ private:
     QPushButton *m_btnRemoteAutostart = nullptr;
     QPushButton *m_btnShowCursor = nullptr;
     QPushButton *m_btnIgnoreLoadCell = nullptr;
+    QPushButton *m_btnIgnoreLaunchLocks = nullptr;
     QLabel *m_droX = nullptr;
     QLabel *m_droY = nullptr;
     QLabel *m_droZ = nullptr;

@@ -12,6 +12,7 @@ namespace {
 constexpr int kPingIntervalMs = 1000;
 constexpr int kPingTimeoutMs = 800;
 constexpr int kConnectTimeoutMs = 3000;
+constexpr int kLegacyStatusSize = 100; // прежний кадр 50 int16
 constexpr char kPingFrame[] = {static_cast<char>(203), '\0', '\0', '\0'};
 
 bool readExact(QTcpSocket &sock, QByteArray *out, int nbytes, int timeoutMs)
@@ -31,18 +32,45 @@ bool readExact(QTcpSocket &sock, QByteArray *out, int nbytes, int timeoutMs)
     return out->size() >= nbytes;
 }
 
+// ПЛК отдаёт statusBytes (100 = старый кадр, 120 = 60 int16).
+bool readStatusFrame(QTcpSocket &sock, QByteArray *out, int timeoutMs, int statusBytes)
+{
+    const int expected = qBound(kLegacyStatusSize, statusBytes, PlcClient::kStatusSize);
+    out->clear();
+    QElapsedTimer timer;
+    timer.start();
+    while (out->size() < expected) {
+        const int elapsed = static_cast<int>(timer.elapsed());
+        if (elapsed > timeoutMs)
+            break;
+        if (sock.state() != QAbstractSocket::ConnectedState)
+            break;
+        const int remain = timeoutMs - elapsed;
+        if (sock.bytesAvailable() > 0 || sock.waitForReadyRead(qMin(50, qMax(1, remain)))) {
+            out->append(sock.read(expected - out->size()));
+            continue;
+        }
+    }
+    if (out->size() < expected)
+        return false;
+    if (out->size() < PlcClient::kStatusSize)
+        out->append(QByteArray(PlcClient::kStatusSize - out->size(), '\0'));
+    return true;
+}
+
 } // namespace
 
 class PlcClient::Worker : public QThread
 {
 public:
     Worker(PlcClient *owner, QString host, quint16 port,
-           QByteArray readyValue, QByteArray readyMask)
+           QByteArray readyValue, QByteArray readyMask, int statusBytes)
         : m_owner(owner)
         , m_host(std::move(host))
         , m_port(port)
         , m_readyValue(std::move(readyValue))
         , m_readyMask(std::move(readyMask))
+        , m_statusBytes(qBound(100, statusBytes, PlcClient::kStatusSize))
     {
     }
 
@@ -136,7 +164,7 @@ private:
             return false;
 
         QByteArray reply;
-        if (!readExact(sock, &reply, PlcClient::kStatusSize, kPingTimeoutMs))
+        if (!readStatusFrame(sock, &reply, kPingTimeoutMs, m_statusBytes))
             return false;
 
         applyIncoming(reply.left(PlcClient::kStatusSize));
@@ -159,7 +187,11 @@ private:
             sensors = m_owner->m_sensors;
         }
 
-        if (buf.size() < PlcClient::kStatusSize || (buf.size() % PlcClient::kStatusIntBytes) != 0)
+        QByteArray frame = buf;
+        if (frame.size() < PlcClient::kStatusSize)
+            frame.append(QByteArray(PlcClient::kStatusSize - frame.size(), '\0'));
+
+        if (frame.size() < kLegacyStatusSize || (frame.size() % PlcClient::kStatusIntBytes) != 0)
             return;
 
         for (int i = 0; i < PlcClient::kValveCount; ++i)
@@ -214,6 +246,7 @@ private:
     quint16 m_port = 0;
     QByteArray m_readyValue;
     QByteArray m_readyMask;
+    int m_statusBytes = PlcClient::kStatusSize;
 };
 
 PlcClient::PlcClient(QObject *parent)
@@ -286,7 +319,8 @@ PlcClient::~PlcClient()
 }
 
 void PlcClient::start(const QString &host, quint16 port,
-                      const QByteArray &readyValue, const QByteArray &readyMask)
+                      const QByteArray &readyValue, const QByteArray &readyMask,
+                      int statusBytes)
 {
     stop();
     QByteArray value = readyValue;
@@ -307,7 +341,7 @@ void PlcClient::start(const QString &host, quint16 port,
         std::lock_guard<std::mutex> lock(m_dataMutex);
         m_status.fill(0);
     }
-    m_worker = new Worker(this, host, port, std::move(value), std::move(mask));
+    m_worker = new Worker(this, host, port, std::move(value), std::move(mask), statusBytes);
     m_worker->start();
 }
 

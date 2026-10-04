@@ -6,7 +6,9 @@
 #include "PlcClient.h"
 #include "PrepOverlay.h"
 #include "RecoveryOverlay.h"
+#include "RuntimeState.h"
 
+#include <QCloseEvent>
 #include <QColor>
 #include <QDateTime>
 #include <QDir>
@@ -134,6 +136,10 @@ MainWindow::MainWindow(QWidget *parent)
     , m_plc(new PlcClient(this))
 {
     ui->setupUi(this);
+    if (ui->statusPowerOff)
+        ui->statusPowerOff->raise();
+    if (ui->statusPowerOff)
+        ui->statusPowerOff->raise();
 #ifdef Q_OS_ANDROID
     setupAndroidCanvas();
     enableKeepScreenOn();
@@ -174,6 +180,7 @@ MainWindow::MainWindow(QWidget *parent)
         updateNatsStatusIndicator();
         updatePlcIndicators();
         updateModuleIndicators();
+        syncPowerOffLatch();
     });
     clockTimer->start(1000);
     updateClock();
@@ -262,7 +269,20 @@ MainWindow::MainWindow(QWidget *parent)
 #endif
 
     applyConnectionSettings(false);
+
+    const RuntimeState prev = RuntimeState::load();
+    const bool unclean = !prev.cleanShutdown;
+    const bool recovery = prev.recoveryPending;
+    RuntimeState::setCleanShutdown(false);
+
     refreshUi();
+
+    if (recovery || unclean) {
+        const QString reason = recovery
+            ? QStringLiteral("EMERGENCY STOP · восстановлено после перезапуска")
+            : QStringLiteral("EMERGENCY STOP · прошлое выключение было нештатным");
+        QTimer::singleShot(0, this, [this, reason]() { enterRecovery(reason); });
+    }
 }
 
 MainWindow::~MainWindow()
@@ -293,6 +313,13 @@ void MainWindow::showEvent(QShowEvent *event)
 {
     QMainWindow::showEvent(event);
     fitAndroidCanvas();
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    if (canPowerOff())
+        RuntimeState::setCleanShutdown(true);
+    QMainWindow::closeEvent(event);
 }
 
 void MainWindow::setupAndroidCanvas()
@@ -366,12 +393,14 @@ void MainWindow::enableKeepScreenOn()
 
 void MainWindow::startPlcClient()
 {
-    m_plc->start(m_plcHost, m_plcPort, m_plcReadyValue, m_plcReadyMask);
+    m_plc->start(m_plcHost, m_plcPort, m_plcReadyValue, m_plcReadyMask, m_plcStatusBytes);
     appendLog(LogLevel::Info,
-              QStringLiteral("Подключение к серверу ПЛК (%1:%2), кадр 60 int16. "
-                             "Vision 1/2: buffer[%3]/buffer[%4] == 1")
+              QStringLiteral("Подключение к серверу ПЛК (%1:%2), кадр %3 байт (%4 int16). "
+                             "Vision 1/2: buffer[%5]/buffer[%6] == 1")
                   .arg(m_plcHost)
                   .arg(m_plcPort)
+                  .arg(m_plcStatusBytes)
+                  .arg(m_plcStatusBytes / 2)
                   .arg(PlcClient::kVision1IntIndex)
                   .arg(PlcClient::kVision2IntIndex));
     ui->statusPlc->setToolTip(QStringLiteral("%1:%2").arg(m_plcHost).arg(m_plcPort));
@@ -386,6 +415,7 @@ void MainWindow::applyConnectionSettings(bool notifyOnError)
     m_plcPort = cfg.plcPort;
     m_plcReadyMask = cfg.plcReadyMask;
     m_plcReadyValue = cfg.plcReadyValue;
+    m_plcStatusBytes = cfg.plcStatusBytes;
     if (!cfg.plcPatternWarning.isEmpty())
         appendLog(LogLevel::Warn, cfg.plcPatternWarning);
     ui->statusNats->setToolTip(m_natsUrl);
@@ -483,6 +513,7 @@ void MainWindow::refreshUi()
     applyModeVisuals();
     updateNatsStatusIndicator();
     updatePlcIndicators();
+    syncPowerOffLatch();
 }
 
 void MainWindow::updateNatsStatusIndicator()
@@ -696,8 +727,45 @@ bool MainWindow::plcEstopPressed() const
         && m_plc->statusInt16(PlcClient::kEstopIntIndex) == PlcClient::kEstopPressedValue;
 }
 
+bool MainWindow::canPowerOff() const
+{
+    if (m_mode == Mode::Run)
+        return false;
+    if (m_prep || m_prepArming)
+        return false;
+    if (m_execWatcher && m_execWatcher->isRunning())
+        return false;
+    if (m_stopWatcher && m_stopWatcher->isRunning())
+        return false;
+    if (m_recovery && m_recovery->isExitRunning())
+        return false;
+    return true;
+}
+
+void MainWindow::syncPowerOffLatch()
+{
+    const bool allow = canPowerOff();
+    RuntimeState::setCleanShutdown(allow);
+    if (!ui->statusPowerOff)
+        return;
+    if (allow) {
+        ui->statusPowerOff->setText(QStringLiteral("Можно выключать питание · ДА"));
+        ui->statusPowerOff->setStyleSheet(QString::fromUtf8(kPillOk) +
+                                          QStringLiteral(" font-size:14px; font-weight:700;"));
+    } else {
+        ui->statusPowerOff->setText(QStringLiteral("Можно выключать питание · НЕТ"));
+        ui->statusPowerOff->setStyleSheet(QString::fromUtf8(kPillErr) +
+                                          QStringLiteral(" font-size:14px; font-weight:700;"));
+    }
+}
+
 bool MainWindow::modulesReady() const
 {
+    if (m_mode == Mode::Recovery)
+        return false;
+    if (ConnectionSettings::load().ignoreLaunchLocks)
+        return true;
+
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     const qint64 lastCtrl = m_nats ? m_nats->lastCtrlMs() : 0;
     const qint64 lastBehaviour = m_nats ? m_nats->lastBehaviourMs() : 0;
@@ -1151,6 +1219,7 @@ void MainWindow::applyModeVisuals()
         ui->nodeRobotState->setText(QStringLiteral("Восстановление"));
         break;
     }
+    syncPowerOffLatch();
 }
 
 void MainWindow::on_btnStart_clicked()
@@ -1168,6 +1237,13 @@ void MainWindow::on_btnStart_clicked()
     if (m_prepArming || m_prep)
         return;
 
+    if (ConnectionSettings::load().ignoreLaunchLocks) {
+        appendLog(LogLevel::Warn,
+                  QStringLiteral("Старт без блокировок · ПЛК/Vision/буфер не проверяются"));
+        startSelectedProgramScript(/*fromLine=*/1);
+        return;
+    }
+
     const bool ignoreLoadCell = ConnectionSettings::load().ignoreLoadCell;
     const QByteArray frame = PlcClient::startCommand(ignoreLoadCell);
     m_prepArming = true;
@@ -1178,6 +1254,7 @@ void MainWindow::on_btnStart_clicked()
                   : QStringLiteral("Команда старта на ПЛК · 7 1 1 1"));
     m_plcAcks.append(PlcAck::Start);
     m_plc->sendCommand(frame);
+    syncPowerOffLatch();
 }
 
 void MainWindow::openPrepOverlay()
@@ -1227,6 +1304,7 @@ void MainWindow::openPrepOverlay()
                                                     : QStringLiteral("Деталь 2")));
     overlay->show();
     overlay->raise();
+    syncPowerOffLatch();
 }
 
 QString MainWindow::scriptFilenameForProgram(Program p) const
@@ -1432,6 +1510,8 @@ void MainWindow::enterRecovery(const QString &reason)
     if (m_execWatcher && m_execWatcher->isRunning())
         return;
 
+    // Локальная защёлка: переживает выключение HMI; при старте снова шлём e-stop на ПЛК.
+    RuntimeState::setRecoveryPending(true);
     sendPlcControl(4);
 
     if (m_mode == Mode::Recovery && m_recovery) {
@@ -1485,13 +1565,14 @@ void MainWindow::onRecoveryFinished()
     refreshUi();
     updateLeftPanel();
 
+    RuntimeState::setRecoveryPending(false);
+    sendPlcControl(5);
+    appendLog(LogLevel::Ok, QStringLiteral("Восстановление завершено — на ПЛК отправлен выход (7 5)"));
+
     if (plcEstopPressed()) {
         enterRecovery(QStringLiteral("EMERGENCY STOP · ПЛК после выхода"));
         return;
     }
-
-    sendPlcControl(5);
-    appendLog(LogLevel::Ok, QStringLiteral("Восстановление завершено — можно запускать снова"));
 }
 
 void MainWindow::on_btnStop_clicked()
@@ -1574,6 +1655,7 @@ void MainWindow::on_btnAdmin_clicked()
     });
     panel.exec();
     appendLog(LogLevel::Info, QStringLiteral("Админ: панель закрыта"));
+    refreshUi();
 #endif
 }
 
