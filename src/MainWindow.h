@@ -49,6 +49,7 @@ private slots:
     void on_btnProg1_clicked();
     void on_btnProg2_clicked();
     void on_btnAdmin_clicked();
+    void on_btnService_clicked();
     void on_btnExportLog_clicked();
 
 private:

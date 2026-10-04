@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "ui_MainWindow.h"
 #include "AdminPanel.h"
+#include "ServicePanel.h"
 #include "ConnectionSettings.h"
 #include "NatsClient.h"
 #include "PlcClient.h"
@@ -144,6 +145,8 @@ MainWindow::MainWindow(QWidget *parent)
     setupAndroidCanvas();
     enableKeepScreenOn();
     ui->btnAdmin->hide();
+    if (ui->btnService)
+        ui->btnService->hide();
 #endif
     setupChecklistPanel();
 
@@ -1624,6 +1627,19 @@ void MainWindow::on_btnProg1_clicked()
 void MainWindow::on_btnProg2_clicked()
 {
     selectProgram(Program::Detail2);
+}
+
+void MainWindow::on_btnService_clicked()
+{
+#ifdef Q_OS_ANDROID
+    return;
+#else
+    appendLog(LogLevel::Info, QStringLiteral("Сервис: панель открыта"));
+    ServicePanel panel(m_plc, this);
+    panel.exec();
+    appendLog(LogLevel::Info, QStringLiteral("Сервис: панель закрыта"));
+    refreshUi();
+#endif
 }
 
 void MainWindow::on_btnAdmin_clicked()

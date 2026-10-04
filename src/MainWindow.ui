@@ -181,7 +181,7 @@
    <widget class="QLabel" name="labelClock">
     <property name="geometry">
      <rect>
-      <x>1648</x>
+      <x>1530</x>
       <y>22</y>
       <width>130</width>
       <height>28</height>
@@ -195,6 +195,28 @@
     </property>
     <property name="alignment">
      <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignVCenter</set>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btnService">
+    <property name="geometry">
+     <rect>
+      <x>1672</x>
+      <y>16</y>
+      <width>106</width>
+      <height>40</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Сервис</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton{background:#FFFFFF; color:#1F2126; border:1px solid #DBDEE3; border-radius:8px; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:13px; font-weight:600;} QPushButton:pressed{background:#F0F2F5;}</string>
+    </property>
+    <property name="cursor">
+     <cursorShape>PointingHandCursor</cursorShape>
+    </property>
+    <property name="focusPolicy">
+     <enum>Qt::FocusPolicy::NoFocus</enum>
     </property>
    </widget>
    <widget class="QPushButton" name="btnAdmin">
@@ -1533,6 +1555,7 @@ Vision 2</string>
    <zorder>statusNats</zorder>
    <zorder>statusPowerOff</zorder>
    <zorder>labelClock</zorder>
+   <zorder>btnService</zorder>
    <zorder>btnAdmin</zorder>
    <zorder>panelChecklist</zorder>
    <zorder>labelChecklistTitle</zorder>

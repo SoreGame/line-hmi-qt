@@ -290,6 +290,22 @@ QByteArray PlcClient::programSelectCommand(int program)
     return QByteArray(bytes, sizeof(bytes));
 }
 
+QByteArray PlcClient::serviceModeCommand(bool on)
+{
+    const char bytes[] = {99, static_cast<char>(on ? 1 : 0)};
+    return QByteArray(bytes, sizeof(bytes));
+}
+
+QByteArray PlcClient::doCommand(int n, bool on)
+{
+    const char bytes[] = {
+        2,
+        static_cast<char>(n),
+        static_cast<char>(on ? 1 : 0),
+    };
+    return QByteArray(bytes, sizeof(bytes));
+}
+
 void PlcClient::excludeLiveSignals(QByteArray *mask)
 {
     if (!mask || mask->size() < kStatusSize)
