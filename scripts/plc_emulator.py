@@ -32,13 +32,13 @@ Set alarms from the server console, or from a client:
 
 HMI prep start used to be 10 zero bytes. That frame is still accepted and
 starts the same fill simulation. Старт с пульта теперь [7, 1, 1, 0] или
-[7, 1, 1, 1] — тоже запускает заполнение. [7, 2, 0, 0] оставлен как старый старт.
+[7, 1, 1, 1] — тоже запускает заполнение.
 
 HMI commands, 4 bytes, no reply. Tag 7:
   [7, 1, 1, 0]  — старт, тензодатчик игнорируется (тот же кадр, что выбор детали 1)
   [7, 1, 1, 1]  — старт, тензодатчик учитывается
   [7, 1, 2, 0]  — деталь 2
-  [7, 2, 0, 0]  — старый старт
+  [7, 2, 0, 0]  — запуск основной программы (после отсчёта или «Пропустить»)
   [7, 3, 0, 0]  — стоп
   [7, 4, 0, 0]  — аварийный стоп
   [7, 5, 0, 0]  — выход из аварийного стопа
@@ -398,15 +398,13 @@ def handle_tag7(frame: bytes, peer: str, state: PlcState) -> None:
         return
     names = {
         1: "program",
-        2: "start",
+        2: "main-start",
         3: "stop",
         4: "e-stop",
         5: "e-stop-exit",
     }
     name = names.get(sub, "unknown")
     print(f"[plc] {peer} hmi {name} {list(frame)}", flush=True)
-    if sub == 2:
-        state.begin_prep_fill()
 
 
 def try_consume_pending(

@@ -1296,6 +1296,7 @@ void MainWindow::openPrepOverlay()
             m_prep->deleteLater();
             m_prep = nullptr;
         }
+        sendPlcControl(2);
         startSelectedProgramScript(/*fromLine=*/1);
     });
     connect(overlay, &PrepOverlay::dismissed, this, [this]() {
