@@ -51,10 +51,14 @@ public:
     // Готовность сварочного модуля: эти int16 кадра равны 1. Индекс 15 не входит.
     static constexpr int kWeldingReadyInts[] = {10, 11, 12, 13, 14, 16};
     static constexpr qint16 kWeldingReadyValue = 1;
-    // Новые ячейки кадра (индексы 50–59). В маску готовности не входят.
-    // 50: грибок, 1 = нажат. 51–59: подозрения, 1 = показать на левой панели.
-    static constexpr int kEstopIntIndex = 50;
-    static constexpr qint16 kEstopPressedValue = 1;
+    // Ячейки, меняющиеся в работе (индексы 49–59). В маску готовности не входят.
+    // 49 (50-я по счёту): кнопки корпуса, защёлка ПЛК: 10 — СТОП (снимается по 7 3),
+    // 20 — зелёная/СТАРТ (по 7 1 1 x), 30 — грибок e-stop (только по 7 5).
+    // 51–59: подозрения, 1 = показать на левой панели.
+    static constexpr int kPanelIntIndex = 49;
+    static constexpr qint16 kPanelStop = 10;
+    static constexpr qint16 kPanelStart = 20;
+    static constexpr qint16 kPanelEstop = 30;
     static constexpr int kSuspicionFirstIntIndex = 51;
     static constexpr int kSuspicionLastIntIndex = 59;
     static constexpr qint16 kSuspicionActiveValue = 1;

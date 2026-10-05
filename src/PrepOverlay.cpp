@@ -293,6 +293,26 @@ void PrepOverlay::stopCountdown()
     m_countdownTimer->stop();
 }
 
+bool PrepOverlay::requestStop()
+{
+    if (m_phase != Phase::Running && m_phase != Phase::Countdown)
+        return false;
+    beginSmoothStop();
+    return true;
+}
+
+void PrepOverlay::cancelPending()
+{
+    stopCountdown();
+    {
+        std::lock_guard<std::mutex> lock(*m_gate);
+        m_epoch->fetch_add(1, std::memory_order_relaxed);
+    }
+    m_waitFilename.clear();
+    m_phase = Phase::Exit;
+    refreshButtons();
+}
+
 void PrepOverlay::skipPreparation()
 {
     if (m_phase != Phase::Running)

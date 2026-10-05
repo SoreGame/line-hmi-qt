@@ -204,12 +204,27 @@ MainWindow::MainWindow(QWidget *parent)
     });
     natsReconnectTimer->start();
 
+    m_estopClearTimer = new QTimer(this);
+    m_estopClearTimer->setSingleShot(true);
+    m_estopClearTimer->setInterval(3000);
+    connect(m_estopClearTimer, &QTimer::timeout, this, [this]() {
+        if (!m_awaitEstopClear)
+            return;
+        m_awaitEstopClear = false;
+        if (!plcReady()) {
+            appendLog(LogLevel::Warn, QStringLiteral("ПЛК не на связи · снятие e-stop не подтверждено"));
+            refreshUi();
+            return;
+        }
+        enterRecovery(QStringLiteral("EMERGENCY STOP · ПЛК не снял e-stop после 7 5"));
+    });
+
     connect(m_nats, &NatsClient::scriptStatusReceived, this, &MainWindow::onScriptStatus);
 
     connect(m_plc, &PlcClient::stateChanged, this, [this]() {
         updatePlcIndicators();
         updateLeftPanel();
-        maybeEnterRecoveryFromPlc();
+        handlePanelButtons();
         if (!(m_execWatcher && m_execWatcher->isRunning())
             && !(m_stopWatcher && m_stopWatcher->isRunning())) {
             if (m_mode == Mode::Ready)
@@ -727,7 +742,87 @@ bool MainWindow::plcReady() const
 bool MainWindow::plcEstopPressed() const
 {
     return m_plc && m_plc->isOk()
-        && m_plc->statusInt16(PlcClient::kEstopIntIndex) == PlcClient::kEstopPressedValue;
+        && m_plc->statusInt16(PlcClient::kPanelIntIndex) == PlcClient::kPanelEstop;
+}
+
+bool MainWindow::canStartNow(QString *reason) const
+{
+    const auto fail = [reason](const QString &why) {
+        if (reason)
+            *reason = why;
+        return false;
+    };
+    if (m_mode == Mode::Run)
+        return fail(QStringLiteral("программа уже работает"));
+    if (m_mode == Mode::Recovery || m_recovery || m_estopPending)
+        return fail(QStringLiteral("идёт восстановление после аварийного стопа"));
+    if (plcEstopPressed())
+        return fail(QStringLiteral("на ПЛК активен e-stop"));
+    if (m_awaitEstopClear)
+        return fail(QStringLiteral("ПЛК ещё не снял e-stop"));
+    if ((m_execWatcher && m_execWatcher->isRunning())
+        || (m_stopWatcher && m_stopWatcher->isRunning()))
+        return fail(QStringLiteral("выполняется предыдущая команда"));
+    if (m_prepArming || m_prep)
+        return fail(QStringLiteral("идёт предподготовка"));
+    if (!modulesReady())
+        return fail(QStringLiteral("система не готова"));
+    return true;
+}
+
+void MainWindow::handlePanelButtons()
+{
+    if (!m_plc || !m_plc->isOk())
+        return;
+    const qint16 value = m_plc->statusInt16(PlcClient::kPanelIntIndex);
+    // Первое чтение после запуска пульта: висящую защёлку СТОП/СТАРТ не исполняем.
+    const bool changed = m_panelValueKnown && value != m_prevPanelValue;
+    m_panelValueKnown = true;
+    m_prevPanelValue = value;
+
+    if (m_awaitEstopClear && value != PlcClient::kPanelEstop) {
+        m_awaitEstopClear = false;
+        m_estopClearTimer->stop();
+        appendLog(LogLevel::Ok, QStringLiteral("ПЛК снял e-stop · старт снова доступен"));
+        refreshUi();
+    }
+
+    if (value == PlcClient::kPanelEstop) {
+        maybeEnterRecoveryFromPlc();
+        return;
+    }
+    if (!changed)
+        return;
+    if (value == PlcClient::kPanelStop)
+        panelStopPressed();
+    else if (value == PlcClient::kPanelStart)
+        panelStartPressed();
+}
+
+void MainWindow::panelStopPressed()
+{
+    if (m_mode == Mode::Run && !m_stopAfterCycle) {
+        appendLog(LogLevel::Info, QStringLiteral("Кнопка СТОП на корпусе"));
+        on_btnStop_clicked();
+        return;
+    }
+    if (m_prep && m_prep->requestStop()) {
+        appendLog(LogLevel::Info, QStringLiteral("Кнопка СТОП на корпусе · предподготовка"));
+        sendPlcControl(3);
+        return;
+    }
+    appendLog(LogLevel::Warn, QStringLiteral("Кнопка СТОП на корпусе: сейчас недоступна"));
+}
+
+void MainWindow::panelStartPressed()
+{
+    QString why;
+    if (!canStartNow(&why)) {
+        appendLog(LogLevel::Warn, QStringLiteral("Кнопка СТАРТ на корпусе: недоступно · %1").arg(why));
+        return;
+    }
+    appendLog(LogLevel::Info, QStringLiteral("Кнопка СТАРТ на корпусе"));
+    on_btnStart_clicked();
 }
 
 bool MainWindow::canPowerOff() const
@@ -1068,7 +1163,7 @@ void MainWindow::onScriptStatus(bool running, bool completed, int /*line*/,
     // Успешное завершение программы → сохранить время цикла и запустить снова.
     if (!completed || running)
         return;
-    if (m_mode != Mode::Run)
+    if (m_mode != Mode::Run || m_estopPending)
         return;
     if (!m_cycleRunning && m_cycleAccumulatedMs <= 0)
         return; // цикл уже обработан / ещё не стартовал
@@ -1186,7 +1281,7 @@ void MainWindow::applyModeVisuals()
             ui->statusReady->setText(QStringLiteral("●  Готовность · INIT"));
             ui->statusReady->setStyleSheet(QString::fromUtf8(kPillInit));
         }
-        ui->btnStart->setEnabled(canStart && !m_prepArming && !m_prep && !m_recovery);
+        ui->btnStart->setEnabled(canStartNow());
         ui->btnProg1->setEnabled(!m_prepArming && !m_prep && !m_recovery);
         ui->btnProg2->setEnabled(!m_prepArming && !m_prep && !m_recovery);
         ui->btnStop->setEnabled(false);
@@ -1228,18 +1323,11 @@ void MainWindow::applyModeVisuals()
 
 void MainWindow::on_btnStart_clicked()
 {
-    if (m_mode != Mode::Ready)
-        return;
-    if (m_execWatcher && m_execWatcher->isRunning())
-        return;
-    if (m_stopWatcher && m_stopWatcher->isRunning())
-        return;
-    if (!modulesReady()) {
-        appendLog(LogLevel::Warn, QStringLiteral("Старт недоступен: система не готова"));
+    QString why;
+    if (!canStartNow(&why)) {
+        appendLog(LogLevel::Warn, QStringLiteral("Старт недоступен: %1").arg(why));
         return;
     }
-    if (m_prepArming || m_prep)
-        return;
 
     const bool ignoreLoadCell = ConnectionSettings::load().ignoreLoadCell;
     const QByteArray frame = PlcClient::startCommand(ignoreLoadCell);
@@ -1367,6 +1455,11 @@ void MainWindow::startSelectedProgramScript(int fromLine, bool freshSession)
             [this, freshSession]() {
         const QString error = m_execWatcher->result();
 
+        if (m_estopPending) {
+            // Exec мог дойти до behaviour — stop из восстановления его прервёт.
+            sendStopThenRecover(m_estopPendingReason);
+            return;
+        }
         if (!error.isEmpty()) {
             appendLog(LogLevel::Err, error);
             QMessageBox::warning(this, QStringLiteral("Ошибка запуска"), error);
@@ -1425,6 +1518,10 @@ void MainWindow::sendStopCommandAsync(const QString &reason, LogLevel logLevel,
     connect(m_stopWatcher, &QFutureWatcher<QString>::finished, this,
             [this, reason, logLevel, countScrap]() {
         const QString error = m_stopWatcher->result();
+        if (m_estopPending) {
+            sendStopThenRecover(m_estopPendingReason);
+            return;
+        }
         if (!error.isEmpty()) {
             appendLog(LogLevel::Err,
                       QStringLiteral("Не удалось отправить stop: %1").arg(error));
@@ -1487,6 +1584,7 @@ void MainWindow::sendStopThenRecover(const QString &reason)
         if (interruptedCycle)
             registerScrap();
 
+        m_estopPending = false;
         m_mode = Mode::Recovery;
         m_stopAfterCycle = false;
         resetUptime();
@@ -1504,26 +1602,21 @@ void MainWindow::closePrepOverlay()
 {
     if (!m_prep)
         return;
+    m_prep->cancelPending();
     m_prep->deleteLater();
     m_prep = nullptr;
 }
 
 void MainWindow::maybeEnterRecoveryFromPlc()
 {
-    const bool pressed = plcEstopPressed();
-    const bool rising = pressed && !m_prevPlcEstop;
-    m_prevPlcEstop = pressed;
-    if (!rising)
+    // По уровню: 30 держится на ПЛК до 7 5, поэтому пропущенный фронт не теряет аварию.
+    if (!plcEstopPressed() || m_estopPending || m_awaitEstopClear || m_mode == Mode::Recovery)
         return;
-
     enterRecovery(QStringLiteral("EMERGENCY STOP · ПЛК"));
 }
 
 void MainWindow::enterRecovery(const QString &reason)
 {
-    if (m_execWatcher && m_execWatcher->isRunning())
-        return;
-
     // Локальная защёлка: переживает выключение HMI; при старте снова шлём e-stop на ПЛК.
     RuntimeState::setRecoveryPending(true);
     sendPlcControl(4);
@@ -1537,6 +1630,18 @@ void MainWindow::enterRecovery(const QString &reason)
     closePrepOverlay();
     m_prepArming = false;
     m_stopAfterCycle = false;
+    m_awaitEstopClear = false;
+    m_estopClearTimer->stop();
+    m_estopPending = true;
+    m_estopPendingReason = reason;
+
+    if ((m_execWatcher && m_execWatcher->isRunning())
+        || (m_stopWatcher && m_stopWatcher->isRunning())) {
+        appendLog(LogLevel::Err,
+                  QStringLiteral("%1 · ждём завершения текущей команды").arg(reason));
+        refreshUi();
+        return;
+    }
     sendStopThenRecover(reason);
 }
 
@@ -1575,19 +1680,18 @@ void MainWindow::onRecoveryFinished()
         m_recovery = nullptr;
     }
 
+    // Выход из аварии не продолжает работу: только Ready, новый цикл — через Старт.
     m_mode = Mode::Ready;
+    m_stopAfterCycle = false;
+    m_awaitEstopClear = true;
+    m_estopClearTimer->start();
     m_lastChecklistTasks.clear();
-    refreshUi();
-    updateLeftPanel();
 
     RuntimeState::setRecoveryPending(false);
     sendPlcControl(5);
     appendLog(LogLevel::Ok, QStringLiteral("Восстановление завершено — на ПЛК отправлен выход (7 5)"));
-
-    if (plcEstopPressed()) {
-        enterRecovery(QStringLiteral("EMERGENCY STOP · ПЛК после выхода"));
-        return;
-    }
+    refreshUi();
+    updateLeftPanel();
 }
 
 void MainWindow::on_btnStop_clicked()
@@ -1602,8 +1706,6 @@ void MainWindow::on_btnStop_clicked()
 
 void MainWindow::on_btnEmergencyStop_clicked()
 {
-    if (m_execWatcher && m_execWatcher->isRunning())
-        return;
     enterRecovery(QStringLiteral("EMERGENCY STOP"));
 }
 

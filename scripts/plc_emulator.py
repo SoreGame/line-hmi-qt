@@ -27,8 +27,15 @@ Service panel (no reply):
   In service mode the status frame int16[n] echoes DO n.
 
 Set alarms from the server console, or from a client:
-  [204, index, value, 0]  — set int16 index (50..59) to 0/1
-  [205, 0, 0, 0]          — clear e-stop and all suspicions
+  [204, index, value, 0]  — set int16 index 51..59 to 0/1, index 49 to 0/10/20/30
+  [205, 0, 0, 0]          — clear panel buttons and all suspicions
+
+Кнопки корпуса, int16[49] (50-я ячейка) — защёлка, как на настоящем ПЛК:
+  10 — СТОП, снимается по [7, 3, 0, 0]
+  20 — зелёная/СТАРТ, снимается по старту [7, 1, 1, x]
+  30 — грибок e-stop, снимается только по [7, 5, 0, 0]
+Подозрения int16[51..59] есть в кадре только при --status-bytes 120.
+В сервисном режиме int16[49] показывает DO 49, как и остальные DO.
 
 HMI prep start used to be 10 zero bytes. That frame is still accepted and
 starts the same fill simulation. Старт с пульта теперь [7, 1, 1, 0] или
@@ -60,7 +67,8 @@ Usage:
   python3 plc_emulator.py --client [--host 127.0.0.1] [--port 1502]
   python3 plc_emulator.py --client --set 1=1,3=0
   python3 plc_emulator.py --client --poll
-  python3 plc_emulator.py --client --estop 1
+  python3 plc_emulator.py --status-bytes 120
+  python3 plc_emulator.py --client --panel start|stop|estop|0
   python3 plc_emulator.py --client --suspect 51=1,53=1
   python3 plc_emulator.py --client --clear-alarms
 
@@ -72,8 +80,8 @@ Usage:
 Server console (while listening, TTY only; status-ping не печатается каждый раз):
   service 0|1
   do N=0|1
-  estop 0|1          — вне кадра 50 int16, только лог
-  suspect 51=1,53=0  — вне кадра 50 int16, только лог
+  panel stop|start|estop|0 — int16[49] (10/20/30/0)
+  suspect 51=1,53=0  — int16[51..59]
   clear
   status
   help
@@ -90,9 +98,10 @@ import time
 from typing import Iterable
 
 FRAME_SIZE = 1024
+# 100 байт — int16[0..49]; --status-bytes 120 — ещё int16[50..59] (подозрения), как PlcClient.
 STATUS_INT_COUNT = 50
 STATUS_INT_BYTES = 2
-STATUS_SIZE = STATUS_INT_COUNT * STATUS_INT_BYTES  # 100
+STATUS_SIZE = STATUS_INT_COUNT * STATUS_INT_BYTES
 DO_COUNT = 50
 SERVICE_TAG = 99
 DO_TAG = 2
@@ -115,7 +124,11 @@ VALVE_COUNT = 12
 SENSOR_COUNT = 12
 VALVE_OFFSET = 0
 SENSOR_OFFSET = 12
-ESTOP_INT_INDEX = 50
+PANEL_INT_INDEX = 49
+PANEL_VALUES = {"0": 0, "stop": 10, "start": 20, "estop": 30}
+PANEL_STOP = PANEL_VALUES["stop"]
+PANEL_START = PANEL_VALUES["start"]
+PANEL_ESTOP = PANEL_VALUES["estop"]
 SUSPICION_FIRST = 51
 SUSPICION_LAST = 59
 # Стейты станций перед стартом (0 = готово), как PlcClient.
@@ -188,7 +201,24 @@ def format_bits(names: Iterable[str], values: Iterable[int]) -> str:
 
 
 def is_alarm_index(index: int) -> bool:
-    return ESTOP_INT_INDEX <= index <= SUSPICION_LAST
+    return index == PANEL_INT_INDEX or SUSPICION_FIRST <= index <= SUSPICION_LAST
+
+
+def check_alarm_value(index: int, value: int) -> None:
+    if index == PANEL_INT_INDEX:
+        if value not in PANEL_VALUES.values():
+            raise ValueError(f"int16[{PANEL_INT_INDEX}] must be 0/10/20/30: {value}")
+    elif value not in (0, 1):
+        raise ValueError(f"alarm value must be 0 or 1: {value}")
+
+
+def parse_panel(text: str) -> int:
+    text = text.strip()
+    if text in PANEL_VALUES:
+        return PANEL_VALUES[text]
+    value = int(text)
+    check_alarm_value(PANEL_INT_INDEX, value)
+    return value
 
 
 class PlcState:
@@ -197,7 +227,7 @@ class PlcState:
     def __init__(self) -> None:
         self.valves = [0] * VALVE_COUNT
         self.sensors = [0] * SENSOR_COUNT
-        self.estop = 0
+        self.panel = 0
         self.suspicions = [0] * (SUSPICION_LAST - SUSPICION_FIRST + 1)
         # idle: int16 сварки = 1 для чек-листа. filling: байты предподготовки 0→1.
         self.phase = "idle"
@@ -252,27 +282,34 @@ class PlcState:
         return None
 
     def set_alarm_int(self, index: int, value: int) -> None:
-        if value not in (0, 1):
-            raise ValueError(f"alarm value must be 0 or 1: {value}")
+        check_alarm_value(index, value)
         if not is_alarm_index(index):
             raise ValueError(
-                f"alarm index out of range {ESTOP_INT_INDEX}..{SUSPICION_LAST}: {index}"
+                f"alarm index must be {PANEL_INT_INDEX} or {SUSPICION_FIRST}..{SUSPICION_LAST}: {index}"
             )
         with self._lock:
-            if index == ESTOP_INT_INDEX:
-                self.estop = value
+            if index == PANEL_INT_INDEX:
+                self.panel = value
             else:
                 self.suspicions[index - SUSPICION_FIRST] = value
 
     def clear_alarms(self) -> None:
         with self._lock:
-            self.estop = 0
+            self.panel = 0
             for i in range(len(self.suspicions)):
                 self.suspicions[i] = 0
 
     def alarm_snapshot(self) -> tuple[int, list[int]]:
         with self._lock:
-            return self.estop, list(self.suspicions)
+            return self.panel, list(self.suspicions)
+
+    def release_panel(self, value: int) -> bool:
+        """HMI ответил командой — снять защёлку, если в int16[49] именно это значение."""
+        with self._lock:
+            if self.panel != value:
+                return False
+            self.panel = 0
+            return True
 
     def begin_prep_fill(self) -> None:
         """HMI прислал 10-байтный Старт — имитируем набор ламелей/гусей/сварки."""
@@ -357,7 +394,7 @@ class PlcState:
             put_i16(out, GOOSE_STATE_INT, 0)
             put_i16(out, BIG_GOOSE_STATE_INT, 0)
             put_i16(out, WELDING_STATE_INT, 0)
-            put_i16(out, ESTOP_INT_INDEX, self.estop)
+            put_i16(out, PANEL_INT_INDEX, self.panel)
             for i, v in enumerate(self.suspicions):
                 put_i16(out, SUSPICION_FIRST + i, v)
 
@@ -378,8 +415,8 @@ class PlcState:
         return bytes(out), valves, sensors
 
 
-def format_alarms(estop: int, suspicions: list[int]) -> str:
-    parts = [f"estop={estop}"]
+def format_alarms(panel: int, suspicions: list[int]) -> str:
+    parts = [f"panel={panel}"]
     for i, v in enumerate(suspicions):
         if v:
             parts.append(f"{SUSPICION_FIRST + i}={v}")
@@ -394,6 +431,8 @@ def handle_tag7(frame: bytes, peer: str, state: PlcState) -> None:
     if is_start:
         flag = "ignore-on" if frame[3] == 0 else "ignore-off"
         print(f"[plc] {peer} hmi start {flag} {list(frame)}", flush=True)
+        if state.release_panel(PANEL_START):
+            print("[plc] panel: СТАРТ (20) снят", flush=True)
         state.begin_prep_fill()
         return
     names = {
@@ -405,6 +444,10 @@ def handle_tag7(frame: bytes, peer: str, state: PlcState) -> None:
     }
     name = names.get(sub, "unknown")
     print(f"[plc] {peer} hmi {name} {list(frame)}", flush=True)
+    if sub == 3 and state.release_panel(PANEL_STOP):
+        print("[plc] panel: СТОП (10) снят", flush=True)
+    if sub == 5 and state.release_panel(PANEL_ESTOP):
+        print("[plc] panel: e-stop (30) снят", flush=True)
 
 
 def try_consume_pending(
@@ -461,12 +504,12 @@ def try_consume_pending(
         del pending[:4]
         state.apply_valve_commands(frame)
         reply = state.build_status()
-        estop, suspects = state.alarm_snapshot()
-        alarm_key = (estop, tuple(suspects), state.service_on())
+        panel, suspects = state.alarm_snapshot()
+        alarm_key = (panel, tuple(suspects), state.service_on())
         if getattr(state, "_last_logged_alarms", None) != alarm_key:
             state._last_logged_alarms = alarm_key
             print(
-                f"[plc] {peer} status {STATUS_SIZE}B  {format_alarms(estop, suspects)}"
+                f"[plc] {peer} status {STATUS_SIZE}B  {format_alarms(panel, suspects)}"
                 f"{' service' if state.service_on() else ''}",
                 flush=True,
             )
@@ -560,10 +603,9 @@ def parse_alarm_spec(spec: str) -> dict[int, int]:
         val = int(right.strip())
         if not is_alarm_index(idx):
             raise ValueError(
-                f"alarm index out of range {ESTOP_INT_INDEX}..{SUSPICION_LAST}: {idx}"
+                f"alarm index must be {PANEL_INT_INDEX} or {SUSPICION_FIRST}..{SUSPICION_LAST}: {idx}"
             )
-        if val not in (0, 1):
-            raise ValueError(f"alarm value must be 0 or 1: {val}")
+        check_alarm_value(idx, val)
         result[idx] = val
     return result
 
@@ -572,7 +614,7 @@ def run_server_console(state: PlcState, stop: threading.Event) -> None:
     if not sys.stdin.isatty():
         return
     print(
-        "[plc] console: service 0|1 | do N=0|1 | estop 0|1 | suspect 51=1 | "
+        "[plc] console: service 0|1 | do N=0|1 | panel stop|start|estop|0 | suspect 51=1 | "
         "clear | status | help | quit",
         flush=True,
     )
@@ -593,18 +635,18 @@ def run_server_console(state: PlcState, stop: threading.Event) -> None:
             print(
                 "  service 0|1            — сервисный режим\n"
                 "  do N=0|1               — DO 0..49 (только в сервисе)\n"
-                "  estop 0|1              — грибок (вне кадра 50 int16)\n"
-                "  suspect 51=1,53=0      — подозрения (вне кадра 50 int16)\n"
-                "  clear                  — сбросить грибок и подозрения\n"
+                "  panel stop|start|estop|0 — кнопки корпуса, int16[49] = 10/20/30/0\n"
+                "  suspect 51=1,53=0      — подозрения int16[51..59]\n"
+                "  clear                  — сбросить кнопки и подозрения\n"
                 "  status                 — текущие аварии и сервис\n"
                 "  quit                   — остановить сервер",
                 flush=True,
             )
             continue
         if line == "status":
-            estop, suspects = state.alarm_snapshot()
+            panel, suspects = state.alarm_snapshot()
             mode = "on" if state.service_on() else "off"
-            print(f"[plc] service={mode} {format_alarms(estop, suspects)}", flush=True)
+            print(f"[plc] service={mode} {format_alarms(panel, suspects)}", flush=True)
             continue
         if line.startswith("service "):
             try:
@@ -630,11 +672,11 @@ def run_server_console(state: PlcState, stop: threading.Event) -> None:
             state.clear_alarms()
             print("[plc] alarms cleared", flush=True)
             continue
-        if line.startswith("estop "):
+        if line.startswith("panel "):
             try:
-                val = int(line.split(None, 1)[1].strip())
-                state.set_alarm_int(ESTOP_INT_INDEX, val)
-                print(f"[plc] estop={val}", flush=True)
+                val = parse_panel(line.split(None, 1)[1])
+                state.set_alarm_int(PANEL_INT_INDEX, val)
+                print(f"[plc] panel={val}", flush=True)
             except (ValueError, IndexError) as exc:
                 print(f"[plc] error: {exc}", flush=True)
             continue
@@ -642,8 +684,8 @@ def run_server_console(state: PlcState, stop: threading.Event) -> None:
             try:
                 for idx, val in parse_alarm_spec(line.split(None, 1)[1]).items():
                     state.set_alarm_int(idx, val)
-                estop, suspects = state.alarm_snapshot()
-                print(f"[plc] {format_alarms(estop, suspects)}", flush=True)
+                panel, suspects = state.alarm_snapshot()
+                print(f"[plc] {format_alarms(panel, suspects)}", flush=True)
             except (ValueError, IndexError) as exc:
                 print(f"[plc] error: {exc}", flush=True)
             continue
@@ -666,7 +708,7 @@ def run_server(host: str, port: int) -> None:
         print(
             f"[plc] map: valves@{VALVE_OFFSET}..{VALVE_OFFSET + VALVE_COUNT - 1} "
             f"sensors@{SENSOR_OFFSET}..{SENSOR_OFFSET + SENSOR_COUNT - 1} "
-            f"estop@int16[{ESTOP_INT_INDEX}] suspects@int16[{SUSPICION_FIRST}..{SUSPICION_LAST}]",
+            f"panel@int16[{PANEL_INT_INDEX}] suspects@int16[{SUSPICION_FIRST}..{SUSPICION_LAST}]",
             flush=True,
         )
         print(
@@ -782,12 +824,12 @@ def print_state(label: str, valves: list[int], sensors: list[int]) -> None:
 
 
 def print_status_frame(label: str, frame: bytes) -> None:
-    estop = get_i16(frame, ESTOP_INT_INDEX)
+    panel = get_i16(frame, PANEL_INT_INDEX)
     suspects = [
         get_i16(frame, i) for i in range(SUSPICION_FIRST, SUSPICION_LAST + 1)
     ]
     print(f"[client] {label} ({len(frame)}B)")
-    print(f"  {format_alarms(estop, suspects)}")
+    print(f"  {format_alarms(panel, suspects)}")
     print(
         f"  vision1={get_i16(frame, VISION1_INT_INDEX)} "
         f"vision2={get_i16(frame, VISION2_INT_INDEX)}"
@@ -800,7 +842,7 @@ def run_client(
     set_spec: str | None,
     oneshot: bool,
     *,
-    estop: int | None = None,
+    panel: int | None = None,
     suspect_spec: str | None = None,
     clear_alarms: bool = False,
     status_poll: bool = False,
@@ -812,10 +854,8 @@ def run_client(
         print("[client] alarms cleared", flush=True)
 
     alarm_pairs: dict[int, int] = {}
-    if estop is not None:
-        if estop not in (0, 1):
-            raise ValueError(f"--estop must be 0 or 1: {estop}")
-        alarm_pairs[ESTOP_INT_INDEX] = estop
+    if panel is not None:
+        alarm_pairs[PANEL_INT_INDEX] = panel
     if suspect_spec:
         alarm_pairs.update(parse_alarm_spec(suspect_spec))
     if alarm_pairs:
@@ -847,7 +887,7 @@ def run_client(
         return 0
 
     print(
-        "Commands: poll | status | set <N>=<0|1>[,...] | estop 0|1 | "
+        "Commands: poll | status | set <N>=<0|1>[,...] | panel stop|start|estop|0 | "
         "suspect 51=1[,...] | clear | quit\n"
         f"Connected target {host}:{port}",
         flush=True,
@@ -891,10 +931,10 @@ def run_client(
             except OSError as exc:
                 print(f"[client] error: {exc}", file=sys.stderr)
             continue
-        if line.startswith("estop "):
+        if line.startswith("panel "):
             try:
-                val = int(line.split(None, 1)[1].strip())
-                send_status_sets(host, port, {ESTOP_INT_INDEX: val})
+                val = parse_panel(line.split(None, 1)[1])
+                send_status_sets(host, port, {PANEL_INT_INDEX: val})
                 print_status_frame("status", poll_status(host, port))
             except (ValueError, OSError, IndexError) as exc:
                 print(f"[client] error: {exc}", file=sys.stderr)
@@ -918,7 +958,7 @@ def run_client(
                 print(f"[client] error: {exc}", file=sys.stderr)
             continue
         print(
-            "unknown command; try: poll | status | set 1=1 | estop 1 | "
+            "unknown command; try: poll | status | set 1=1 | panel stop | "
             "suspect 51=1 | clear | quit"
         )
 
@@ -931,11 +971,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--set", dest="set_spec", default=None, help="client: valve set e.g. 1=1,3=0")
     p.add_argument("--poll", action="store_true", help="client: single exchange then exit")
     p.add_argument(
-        "--estop",
-        type=int,
-        choices=(0, 1),
+        "--panel",
+        type=parse_panel,
         default=None,
-        help="client: set int16[50] e-stop (0|1)",
+        help="client: int16[49] кнопки корпуса: stop|start|estop|0 (или 10/20/30)",
+    )
+    p.add_argument(
+        "--status-bytes",
+        type=int,
+        choices=(100, 120),
+        default=100,
+        help="размер кадра статуса; 120 — ещё int16[50..59] (подозрения)",
     )
     p.add_argument(
         "--suspect",
@@ -951,19 +997,22 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--status",
         action="store_true",
-        help="client: ping [203,0,0,0] and print 120-byte status",
+        help="client: ping [203,0,0,0] and print status",
     )
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
+    global STATUS_INT_COUNT, STATUS_SIZE
     args = build_arg_parser().parse_args(argv)
+    STATUS_INT_COUNT = args.status_bytes // STATUS_INT_BYTES
+    STATUS_SIZE = args.status_bytes
     if args.client:
         host = args.host or DEFAULT_CLIENT_HOST
         oneshot = (
             args.set_spec is not None
             or args.poll
-            or args.estop is not None
+            or args.panel is not None
             or args.suspect_spec is not None
             or args.clear_alarms
             or args.status
@@ -974,7 +1023,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.port,
                 args.set_spec,
                 oneshot,
-                estop=args.estop,
+                panel=args.panel,
                 suspect_spec=args.suspect_spec,
                 clear_alarms=args.clear_alarms,
                 status_poll=args.status,

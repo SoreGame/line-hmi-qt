@@ -31,6 +31,10 @@ public:
 
     void onScriptStatus(bool running, bool completed, const QString &filename);
     void onPlcState();
+    // То же, что кнопка «Стоп». false — сейчас недоступна.
+    bool requestStop();
+    // Отменяет ещё не отправленные в behaviour скрипты; вызывать перед закрытием окна.
+    void cancelPending();
 
 signals:
     void note(Note level, const QString &message);

@@ -27,6 +27,7 @@ class QGraphicsView;
 class QLabel;
 class QResizeEvent;
 class QShowEvent;
+class QTimer;
 class QVBoxLayout;
 
 class MainWindow : public QMainWindow
@@ -95,8 +96,13 @@ private:
     bool plcReady() const;
     bool bufferReady() const;
     bool plcEstopPressed() const;
+    bool canStartNow(QString *reason = nullptr) const;
     bool canPowerOff() const;
     void syncPowerOffLatch();
+    // Кнопки корпуса (int16[49] ПЛК) — те же действия, что кнопки на экране.
+    void handlePanelButtons();
+    void panelStopPressed();
+    void panelStartPressed();
     void maybeEnterRecoveryFromPlc();
     void enterRecovery(const QString &reason);
     void openRecoveryOverlay();
@@ -186,7 +192,15 @@ private:
     bool m_prevVision2Ok = false;
     bool m_prevPlcLinked = false;
     bool m_prevPlcOk = false;
-    bool m_prevPlcEstop = false;
+    qint16 m_prevPanelValue = 0;
+    bool m_panelValueKnown = false;
+    // Аварийный стоп запрошен, окно восстановления ещё не открыто.
+    // Пока стоит — exec/stop не переводят пульт в Run/Ready.
+    bool m_estopPending = false;
+    QString m_estopPendingReason;
+    // После 7 5: ждём, пока ПЛК снимет 30 в int16[49]. Старт заблокирован.
+    bool m_awaitEstopClear = false;
+    QTimer *m_estopClearTimer = nullptr;
     bool m_moduleStateInitialized = false;
     bool m_initReadyLogged = false;
 };
