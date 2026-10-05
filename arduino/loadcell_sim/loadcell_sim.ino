@@ -13,7 +13,7 @@ GyverHX711 sensor(8, 9, HX_GAIN64_A);
 
 constexpr int kOutPin = 5;
 constexpr long kMinValue = -10000L;
-constexpr long kMaxValue = 1500000L;
+constexpr long kMaxValue = 3000000L;
 constexpr long kDefaultThreshold = 1100000L;
 
 long g_value = 0;

@@ -10,6 +10,7 @@
 #include <QPainter>
 #include <QPushButton>
 #include <QShowEvent>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
 
@@ -46,11 +47,9 @@ const char *kStyleError =
     " color:#C43B3B; font-family:\"Inter\",\"Segoe UI\",sans-serif;"
     " font-size:18px; font-weight:600; padding:16px 18px;";
 
-const char *kBtnBegin =
-    "QPushButton{background:#388F51; color:white; border:none; border-radius:10px;"
-    " font-family:\"Inter\",\"Segoe UI\",sans-serif; font-size:18px; font-weight:700;}"
-    " QPushButton:pressed{background:#2F7A44;}"
-    " QPushButton:disabled{background:#A9B0B8; color:white;}";
+const char *kCountdownStyle =
+    "background:#388F51; color:white; border:none; border-radius:10px;"
+    " font-family:\"Inter\",\"Segoe UI\",sans-serif; font-size:20px; font-weight:700;";
 
 const char *kBtnStop =
     "QPushButton{background:#C45C1A; color:white; border:none; border-radius:10px;"
@@ -66,9 +65,12 @@ const char *kBtnEmergency =
 
 } // namespace
 
-PrepOverlay::PrepOverlay(Program program, NatsClient *nats, PlcClient *plc, QWidget *parent)
+PrepOverlay::PrepOverlay(Program program, const QString &initFilename, int countdownSec,
+                         NatsClient *nats, PlcClient *plc, QWidget *parent)
     : QWidget(parent)
     , m_program(program)
+    , m_initFilename(initFilename)
+    , m_countdownSec(qMax(0, countdownSec))
     , m_nats(nats)
     , m_plc(plc)
 {
@@ -98,9 +100,10 @@ PrepOverlay::PrepOverlay(Program program, NatsClient *nats, PlcClient *plc, QWid
         " font-size:28px; font-weight:700; background:transparent;"));
     cardLayout->addWidget(title);
 
-    const QString programName = program == Program::Detail1
-                                    ? QStringLiteral("Деталь 1 · preProg1.chai")
-                                    : QStringLiteral("Деталь 2 · preProg2.chai");
+    const QString programName = QStringLiteral("%1 · %2")
+                                    .arg(program == Program::Detail1 ? QStringLiteral("Деталь 1")
+                                                                     : QStringLiteral("Деталь 2"),
+                                         m_initFilename);
     auto *subtitle = new QLabel(programName, card);
     subtitle->setStyleSheet(QStringLiteral(
         "color:#737880; font-family:\"Inter\",\"Segoe UI\",sans-serif;"
@@ -132,19 +135,28 @@ PrepOverlay::PrepOverlay(Program program, NatsClient *nats, PlcClient *plc, QWid
     auto *actions = new QVBoxLayout();
     actions->setSpacing(12);
 
-    m_btnBegin = new QPushButton(QStringLiteral("Начать выполнение"), card);
+    m_countdownLabel = new QLabel(card);
+    m_countdownLabel->setAlignment(Qt::AlignCenter);
+    m_countdownLabel->setFixedSize(300, 68);
+    m_countdownLabel->setStyleSheet(QString::fromUtf8(kCountdownStyle));
+    m_countdownLabel->hide();
+
     m_btnStop = new QPushButton(QStringLiteral("Стоп"), card);
     m_btnEmergency = new QPushButton(QStringLiteral("Экстренная остановка"), card);
-    for (QPushButton *button : {m_btnBegin, m_btnStop, m_btnEmergency}) {
+    for (QPushButton *button : {m_btnStop, m_btnEmergency}) {
         button->setCursor(Qt::PointingHandCursor);
         button->setFocusPolicy(Qt::NoFocus);
         button->setFixedSize(300, 68);
     }
-    m_btnBegin->setStyleSheet(QString::fromUtf8(kBtnBegin));
     m_btnStop->setStyleSheet(QString::fromUtf8(kBtnStop));
     m_btnEmergency->setStyleSheet(QString::fromUtf8(kBtnEmergency));
 
-    actions->addWidget(m_btnBegin);
+    m_countdownTimer = new QTimer(this);
+    m_countdownTimer->setInterval(1000);
+    m_countdownTimer->setTimerType(Qt::PreciseTimer);
+    connect(m_countdownTimer, &QTimer::timeout, this, &PrepOverlay::onCountdownTick);
+
+    actions->addWidget(m_countdownLabel);
     actions->addWidget(m_btnStop);
     actions->addWidget(m_btnEmergency);
     actions->addStretch();
@@ -157,17 +169,6 @@ PrepOverlay::PrepOverlay(Program program, NatsClient *nats, PlcClient *plc, QWid
     root->addLayout(row);
     root->addStretch();
 
-    connect(m_btnBegin, &QPushButton::clicked, this, [this]() {
-        if (m_phase != Phase::Running)
-            return;
-        for (TaskState state : m_tasks) {
-            if (state != TaskState::Done)
-                return;
-        }
-        m_phase = Phase::Exit;
-        refreshButtons();
-        emit startMainRequested();
-    });
     connect(m_btnStop, &QPushButton::clicked, this, &PrepOverlay::beginSmoothStop);
     connect(m_btnEmergency, &QPushButton::clicked, this, &PrepOverlay::beginEmergencyStop);
 
@@ -188,12 +189,6 @@ void PrepOverlay::showEvent(QShowEvent *event)
         setGeometry(parent->rect());
     raise();
     onPlcState();
-}
-
-QString PrepOverlay::preprogFilename() const
-{
-    return m_program == Program::Detail1 ? QStringLiteral("preProg1.chai")
-                                         : QStringLiteral("preProg2.chai");
 }
 
 void PrepOverlay::setTask(int index, TaskState state)
@@ -231,11 +226,59 @@ void PrepOverlay::refreshButtons()
         if (state != TaskState::Done)
             allDone = false;
     }
-    m_btnBegin->setEnabled(m_phase == Phase::Running && allDone);
-    m_btnStop->setEnabled(m_phase == Phase::Running);
+    m_btnStop->setEnabled(m_phase == Phase::Running || m_phase == Phase::Countdown);
     m_btnEmergency->setEnabled(m_phase != Phase::Exit);
-    if (m_phase == Phase::Running && allDone && m_status)
-        m_status->setText(QStringLiteral("Все задачи выполнены — можно начать выполнение"));
+    m_countdownLabel->setVisible(m_phase == Phase::Countdown);
+    if (m_phase == Phase::Running && allDone)
+        beginCountdown();
+}
+
+void PrepOverlay::beginCountdown()
+{
+    m_phase = Phase::Countdown;
+    m_countdownLeft = m_countdownSec;
+    emit note(Note::Info, QStringLiteral("Инициализация завершена · запуск основной программы через %1 с")
+                              .arg(m_countdownSec));
+    refreshButtons();
+    if (m_countdownLeft <= 0) {
+        // Не из refreshButtons(): startMainRequested удаляет оверлей.
+        QTimer::singleShot(0, this, &PrepOverlay::finishCountdown);
+        return;
+    }
+    onCountdownTick();
+    m_countdownTimer->start();
+}
+
+void PrepOverlay::onCountdownTick()
+{
+    if (m_phase != Phase::Countdown) {
+        stopCountdown();
+        return;
+    }
+    if (m_countdownLeft <= 0) {
+        finishCountdown();
+        return;
+    }
+    m_status->setText(QStringLiteral("Все задачи выполнены — запуск основной программы через %1 с")
+                          .arg(m_countdownLeft));
+    m_countdownLabel->setText(QStringLiteral("Старт через %1").arg(m_countdownLeft));
+    --m_countdownLeft;
+}
+
+void PrepOverlay::finishCountdown()
+{
+    stopCountdown();
+    if (m_phase != Phase::Countdown)
+        return;
+    m_phase = Phase::Exit;
+    m_status->setText(QStringLiteral("Запуск основной программы"));
+    refreshButtons();
+    emit startMainRequested();
+}
+
+void PrepOverlay::stopCountdown()
+{
+    m_countdownTimer->stop();
 }
 
 void PrepOverlay::onPlcState()
@@ -285,7 +328,7 @@ void PrepOverlay::considerLaunchPreprog()
 
     m_preprogStarted = true;
     setTask(2, TaskState::Active);
-    m_waitFilename = preprogFilename();
+    m_waitFilename = m_initFilename;
     m_sawScriptRunning = false;
     m_status->setText(QStringLiteral("Запуск подпрограммы %1").arg(m_waitFilename));
     emit note(Note::Info,
@@ -400,9 +443,10 @@ void PrepOverlay::onScriptStatus(bool running, bool completed, const QString &fi
 
 void PrepOverlay::beginSmoothStop()
 {
-    if (m_phase != Phase::Running)
+    if (m_phase != Phase::Running && m_phase != Phase::Countdown)
         return;
 
+    stopCountdown();
     m_phase = Phase::Homing;
     {
         std::lock_guard<std::mutex> lock(*m_gate);
@@ -426,6 +470,7 @@ void PrepOverlay::beginEmergencyStop()
     if (m_phase == Phase::Exit)
         return;
 
+    stopCountdown();
     m_phase = Phase::Exit;
     m_waitFilename.clear();
     m_status->setText(QStringLiteral("Экстренная остановка"));

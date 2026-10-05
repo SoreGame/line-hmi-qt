@@ -30,6 +30,14 @@ struct ConnectionSettings {
     qint32 arduinoThreshold = 1100000;
     // кг = сырое / arduinoUnitsPerKg (после тарирования датчика).
     double arduinoUnitsPerKg = 100000.0;
+    // Имена .chai в KV (как сохранены редактором). Пустое → значение по умолчанию.
+    QString initScriptDetail1 = QStringLiteral("preProg1.chai");
+    QString initScriptDetail2 = QStringLiteral("preProg2.chai");
+    QString mainScriptDetail1 = QStringLiteral("ai.chai");
+    QString mainScriptDetail2 = QStringLiteral("ai2.chai");
+    QString estopScript = QStringLiteral("e-stop_out.chai");
+    // Пауза между концом инициализации и запуском основной программы. 0 — сразу.
+    int startCountdownSec = 5;
 
     QString natsUrl() const;
     QString plcEndpoint() const;

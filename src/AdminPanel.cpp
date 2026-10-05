@@ -799,6 +799,67 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     togglesLay->addWidget(m_btnIgnoreLaunchLocks);
     togglesLay->addWidget(targetHint);
 
+    // --- Программы (.chai) под «Переключателями» ----------------------
+    m_programsPanel = new QFrame(this);
+    m_programsPanel->setObjectName(QStringLiteral("programsPanel"));
+    m_programsPanel->setStyleSheet(QStringLiteral(
+        "QFrame#programsPanel {"
+        "  background:#FFFFFF;"
+        "  border:1px solid #DBDEE3;"
+        "  border-radius:8px;"
+        "}"));
+
+    auto *programsTitle = new QLabel(
+        QStringLiteral("Программы · имена .chai в KV, как сохранены редактором"), m_programsPanel);
+    programsTitle->setStyleSheet(togglesTitle->styleSheet());
+
+    m_initScript1 = new QLineEdit(initial.initScriptDetail1, m_programsPanel);
+    m_initScript2 = new QLineEdit(initial.initScriptDetail2, m_programsPanel);
+    m_mainScript1 = new QLineEdit(initial.mainScriptDetail1, m_programsPanel);
+    m_mainScript2 = new QLineEdit(initial.mainScriptDetail2, m_programsPanel);
+    m_estopScript = new QLineEdit(initial.estopScript, m_programsPanel);
+    m_startCountdown = new QSpinBox(m_programsPanel);
+    m_startCountdown->setRange(0, 60);
+    m_startCountdown->setValue(initial.startCountdownSec);
+    m_startCountdown->setSuffix(QStringLiteral(" с"));
+    m_startCountdown->setFixedWidth(120);
+    for (QWidget *w : {static_cast<QWidget *>(m_initScript1),
+                       static_cast<QWidget *>(m_initScript2),
+                       static_cast<QWidget *>(m_mainScript1),
+                       static_cast<QWidget *>(m_mainScript2),
+                       static_cast<QWidget *>(m_estopScript),
+                       static_cast<QWidget *>(m_startCountdown)}) {
+        w->setStyleSheet(QLatin1String(kFieldStyle));
+    }
+
+    const auto makeProgramsRow = [this](QWidget *left, QWidget *right) {
+        auto *row = new QWidget(m_programsPanel);
+        auto *lay = new QHBoxLayout(row);
+        lay->setContentsMargins(0, 0, 0, 0);
+        lay->setSpacing(8);
+        lay->addWidget(left, 1);
+        lay->addWidget(right, 1);
+        return row;
+    };
+    auto *rowInit = makeProgramsRow(
+        makeLabeledField(QStringLiteral("Инициализация · Деталь 1"), m_initScript1, m_programsPanel),
+        makeLabeledField(QStringLiteral("Инициализация · Деталь 2"), m_initScript2, m_programsPanel));
+    auto *rowMain = makeProgramsRow(
+        makeLabeledField(QStringLiteral("Основная · Деталь 1"), m_mainScript1, m_programsPanel),
+        makeLabeledField(QStringLiteral("Основная · Деталь 2"), m_mainScript2, m_programsPanel));
+    auto *rowEstop = makeProgramsRow(
+        makeLabeledField(QStringLiteral("Выход из E-stop"), m_estopScript, m_programsPanel),
+        makeLabeledField(QStringLiteral("Отсчёт до автозапуска основной"), m_startCountdown,
+                         m_programsPanel));
+
+    auto *programsLay = new QVBoxLayout(m_programsPanel);
+    programsLay->setContentsMargins(12, 10, 12, 12);
+    programsLay->setSpacing(8);
+    programsLay->addWidget(programsTitle);
+    programsLay->addWidget(rowInit);
+    programsLay->addWidget(rowMain);
+    programsLay->addWidget(rowEstop);
+
     // --- Arduino / тензодатчик (низ второго столбца) -------------------
     m_arduinoPanel = new QFrame(this);
     m_arduinoPanel->setObjectName(QStringLiteral("arduinoPanel"));
@@ -1060,6 +1121,14 @@ ConnectionSettings AdminPanel::networkSettings() const
     c.showCursor = m_btnShowCursor && m_btnShowCursor->isChecked();
     c.ignoreLoadCell = m_btnIgnoreLoadCell && m_btnIgnoreLoadCell->isChecked();
     c.ignoreLaunchLocks = m_btnIgnoreLaunchLocks && m_btnIgnoreLaunchLocks->isChecked();
+    if (m_initScript1) {
+        c.initScriptDetail1 = m_initScript1->text().trimmed();
+        c.initScriptDetail2 = m_initScript2->text().trimmed();
+        c.mainScriptDetail1 = m_mainScript1->text().trimmed();
+        c.mainScriptDetail2 = m_mainScript2->text().trimmed();
+        c.estopScript = m_estopScript->text().trimmed();
+        c.startCountdownSec = m_startCountdown->value();
+    }
     if (m_arduinoPort) {
         QString port;
         const int idx = m_arduinoPort->currentIndex();
@@ -1434,6 +1503,7 @@ void AdminPanel::fitTablePanel()
         m_jogPanel->setGeometry(12, 64 + sharedH + 12, m_leftColW, m_jogPanel->height());
     }
     fitTogglesPanel();
+    fitProgramsPanel();
     fitPlcLogPanel();
     fitArduinoPanel();
 }
@@ -1449,6 +1519,19 @@ void AdminPanel::fitTogglesPanel()
     const int togglesH = qMax(m_togglesPanel->minimumSizeHint().height(),
                               m_togglesPanel->sizeHint().height());
     m_togglesPanel->setGeometry(table.x(), table.bottom() + 1 + 12, table.width(), togglesH);
+}
+
+void AdminPanel::fitProgramsPanel()
+{
+    if (!m_programsPanel || !m_togglesPanel)
+        return;
+    if (m_programsPanel->layout())
+        m_programsPanel->layout()->activate();
+
+    const QRect toggles = m_togglesPanel->geometry();
+    const int h = qMax(m_programsPanel->minimumSizeHint().height(),
+                       m_programsPanel->sizeHint().height());
+    m_programsPanel->setGeometry(toggles.x(), toggles.bottom() + 1 + 12, toggles.width(), h);
 }
 
 void AdminPanel::fitArduinoPanel()

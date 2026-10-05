@@ -14,8 +14,6 @@
 
 namespace {
 
-const char *kExitScriptName = "e-stop_out.chai";
-
 const char *kItemStyle =
     "background:#FFF6E5; border:1px solid #E0B15A; border-radius:8px;"
     " color:#8A5A00; font-family:\"Inter\",\"Segoe UI\",sans-serif;"
@@ -35,9 +33,10 @@ const char *kChecklistItems[] = {
 
 } // namespace
 
-RecoveryOverlay::RecoveryOverlay(NatsClient *nats, QWidget *parent)
+RecoveryOverlay::RecoveryOverlay(NatsClient *nats, const QString &exitScript, QWidget *parent)
     : QWidget(parent)
     , m_nats(nats)
+    , m_exitScript(exitScript)
 {
     setAttribute(Qt::WA_StyledBackground, false);
     setFocusPolicy(Qt::StrongFocus);
@@ -162,7 +161,7 @@ void RecoveryOverlay::onNextClicked()
 void RecoveryOverlay::startExitScript()
 {
     m_phase = Phase::Running;
-    m_waitFilename = QString::fromUtf8(kExitScriptName);
+    m_waitFilename = m_exitScript;
     m_sawScriptRunning = false;
     m_status->setText(QStringLiteral("Запуск выхода в стартовое положение…"));
     refreshButtons();
@@ -237,7 +236,7 @@ void RecoveryOverlay::onScriptStatus(bool running, bool completed, const QString
         m_status->setText(QStringLiteral("Выход завершён"));
         refreshButtons();
         emit note(Note::Ok, QStringLiteral("Восстановление · '%1' завершён")
-                                .arg(QString::fromUtf8(kExitScriptName)));
+                                .arg(m_exitScript));
         emit finished();
         return;
     }
@@ -246,7 +245,7 @@ void RecoveryOverlay::onScriptStatus(bool running, bool completed, const QString
     m_waitFilename.clear();
     m_status->setText(QStringLiteral("Выход прерван. Выполните пункты и нажмите «Далее»"));
     emit note(Note::Err, QStringLiteral("Восстановление · '%1' не завершился")
-                             .arg(QString::fromUtf8(kExitScriptName)));
+                             .arg(m_exitScript));
     refreshButtons();
 }
 

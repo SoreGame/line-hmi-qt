@@ -20,7 +20,7 @@ class ArduinoLink : public QObject
 
 public:
     static constexpr qint32 kMinValue = -10000;
-    static constexpr qint32 kMaxValue = 1500000;
+    static constexpr qint32 kMaxValue = 3000000;
     static constexpr int kBaudRate = 115200;
     static constexpr int kStaleMs = 1500;
 

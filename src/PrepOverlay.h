@@ -12,9 +12,11 @@ class NatsClient;
 class PlcClient;
 class QLabel;
 class QPushButton;
+class QTimer;
 
 // Окно поверх пульта: предподготовка после «Старт», до основной программы.
 // Список сам начинает выполняться. Жёлтый — в процессе, зелёный — готово.
+// Когда всё готово — обратный отсчёт и автоматический запуск основной программы.
 class PrepOverlay : public QWidget
 {
     Q_OBJECT
@@ -23,7 +25,8 @@ public:
     enum class Program { Detail1, Detail2 };
     enum class Note { Info, Ok, Warn, Err };
 
-    PrepOverlay(Program program, NatsClient *nats, PlcClient *plc, QWidget *parent = nullptr);
+    PrepOverlay(Program program, const QString &initFilename, int countdownSec,
+                NatsClient *nats, PlcClient *plc, QWidget *parent = nullptr);
 
     void onScriptStatus(bool running, bool completed, const QString &filename);
     void onPlcState();
@@ -39,12 +42,15 @@ protected:
     void showEvent(QShowEvent *event) override;
 
 private:
-    enum class Phase { Running, Homing, Exit };
+    enum class Phase { Running, Countdown, Homing, Exit };
     enum class TaskState { Pending, Active, Done, Error };
 
-    QString preprogFilename() const;
     void setTask(int index, TaskState state);
     void refreshButtons();
+    void beginCountdown();
+    void onCountdownTick();
+    void finishCountdown();
+    void stopCountdown();
     void considerLaunchPreprog();
     void publishScript(const QString &filename, const QString &inlineCode, bool fromKv);
     void beginSmoothStop();
@@ -53,6 +59,10 @@ private:
     void failStop(const QString &message);
 
     Program m_program = Program::Detail1;
+    QString m_initFilename;
+    int m_countdownSec = 0;
+    int m_countdownLeft = 0;
+    QTimer *m_countdownTimer = nullptr;
     NatsClient *m_nats = nullptr;
     PlcClient *m_plc = nullptr;
 
@@ -71,7 +81,7 @@ private:
 
     QLabel *m_status = nullptr;
     QLabel *m_rows[4] = {};
-    QPushButton *m_btnBegin = nullptr;
+    QLabel *m_countdownLabel = nullptr;
     QPushButton *m_btnStop = nullptr;
     QPushButton *m_btnEmergency = nullptr;
 };

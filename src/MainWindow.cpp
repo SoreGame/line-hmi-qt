@@ -1058,10 +1058,11 @@ void MainWindow::onScriptStatus(bool running, bool completed, int /*line*/,
         return;
     }
     // Завершение подпрограммы предподготовки не является циклом основной программы.
-    if (filename == QLatin1String("preProg1.chai")
-        || filename == QLatin1String("preProg2.chai")
+    const ConnectionSettings cfg = ConnectionSettings::load();
+    if (filename == cfg.initScriptDetail1
+        || filename == cfg.initScriptDetail2
         || filename == QLatin1String("prep-home.chai")
-        || filename == QLatin1String("e-stop_out.chai"))
+        || filename == cfg.estopScript)
         return;
 
     // Успешное завершение программы → сохранить время цикла и запустить снова.
@@ -1267,7 +1268,11 @@ void MainWindow::openPrepOverlay()
 
     const auto program = m_program == Program::Detail1 ? PrepOverlay::Program::Detail1
                                                        : PrepOverlay::Program::Detail2;
-    auto *overlay = new PrepOverlay(program, m_nats, m_plc, ui->centralwidget);
+    const ConnectionSettings cfg = ConnectionSettings::load();
+    const QString initScript = m_program == Program::Detail1 ? cfg.initScriptDetail1
+                                                             : cfg.initScriptDetail2;
+    auto *overlay = new PrepOverlay(program, initScript, cfg.startCountdownSec, m_nats, m_plc,
+                                    ui->centralwidget);
     m_prep = overlay;
     overlay->setGeometry(ui->centralwidget->rect());
 
@@ -1314,12 +1319,13 @@ QString MainWindow::scriptFilenameForProgram(Program p) const
 {
     // ВАЖНО: имена файлов должны точно совпадать с тем, под чем скрипты
     // сохранены редактором (поле "name"/"id" в KV, т.е. то, что было
-    // введено в поле "Имя файла" при сохранении).
+    // введено в поле "Имя файла" при сохранении). Задаются в админке.
+    const ConnectionSettings cfg = ConnectionSettings::load();
     switch (p) {
     case Program::Detail1:
-        return QStringLiteral("ai.chai");
+        return cfg.mainScriptDetail1;
     case Program::Detail2:
-        return QStringLiteral("ai2.chai");
+        return cfg.mainScriptDetail2;
     }
     return {};
 }
@@ -1534,7 +1540,8 @@ void MainWindow::openRecoveryOverlay()
     if (m_recovery)
         return;
 
-    auto *overlay = new RecoveryOverlay(m_nats, ui->centralwidget);
+    auto *overlay = new RecoveryOverlay(m_nats, ConnectionSettings::load().estopScript,
+                                        ui->centralwidget);
     m_recovery = overlay;
     overlay->setGeometry(ui->centralwidget->rect());
 

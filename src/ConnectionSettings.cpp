@@ -1,4 +1,5 @@
 #include "ConnectionSettings.h"
+#include "ArduinoLink.h"
 #include "PlcClient.h"
 
 #include <QApplication>
@@ -9,6 +10,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QStandardPaths>
+
+#include <utility>
 
 #ifdef Q_OS_UNIX
 #include <unistd.h>
@@ -142,6 +145,20 @@ ConnectionSettings normalize(ConnectionSettings c)
         c.plcStatusBytes += 1;
     if (c.plcStatusBytes > kPlcStatusSize)
         c.plcStatusBytes = kPlcStatusSize;
+
+    const ConnectionSettings defaults;
+    for (auto [field, fallback] : {
+             std::pair{&c.initScriptDetail1, &defaults.initScriptDetail1},
+             std::pair{&c.initScriptDetail2, &defaults.initScriptDetail2},
+             std::pair{&c.mainScriptDetail1, &defaults.mainScriptDetail1},
+             std::pair{&c.mainScriptDetail2, &defaults.mainScriptDetail2},
+             std::pair{&c.estopScript, &defaults.estopScript},
+         }) {
+        *field = field->trimmed();
+        if (field->isEmpty())
+            *field = *fallback;
+    }
+    c.startCountdownSec = qBound(0, c.startCountdownSec, 60);
     return c;
 }
 
@@ -192,13 +209,23 @@ bool readConfigFile(const QString &path, ConnectionSettings *out)
             out->arduinoPort = arduino.value(QStringLiteral("port")).toString(out->arduinoPort).trimmed();
         if (arduino.contains(QStringLiteral("threshold"))) {
             const int raw = arduino.value(QStringLiteral("threshold")).toInt(out->arduinoThreshold);
-            out->arduinoThreshold = qBound(-10000, raw, 1500000);
+            out->arduinoThreshold = ArduinoLink::clampValue(raw);
         }
         if (arduino.contains(QStringLiteral("unitsPerKg"))) {
             const double scale = arduino.value(QStringLiteral("unitsPerKg")).toDouble(out->arduinoUnitsPerKg);
             if (scale > 0.0)
                 out->arduinoUnitsPerKg = scale;
         }
+    }
+
+    const QJsonObject programs = root.value(QStringLiteral("programs")).toObject();
+    if (!programs.isEmpty()) {
+        out->initScriptDetail1 = programs.value(QStringLiteral("initDetail1")).toString(out->initScriptDetail1);
+        out->initScriptDetail2 = programs.value(QStringLiteral("initDetail2")).toString(out->initScriptDetail2);
+        out->mainScriptDetail1 = programs.value(QStringLiteral("mainDetail1")).toString(out->mainScriptDetail1);
+        out->mainScriptDetail2 = programs.value(QStringLiteral("mainDetail2")).toString(out->mainScriptDetail2);
+        out->estopScript = programs.value(QStringLiteral("estop")).toString(out->estopScript);
+        out->startCountdownSec = programs.value(QStringLiteral("countdownSec")).toInt(out->startCountdownSec);
     }
 
     return true;
@@ -245,6 +272,15 @@ bool writeConfigFile(const QString &path, const ConnectionSettings &cfg)
     arduino.insert(QStringLiteral("threshold"), cfg.arduinoThreshold);
     arduino.insert(QStringLiteral("unitsPerKg"), cfg.arduinoUnitsPerKg);
     root.insert(QStringLiteral("arduino"), arduino);
+
+    QJsonObject programs = root.value(QStringLiteral("programs")).toObject();
+    programs.insert(QStringLiteral("initDetail1"), cfg.initScriptDetail1);
+    programs.insert(QStringLiteral("initDetail2"), cfg.initScriptDetail2);
+    programs.insert(QStringLiteral("mainDetail1"), cfg.mainScriptDetail1);
+    programs.insert(QStringLiteral("mainDetail2"), cfg.mainScriptDetail2);
+    programs.insert(QStringLiteral("estop"), cfg.estopScript);
+    programs.insert(QStringLiteral("countdownSec"), cfg.startCountdownSec);
+    root.insert(QStringLiteral("programs"), programs);
 
     const QDir dir = QFileInfo(path).absoluteDir();
     if (!dir.exists() && !QDir().mkpath(dir.absolutePath()))

@@ -13,7 +13,7 @@ class QLabel;
 class QPushButton;
 
 // Окно поверх пульта после аварийного стопа: инструкция руками, затем
-// e-stop_out.chai. Датчики кнопку «Далее» не держат.
+// скрипт выхода из e-stop (имя из админки). Датчики кнопку «Далее» не держат.
 class RecoveryOverlay : public QWidget
 {
     Q_OBJECT
@@ -21,7 +21,7 @@ class RecoveryOverlay : public QWidget
 public:
     enum class Note { Info, Ok, Warn, Err };
 
-    explicit RecoveryOverlay(NatsClient *nats, QWidget *parent = nullptr);
+    RecoveryOverlay(NatsClient *nats, const QString &exitScript, QWidget *parent = nullptr);
 
     void onScriptStatus(bool running, bool completed, const QString &filename);
     // Повторный грибок во время выхода: стоп скрипта и снова чек-лист.
@@ -44,6 +44,7 @@ private:
     void publishStopAndReset(const QString &message);
 
     NatsClient *m_nats = nullptr;
+    QString m_exitScript;
     Phase m_phase = Phase::Checklist;
     QString m_waitFilename;
     bool m_sawScriptRunning = false;

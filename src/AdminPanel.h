@@ -83,6 +83,7 @@ private:
     void refreshPlcBufferLog();
     void fitPlcLogPanel();
     void fitTogglesPanel();
+    void fitProgramsPanel();
     void fitArduinoPanel();
     void refreshArduinoPorts(const QString &preferred);
     void reconnectArduino();
@@ -124,6 +125,13 @@ private:
 
     QFrame *m_networkPanel = nullptr;
     QFrame *m_togglesPanel = nullptr;
+    QFrame *m_programsPanel = nullptr;
+    QLineEdit *m_initScript1 = nullptr;
+    QLineEdit *m_initScript2 = nullptr;
+    QLineEdit *m_mainScript1 = nullptr;
+    QLineEdit *m_mainScript2 = nullptr;
+    QLineEdit *m_estopScript = nullptr;
+    QSpinBox *m_startCountdown = nullptr;
     QFrame *m_arduinoPanel = nullptr;
     QFrame *m_jogPanel = nullptr;
     int m_leftColW = 420;
