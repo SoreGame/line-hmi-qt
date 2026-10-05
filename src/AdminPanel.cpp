@@ -313,10 +313,18 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     m_plcPort->setValue(initial.plcPort > 0 ? initial.plcPort : 2025);
     m_plcPort->setFixedWidth(88);
 
+    m_plcStatusBytes = new QSpinBox(networkPanel);
+    m_plcStatusBytes->setRange(100, 120);
+    m_plcStatusBytes->setSingleStep(2);
+    m_plcStatusBytes->setValue(initial.plcStatusBytes > 0 ? initial.plcStatusBytes : 120);
+    m_plcStatusBytes->setSuffix(QStringLiteral(" байт"));
+    m_plcStatusBytes->setFixedWidth(120);
+
     for (QWidget *w : {static_cast<QWidget *>(m_natsHost),
                        static_cast<QWidget *>(m_natsPort),
                        static_cast<QWidget *>(m_plcHost),
-                       static_cast<QWidget *>(m_plcPort)}) {
+                       static_cast<QWidget *>(m_plcPort),
+                       static_cast<QWidget *>(m_plcStatusBytes)}) {
         w->setStyleSheet(QLatin1String(kFieldStyle));
     }
 
@@ -334,12 +342,20 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     rowPlcLay->addWidget(makeLabeledField(QStringLiteral("ПЛК хост"), m_plcHost, rowPlc), 1);
     rowPlcLay->addWidget(makeLabeledField(QStringLiteral("Порт"), m_plcPort, rowPlc), 0);
 
+    auto *rowFrame = new QWidget(networkPanel);
+    auto *rowFrameLay = new QHBoxLayout(rowFrame);
+    rowFrameLay->setContentsMargins(0, 0, 0, 0);
+    rowFrameLay->setSpacing(8);
+    rowFrameLay->addWidget(makeLabeledField(
+        QStringLiteral("Ожидаемый размер кадра"), m_plcStatusBytes, rowFrame), 1);
+
     auto *panelLay = new QVBoxLayout(networkPanel);
     panelLay->setContentsMargins(12, 10, 12, 10);
     panelLay->setSpacing(8);
     panelLay->addWidget(sectionTitle);
     panelLay->addWidget(rowNats);
     panelLay->addWidget(rowPlc);
+    panelLay->addWidget(rowFrame);
     panelLay->addStretch(1);
 
     // --- Jog / motion --------------------------------------------------
@@ -522,13 +538,19 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
         "  border-radius:8px;"
         "}"));
 
-    auto *plcLogTitle = new QLabel(QStringLiteral("Буфер ПЛК (60 int16)"), m_plcLogPanel);
-    plcLogTitle->setStyleSheet(QStringLiteral(
+    m_plcLogTitle = new QLabel(m_plcLogPanel);
+    m_plcLogTitle->setStyleSheet(QStringLiteral(
         "QLabel {"
         "  font-family:\"Inter\",\"Segoe UI\",sans-serif;"
         "  font-size:13px; font-weight:600; color:#1F2126;"
         "  background:transparent; border:none;"
         "}"));
+    {
+        const int bytes = initial.plcStatusBytes > 0 ? initial.plcStatusBytes : 120;
+        m_plcLogTitle->setText(QStringLiteral("Буфер ПЛК (%1 int16, %2 байт)")
+                                   .arg(bytes / 2)
+                                   .arg(bytes));
+    }
 
     m_plcBufferStatus = new QLabel(m_plcLogPanel);
     m_plcBufferStatus->setStyleSheet(QStringLiteral(
@@ -552,7 +574,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     auto *plcLogLay = new QVBoxLayout(m_plcLogPanel);
     plcLogLay->setContentsMargins(12, 10, 12, 10);
     plcLogLay->setSpacing(6);
-    plcLogLay->addWidget(plcLogTitle);
+    plcLogLay->addWidget(m_plcLogTitle);
     plcLogLay->addWidget(m_plcBufferStatus);
     plcLogLay->addWidget(m_plcBufferLog, 1);
 
@@ -750,9 +772,17 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
                      QStringLiteral("Игнорирование тензодатчика"),
                      initial.ignoreLoadCell);
 
+    m_btnIgnoreLaunchLocks = new QPushButton(m_togglesPanel);
+    makeToggle(m_btnIgnoreLaunchLocks);
+    m_btnIgnoreLaunchLocks->setChecked(initial.ignoreLaunchLocks);
+    setToggleCaption(m_btnIgnoreLaunchLocks,
+                     QStringLiteral("Игнорировать блокировки запуска"),
+                     initial.ignoreLaunchLocks);
+
     auto *targetHint = new QLabel(
         QStringLiteral("Пульт включается на этой панели. Автозапуск системы — на компьютере с NATS-хостом. "
-                       "Игнорирование тензодатчика: вкл — старт 7 1 1 0, выкл — 7 1 1 1."),
+                       "Игнорирование тензодатчика: вкл — старт 7 1 1 0, выкл — 7 1 1 1. "
+                       "Игнорировать блокировки запуска: можно стартовать цикл без ПЛК, Vision, CTRL и буфера."),
         m_togglesPanel);
     targetHint->setWordWrap(true);
     targetHint->setStyleSheet(QStringLiteral(
@@ -766,9 +796,10 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     togglesLay->addWidget(m_btnRemoteAutostart);
     togglesLay->addWidget(m_btnShowCursor);
     togglesLay->addWidget(m_btnIgnoreLoadCell);
+    togglesLay->addWidget(m_btnIgnoreLaunchLocks);
     togglesLay->addWidget(targetHint);
 
-    // --- Arduino -------------------------------------------------------
+    // --- Arduino / тензодатчик (низ второго столбца) -------------------
     m_arduinoPanel = new QFrame(this);
     m_arduinoPanel->setObjectName(QStringLiteral("arduinoPanel"));
     m_arduinoPanel->setStyleSheet(QStringLiteral(
@@ -788,23 +819,27 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
 
     m_arduinoValue = new QLabel(QStringLiteral("—"), m_arduinoPanel);
     m_arduinoValue->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    m_arduinoValue->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    m_arduinoValue->setMinimumHeight(36);
     m_arduinoValue->setStyleSheet(QStringLiteral(
         "QLabel {"
-        "  font-family:\"Inter\",\"Segoe UI\",sans-serif;"
+        "  font-family:\"Consolas\",\"DejaVu Sans Mono\",\"Courier New\",monospace;"
         "  font-size:28px; font-weight:700; color:#1F2126;"
         "  background:transparent; border:none;"
         "}"));
 
     m_arduinoKg = new QLabel(QStringLiteral("— кг"), m_arduinoPanel);
     m_arduinoKg->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    m_arduinoKg->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    m_arduinoKg->setMinimumHeight(30);
     m_arduinoKg->setStyleSheet(QStringLiteral(
         "QLabel {"
-        "  font-family:\"Inter\",\"Segoe UI\",sans-serif;"
-        "  font-size:18px; font-weight:600; color:#3A3F4A;"
+        "  font-family:\"Consolas\",\"DejaVu Sans Mono\",\"Courier New\",monospace;"
+        "  font-size:22px; font-weight:600; color:#3A3F4A;"
         "  background:transparent; border:none;"
         "}"));
 
-    auto *valueCaption = new QLabel(QStringLiteral("Текущее значение"), m_arduinoPanel);
+    auto *valueCaption = new QLabel(QStringLiteral("Сырое / кг"), m_arduinoPanel);
     valueCaption->setStyleSheet(QStringLiteral(
         "QLabel { font-size:11px; color:#737880; background:transparent; border:none; }"));
 
@@ -812,6 +847,14 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     m_arduinoStatus->setWordWrap(true);
     m_arduinoStatus->setStyleSheet(QStringLiteral(
         "QLabel { font-size:12px; font-weight:600; color:#B42318; background:transparent; border:none; }"));
+
+    auto *valueRow = new QWidget(m_arduinoPanel);
+    auto *valueLay = new QVBoxLayout(valueRow);
+    valueLay->setContentsMargins(0, 0, 0, 0);
+    valueLay->setSpacing(2);
+    valueLay->addWidget(m_arduinoValue);
+    valueLay->addWidget(m_arduinoKg);
+    valueLay->addWidget(m_arduinoStatus);
 
     m_arduinoPort = new QComboBox(m_arduinoPanel);
     m_arduinoPort->setEditable(true);
@@ -851,25 +894,102 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     thresholdLay->addWidget(m_btnArduinoSend, 0);
     thresholdRow->setMinimumHeight(36);
 
+    m_arduinoUnitsPerKgBaseline =
+        initial.arduinoUnitsPerKg > 0.0 ? initial.arduinoUnitsPerKg : 100000.0;
     m_arduinoUnitsPerKg = new QDoubleSpinBox(m_arduinoPanel);
     m_arduinoUnitsPerKg->setDecimals(1);
     m_arduinoUnitsPerKg->setRange(0.1, 1e9);
     m_arduinoUnitsPerKg->setSingleStep(1000.0);
-    m_arduinoUnitsPerKg->setValue(initial.arduinoUnitsPerKg > 0.0 ? initial.arduinoUnitsPerKg : 100000.0);
+    m_arduinoUnitsPerKg->setValue(m_arduinoUnitsPerKgBaseline);
     m_arduinoUnitsPerKg->setStyleSheet(QLatin1String(kFieldStyle));
+    m_arduinoUnitsPerKg->setMinimumWidth(180);
+    m_arduinoUnitsPerKg->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+    m_arduinoKnownKg = new QDoubleSpinBox(m_arduinoPanel);
+    m_arduinoKnownKg->setDecimals(2);
+    m_arduinoKnownKg->setRange(0.01, 1e6);
+    m_arduinoKnownKg->setSingleStep(0.5);
+    m_arduinoKnownKg->setValue(10.0);
+    m_arduinoKnownKg->setSuffix(QStringLiteral(" кг"));
+    m_arduinoKnownKg->setStyleSheet(QLatin1String(kFieldStyle));
+    m_arduinoKnownKg->setMinimumWidth(180);
+    m_arduinoKnownKg->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+    m_btnArduinoCalibrate = new QPushButton(QStringLiteral("Калибровать"), m_arduinoPanel);
+    m_btnArduinoCalibrate->setStyleSheet(QLatin1String(kPrimaryBtn));
+    m_btnArduinoCalibrate->setCursor(Qt::PointingHandCursor);
+    m_btnArduinoCalibrate->setFocusPolicy(Qt::NoFocus);
+    m_btnArduinoCalibrate->setMinimumHeight(32);
+
+    m_btnArduinoResetCalib = new QPushButton(QStringLiteral("Сброс калибровки"), m_arduinoPanel);
+    m_btnArduinoResetCalib->setStyleSheet(QLatin1String(kSecondaryBtn));
+    m_btnArduinoResetCalib->setCursor(Qt::PointingHandCursor);
+    m_btnArduinoResetCalib->setFocusPolicy(Qt::NoFocus);
+    m_btnArduinoResetCalib->setMinimumHeight(32);
+
+    m_arduinoCalibHint = new QLabel(m_arduinoPanel);
+    m_arduinoCalibHint->setWordWrap(true);
+    m_arduinoCalibHint->setStyleSheet(QStringLiteral(
+        "QLabel { font-size:11px; color:#737880; background:transparent; border:none; }"));
+
+    auto *calibRow = new QWidget(m_arduinoPanel);
+    auto *calibLay = new QVBoxLayout(calibRow);
+    calibLay->setContentsMargins(0, 0, 0, 0);
+    calibLay->setSpacing(8);
+    calibLay->addWidget(m_arduinoKnownKg);
+    auto *calibBtns = new QWidget(calibRow);
+    auto *calibBtnsLay = new QHBoxLayout(calibBtns);
+    calibBtnsLay->setContentsMargins(0, 0, 0, 0);
+    calibBtnsLay->setSpacing(8);
+    calibBtnsLay->addWidget(m_btnArduinoCalibrate, 1);
+    calibBtnsLay->addWidget(m_btnArduinoResetCalib, 1);
+    calibLay->addWidget(calibBtns);
+
+    auto *leftCol = new QWidget(m_arduinoPanel);
+    auto *leftLay = new QVBoxLayout(leftCol);
+    leftLay->setContentsMargins(0, 0, 0, 0);
+    leftLay->setSpacing(6);
+    leftLay->addWidget(valueCaption);
+    leftLay->addWidget(valueRow);
+    leftLay->addWidget(makeLabeledField(QStringLiteral("Порт"), portRow, leftCol));
+    leftLay->addWidget(makeLabeledField(QStringLiteral("Порог (сырое)"), thresholdRow, leftCol));
+    leftLay->addStretch(1);
+    {
+        QSizePolicy pol(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        pol.setHorizontalStretch(1);
+        leftCol->setSizePolicy(pol);
+    }
+
+    auto *rightCol = new QWidget(m_arduinoPanel);
+    auto *rightLay = new QVBoxLayout(rightCol);
+    rightLay->setContentsMargins(0, 0, 0, 0);
+    rightLay->setSpacing(6);
+    rightLay->addWidget(makeLabeledField(
+        QStringLiteral("Калибровка: укажите вес на датчике"), calibRow, rightCol));
+    rightLay->addWidget(m_arduinoCalibHint);
+    rightLay->addWidget(makeLabeledField(QStringLiteral("Отсчётов на кг"), m_arduinoUnitsPerKg, rightCol));
+    rightLay->addStretch(1);
+    {
+        QSizePolicy pol(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        pol.setHorizontalStretch(1);
+        rightCol->setSizePolicy(pol);
+    }
+
+    auto *body = new QWidget(m_arduinoPanel);
+    auto *bodyLay = new QHBoxLayout(body);
+    bodyLay->setContentsMargins(0, 0, 0, 0);
+    bodyLay->setSpacing(20);
+    bodyLay->addWidget(leftCol, 1);
+    bodyLay->addWidget(rightCol, 1);
 
     auto *arduinoLay = new QVBoxLayout(m_arduinoPanel);
     arduinoLay->setContentsMargins(12, 10, 12, 14);
     arduinoLay->setSpacing(8);
     arduinoLay->setSizeConstraint(QLayout::SetMinimumSize);
     arduinoLay->addWidget(arduinoTitle);
-    arduinoLay->addWidget(valueCaption);
-    arduinoLay->addWidget(m_arduinoValue);
-    arduinoLay->addWidget(m_arduinoKg);
-    arduinoLay->addWidget(m_arduinoStatus);
-    arduinoLay->addWidget(makeLabeledField(QStringLiteral("Порт"), portRow, m_arduinoPanel));
-    arduinoLay->addWidget(makeLabeledField(QStringLiteral("Порог (сырое)"), thresholdRow, m_arduinoPanel));
-    arduinoLay->addWidget(makeLabeledField(QStringLiteral("Отсчётов на кг"), m_arduinoUnitsPerKg, m_arduinoPanel));
+    arduinoLay->addWidget(body, 1);
+
+    updateArduinoCalibHint();
 
     m_arduino = new ArduinoLink(this);
     refreshArduinoPorts(initial.arduinoPort);
@@ -890,6 +1010,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     connect(m_btnRemoteAutostart, &QPushButton::toggled, this, &AdminPanel::onRemoteAutostartToggled);
     connect(m_btnShowCursor, &QPushButton::toggled, this, &AdminPanel::onShowCursorToggled);
     connect(m_btnIgnoreLoadCell, &QPushButton::toggled, this, &AdminPanel::onIgnoreLoadCellToggled);
+    connect(m_btnIgnoreLaunchLocks, &QPushButton::toggled, this, &AdminPanel::onIgnoreLaunchLocksToggled);
     connect(m_btnRefresh, &QPushButton::clicked, this, &AdminPanel::onRefreshClicked);
     connect(m_btnPrevPage, &QPushButton::clicked, this, [this]() { goToPage(m_page - 1); });
     connect(m_btnNextPage, &QPushButton::clicked, this, [this]() { goToPage(m_page + 1); });
@@ -901,6 +1022,8 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     connect(m_arduino, &ArduinoLink::linkChanged, this, &AdminPanel::onArduinoLinkChanged);
     connect(m_btnArduinoSend, &QPushButton::clicked, this, &AdminPanel::onArduinoSendThreshold);
     connect(m_btnArduinoReconnect, &QPushButton::clicked, this, &AdminPanel::onArduinoPortEdited);
+    connect(m_btnArduinoCalibrate, &QPushButton::clicked, this, &AdminPanel::onArduinoCalibrate);
+    connect(m_btnArduinoResetCalib, &QPushButton::clicked, this, &AdminPanel::onArduinoResetCalibration);
     connect(m_arduinoUnitsPerKg, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
             [this](double) { updateArduinoKgDisplay(); });
 
@@ -931,10 +1054,12 @@ ConnectionSettings AdminPanel::networkSettings() const
     c.natsPort = static_cast<quint16>(m_natsPort->value());
     c.plcHost = m_plcHost->text().trimmed();
     c.plcPort = static_cast<quint16>(m_plcPort->value());
+    c.plcStatusBytes = m_plcStatusBytes ? m_plcStatusBytes->value() : 120;
     c.autostart = m_btnRemoteAutostart && m_btnRemoteAutostart->isChecked();
     c.hmiAutostart = m_btnHmiAutostart && m_btnHmiAutostart->isChecked();
     c.showCursor = m_btnShowCursor && m_btnShowCursor->isChecked();
     c.ignoreLoadCell = m_btnIgnoreLoadCell && m_btnIgnoreLoadCell->isChecked();
+    c.ignoreLaunchLocks = m_btnIgnoreLaunchLocks && m_btnIgnoreLaunchLocks->isChecked();
     if (m_arduinoPort) {
         QString port;
         const int idx = m_arduinoPort->currentIndex();
@@ -1103,6 +1228,15 @@ void AdminPanel::onIgnoreLoadCellToggled(bool enabled)
     cfg.save();
 }
 
+void AdminPanel::onIgnoreLaunchLocksToggled(bool enabled)
+{
+    setToggleCaption(m_btnIgnoreLaunchLocks,
+                     QStringLiteral("Игнорировать блокировки запуска"),
+                     enabled);
+    ConnectionSettings cfg = networkSettings();
+    cfg.save();
+}
+
 void AdminPanel::onApplyClicked()
 {
     const ConnectionSettings cfg = networkSettings();
@@ -1114,6 +1248,11 @@ void AdminPanel::onApplyClicked()
     }
     if (m_arduino)
         m_arduino->sendThreshold(cfg.arduinoThreshold);
+    if (m_plcLogTitle) {
+        m_plcLogTitle->setText(QStringLiteral("Буфер ПЛК (%1 int16, %2 байт)")
+                                   .arg(cfg.plcStatusBytes / 2)
+                                   .arg(cfg.plcStatusBytes));
+    }
     emit applyRequested(cfg);
 }
 
@@ -1296,6 +1435,7 @@ void AdminPanel::fitTablePanel()
     }
     fitTogglesPanel();
     fitPlcLogPanel();
+    fitArduinoPanel();
 }
 
 void AdminPanel::fitTogglesPanel()
@@ -1304,41 +1444,30 @@ void AdminPanel::fitTogglesPanel()
         return;
     if (m_togglesPanel->layout())
         m_togglesPanel->layout()->activate();
-    if (m_arduinoPanel && m_arduinoPanel->layout())
-        m_arduinoPanel->layout()->activate();
 
     const QRect table = m_tablePanel->geometry();
     const int togglesH = qMax(m_togglesPanel->minimumSizeHint().height(),
                               m_togglesPanel->sizeHint().height());
-    int arduinoH = 0;
-    if (m_arduinoPanel) {
-        arduinoH = qMax(m_arduinoPanel->minimumSizeHint().height(),
-                        m_arduinoPanel->sizeHint().height());
-        // Рамка QFrame (1px) не всегда входит в sizeHint — иначе режется низ.
-        arduinoH += 4;
-    }
-    const int h = qMax(togglesH, arduinoH);
-    m_togglesPanel->setGeometry(table.x(), table.bottom() + 1 + 12, table.width(), h);
-    fitArduinoPanel();
+    m_togglesPanel->setGeometry(table.x(), table.bottom() + 1 + 12, table.width(), togglesH);
 }
 
 void AdminPanel::fitArduinoPanel()
 {
-    if (!m_arduinoPanel || !m_togglesPanel)
+    if (!m_arduinoPanel || !m_tablePanel)
         return;
     if (m_arduinoPanel->layout())
         m_arduinoPanel->layout()->activate();
 
-    const QRect toggles = m_togglesPanel->geometry();
-    const int w = qMax(340, m_arduinoPanel->sizeHint().width());
-    int needH = qMax(m_arduinoPanel->minimumSizeHint().height(),
-                     m_arduinoPanel->sizeHint().height())
-                + 4;
-    const int h = qMax(toggles.height(), needH);
-    const int x = toggles.right() + 1 + 12;
-    m_arduinoPanel->setGeometry(x, toggles.y(), w, h);
-    if (h > toggles.height())
-        m_togglesPanel->setGeometry(toggles.x(), toggles.y(), toggles.width(), h);
+    const QRect table = m_tablePanel->geometry();
+    const int x = table.right() + 1 + 12;
+    const int y = table.y();
+    const int w = table.width();
+    int bottom = m_layoutH - 12;
+    if (m_plcLogPanel && m_plcLogPanel->isVisible())
+        bottom = m_plcLogPanel->geometry().bottom();
+    const int minH = qMax(m_arduinoPanel->minimumSizeHint().height(), 120);
+    const int h = qMax(minH, bottom - y + 1);
+    m_arduinoPanel->setGeometry(x, y, w, h);
     m_arduinoPanel->raise();
 }
 
@@ -1380,7 +1509,7 @@ void AdminPanel::refreshArduinoPorts(const QString &preferred)
     } else if (!current.isEmpty()) {
         m_arduinoPort->setEditText(current);
     } else {
-        m_arduinoPort->setEditText(QStringLiteral("/dev/ttyUSB1"));
+        m_arduinoPort->setEditText(QStringLiteral("/dev/ttyUSB0"));
     }
     m_arduinoPort->blockSignals(false);
 }
@@ -1428,6 +1557,75 @@ void AdminPanel::updateArduinoKgDisplay()
     }
     const double kg = static_cast<double>(m_arduinoLastRaw) / scale;
     m_arduinoKg->setText(QStringLiteral("%1 кг").arg(kg, 0, 'f', 2));
+}
+
+void AdminPanel::updateArduinoCalibHint()
+{
+    if (!m_arduinoCalibHint)
+        return;
+    if (m_arduinoCalibPoints <= 0) {
+        m_arduinoCalibHint->setText(
+            QStringLiteral("Укажите известный вес, нагрузите датчик и нажмите «Калибровать». "
+                           "Повторите с другим весом для уточнения."));
+        return;
+    }
+    m_arduinoCalibHint->setText(
+        QStringLiteral("Точек калибровки: %1 · среднее «отсчётов на кг» подставляется выше. "
+                       "«Сброс» вернёт значение до калибровки в этой сессии.")
+            .arg(m_arduinoCalibPoints));
+}
+
+void AdminPanel::onArduinoCalibrate()
+{
+    if (!m_arduinoKnownKg || !m_arduinoUnitsPerKg) {
+        return;
+    }
+    if (!m_arduinoHasValue) {
+        QMessageBox::warning(this,
+                             QStringLiteral("Калибровка"),
+                             QStringLiteral("Нет текущего значения с тензодатчика."));
+        return;
+    }
+    const double knownKg = m_arduinoKnownKg->value();
+    if (knownKg <= 0.0) {
+        QMessageBox::warning(this,
+                             QStringLiteral("Калибровка"),
+                             QStringLiteral("Укажите вес больше нуля."));
+        return;
+    }
+    if (m_arduinoLastRaw == 0) {
+        QMessageBox::warning(this,
+                             QStringLiteral("Калибровка"),
+                             QStringLiteral("Сырое значение равно 0 — нагрузите датчик."));
+        return;
+    }
+
+    const double sample = static_cast<double>(m_arduinoLastRaw) / knownKg;
+    if (!(sample > 0.0) || !qIsFinite(sample)) {
+        QMessageBox::warning(this,
+                             QStringLiteral("Калибровка"),
+                             QStringLiteral("Не удалось вычислить масштаб по этой точке."));
+        return;
+    }
+
+    m_arduinoCalibScaleSum += sample;
+    ++m_arduinoCalibPoints;
+    const double averaged = m_arduinoCalibScaleSum / static_cast<double>(m_arduinoCalibPoints);
+    m_arduinoUnitsPerKg->setValue(averaged);
+    updateArduinoCalibHint();
+    updateArduinoKgDisplay();
+}
+
+void AdminPanel::onArduinoResetCalibration()
+{
+    m_arduinoCalibScaleSum = 0.0;
+    m_arduinoCalibPoints = 0;
+    if (m_arduinoUnitsPerKg)
+        m_arduinoUnitsPerKg->setValue(m_arduinoUnitsPerKgBaseline > 0.0
+                                          ? m_arduinoUnitsPerKgBaseline
+                                          : 100000.0);
+    updateArduinoCalibHint();
+    updateArduinoKgDisplay();
 }
 
 void AdminPanel::onArduinoValue(qint32 value)

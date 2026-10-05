@@ -8,7 +8,7 @@
         "port": 4222
     },
     "arduino": {
-        "port": "/dev/ttyUSB1",
+        "port": "/dev/ttyUSB0",
         "threshold": 1100000,
         "unitsPerKg": 100000
     }

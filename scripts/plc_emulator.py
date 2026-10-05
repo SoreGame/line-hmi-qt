@@ -12,14 +12,19 @@ Exchange: client sends 1024 bytes → PLC applies VALVE[0..11], updates sensors,
 optionally replies with 1024 bytes (valve echo + sensors + zeros).
 
 HMI health check: client sends 4 bytes [203,0,0,0] (robot-behaviour ping) →
-PLC replies with one 120-byte status frame (60 int16, valves, sensors, zeros) without
+PLC replies with one 100-byte status frame (50 int16, valves, sensors, zeros) without
 changing valves. HMI treats the PLC as ready only when that frame matches
 its mask. Full 1024-byte command frames still get a 1024-byte reply.
 
 Status int16 (little-endian), same indices as PlcClient:
   45, 46     Vision 1/2 (1 = on)
-  50         E-stop mushroom (1 = pressed) → HMI enters recovery
-  51..59     Suspicions (1 = show on left panel as «Ячейка N»)
+
+Service panel (no reply):
+  [99, 1]     enter service mode
+  [99, 0]     leave service mode (also clears DO 0..49)
+  [2, n, 1]   DO n on  (n = 0..49); applied only in service mode
+  [2, n, 0]   DO n off
+  In service mode the status frame int16[n] echoes DO n.
 
 Set alarms from the server console, or from a client:
   [204, index, value, 0]  — set int16 index (50..59) to 0/1
@@ -65,8 +70,10 @@ Usage:
   python3 plc_emulator.py --client --clear-alarms --status
 
 Server console (while listening, TTY only; status-ping не печатается каждый раз):
-  estop 0|1
-  suspect 51=1,53=0
+  service 0|1
+  do N=0|1
+  estop 0|1          — вне кадра 50 int16, только лог
+  suspect 51=1,53=0  — вне кадра 50 int16, только лог
   clear
   status
   help
@@ -83,9 +90,12 @@ import time
 from typing import Iterable
 
 FRAME_SIZE = 1024
-STATUS_INT_COUNT = 60
+STATUS_INT_COUNT = 50
 STATUS_INT_BYTES = 2
-STATUS_SIZE = STATUS_INT_COUNT * STATUS_INT_BYTES  # 120
+STATUS_SIZE = STATUS_INT_COUNT * STATUS_INT_BYTES  # 100
+DO_COUNT = 50
+SERVICE_TAG = 99
+DO_TAG = 2
 PREP_COMMAND_SIZE = 10
 PING_FRAME = bytes((203, 0, 0, 0))
 PROGRAM_SELECT_TAG = 7
@@ -194,6 +204,8 @@ class PlcState:
         self.prep_lamellae = 0
         self.prep_geese = 0
         self.prep_weld = 0
+        self.service_mode = False
+        self.digital_outputs = [0] * DO_COUNT
         self._lock = threading.Lock()
         self._prep_epoch = 0
 
@@ -215,6 +227,29 @@ class PlcState:
                     changes.append((VALVE_NAMES[i], old, raw))
             self._update_sensors_locked()
         return changes
+
+    def set_service_mode(self, on: bool) -> bool:
+        with self._lock:
+            was = self.service_mode
+            self.service_mode = bool(on)
+            if not self.service_mode:
+                self.digital_outputs = [0] * DO_COUNT
+            return was
+
+    def service_on(self) -> bool:
+        with self._lock:
+            return self.service_mode
+
+    def set_do(self, index: int, value: int) -> str | None:
+        if value not in (0, 1):
+            return f"DO value must be 0 or 1: {value}"
+        if index < 0 or index >= DO_COUNT:
+            return f"DO index out of range 0..{DO_COUNT - 1}: {index}"
+        with self._lock:
+            if not self.service_mode:
+                return "ignored (not in service mode)"
+            self.digital_outputs[index] = value
+        return None
 
     def set_alarm_int(self, index: int, value: int) -> None:
         if value not in (0, 1):
@@ -293,7 +328,7 @@ class PlcState:
             self.sensors[i] = self.valves[i]
 
     def build_status(self) -> bytes:
-        """120-byte status frame for the HMI ping (60 int16)."""
+        """100-byte status frame for the HMI ping (50 int16)."""
         with self._lock:
             out = bytearray(STATUS_SIZE)
             for i, v in enumerate(self.valves):
@@ -310,7 +345,8 @@ class PlcState:
                 out[LAMELLAE_OFFSET] = self.prep_lamellae
                 out[GEESE_OFFSET] = self.prep_geese
                 for i in range(WELD_COUNT):
-                    out[WELD_OFFSET + i] = self.prep_weld
+                    if WELD_OFFSET + i < STATUS_SIZE:
+                        out[WELD_OFFSET + i] = self.prep_weld
             else:
                 # Idle: чек-лист HMI смотрит int16 сварки == 1.
                 for index in WELDING_READY_INTS:
@@ -324,6 +360,10 @@ class PlcState:
             put_i16(out, ESTOP_INT_INDEX, self.estop)
             for i, v in enumerate(self.suspicions):
                 put_i16(out, SUSPICION_FIRST + i, v)
+
+            if self.service_mode:
+                for i, v in enumerate(self.digital_outputs):
+                    put_i16(out, i, v)
         return bytes(out)
 
     def build_reply(self) -> tuple[bytes, list[int], list[int]]:
@@ -348,6 +388,116 @@ def format_alarms(estop: int, suspicions: list[int]) -> str:
     return " ".join(parts)
 
 
+def handle_tag7(frame: bytes, peer: str, state: PlcState) -> None:
+    sub = frame[1]
+    is_start = frame[1] == 1 and frame[2] == 1 and frame[3] in (0, 1)
+    if is_start:
+        flag = "ignore-on" if frame[3] == 0 else "ignore-off"
+        print(f"[plc] {peer} hmi start {flag} {list(frame)}", flush=True)
+        state.begin_prep_fill()
+        return
+    names = {
+        1: "program",
+        2: "start",
+        3: "stop",
+        4: "e-stop",
+        5: "e-stop-exit",
+    }
+    name = names.get(sub, "unknown")
+    print(f"[plc] {peer} hmi {name} {list(frame)}", flush=True)
+    if sub == 2:
+        state.begin_prep_fill()
+
+
+def try_consume_pending(
+    conn: socket.socket, pending: bytearray, peer: str, state: PlcState
+) -> str:
+    """'consumed' | 'need_more' | 'full_frame'."""
+    if not pending:
+        return "need_more"
+
+    if pending[0] == SERVICE_TAG:
+        if len(pending) < 2:
+            return "need_more"
+        on = pending[1] != 0
+        del pending[:2]
+        state.set_service_mode(on)
+        print(f"[plc] {peer} service {'on' if on else 'off'} [99, {int(on)}]", flush=True)
+        return "consumed"
+
+    if pending[0] == DO_TAG:
+        if len(pending) < 3:
+            return "need_more"
+        n = pending[1]
+        v = pending[2]
+        frame = [2, n, v]
+        del pending[:3]
+        err = state.set_do(n, v)
+        if err:
+            print(f"[plc] {peer} DO {list(frame)} {err}", flush=True)
+        else:
+            print(f"[plc] {peer} DO {n}={'on' if v else 'off'}", flush=True)
+        return "consumed"
+
+    if (
+        len(pending) == PREP_COMMAND_SIZE
+        or (
+            len(pending) == PREP_COMMAND_SIZE + len(PING_FRAME)
+            and bytes(pending[PREP_COMMAND_SIZE:]) == PING_FRAME
+        )
+    ):
+        frame = bytes(pending[:PREP_COMMAND_SIZE])
+        del pending[:PREP_COMMAND_SIZE]
+        print(f"[plc] {peer} prep-start {frame.hex()}", flush=True)
+        state.begin_prep_fill()
+        return "consumed"
+
+    if len(pending) >= 4 and pending[0] == PROGRAM_SELECT_TAG:
+        frame = bytes(pending[:4])
+        del pending[:4]
+        handle_tag7(frame, peer, state)
+        return "consumed"
+
+    if len(pending) >= 4 and pending[0] == 203:
+        frame = bytes(pending[:4])
+        del pending[:4]
+        state.apply_valve_commands(frame)
+        reply = state.build_status()
+        estop, suspects = state.alarm_snapshot()
+        alarm_key = (estop, tuple(suspects), state.service_on())
+        if getattr(state, "_last_logged_alarms", None) != alarm_key:
+            state._last_logged_alarms = alarm_key
+            print(
+                f"[plc] {peer} status {STATUS_SIZE}B  {format_alarms(estop, suspects)}"
+                f"{' service' if state.service_on() else ''}",
+                flush=True,
+            )
+        try_send_reply(conn, reply, peer)
+        return "consumed"
+
+    if len(pending) >= 4 and pending[0] == SET_STATUS_TAG:
+        frame = bytes(pending[:4])
+        del pending[:4]
+        index = frame[1]
+        value = frame[2]
+        try:
+            state.set_alarm_int(index, value)
+            print(f"[plc] {peer} set int16[{index}]={value}", flush=True)
+        except ValueError as exc:
+            print(f"[plc] {peer} set rejected: {exc}", flush=True)
+        return "consumed"
+
+    if len(pending) >= 4 and pending[0] == CLEAR_ALARMS_TAG:
+        del pending[:4]
+        state.clear_alarms()
+        print(f"[plc] {peer} alarms cleared", flush=True)
+        return "consumed"
+
+    if len(pending) >= FRAME_SIZE:
+        return "full_frame"
+    return "need_more"
+
+
 def handle_client(conn: socket.socket, addr: tuple[str, int], state: PlcState) -> None:
     peer = f"{addr[0]}:{addr[1]}"
     print(f"[plc] connected {peer}", flush=True)
@@ -360,105 +510,33 @@ def handle_client(conn: socket.socket, addr: tuple[str, int], state: PlcState) -
 
     try:
         while True:
-            if len(pending) < FRAME_SIZE:
-                chunk = conn.recv(FRAME_SIZE - len(pending))
-                if not chunk:
-                    print(f"[plc] disconnected {peer}", flush=True)
-                    return
-                pending.extend(chunk)
-
-            if (
-                len(pending) == PREP_COMMAND_SIZE
-                or (
-                    len(pending) == PREP_COMMAND_SIZE + len(PING_FRAME)
-                    and bytes(pending[PREP_COMMAND_SIZE:]) == PING_FRAME
-                )
-            ):
-                frame = bytes(pending[:PREP_COMMAND_SIZE])
-                del pending[:PREP_COMMAND_SIZE]
-                print(f"[plc] {peer} prep-start {frame.hex()}", flush=True)
-                state.begin_prep_fill()
-                if not pending:
-                    continue
-
-            if len(pending) == 4 and pending[0] == PROGRAM_SELECT_TAG:
-                frame = bytes(pending)
-                pending.clear()
-                sub = frame[1]
-                # Старт пульта: [7, 1, 1, 0] игнорирует тензодатчик, [7, 1, 1, 1] — нет.
-                # [7, 1, 1, 0] совпадает с выбором детали 1.
-                is_start = frame[1] == 1 and frame[2] == 1 and frame[3] in (0, 1)
-                if is_start:
-                    flag = "ignore-on" if frame[3] == 0 else "ignore-off"
-                    print(f"[plc] {peer} hmi start {flag} {list(frame)}", flush=True)
-                    state.begin_prep_fill()
-                    continue
-                names = {
-                    1: "program",
-                    2: "start",
-                    3: "stop",
-                    4: "e-stop",
-                    5: "e-stop-exit",
-                }
-                name = names.get(sub, "unknown")
-                print(f"[plc] {peer} hmi {name} {list(frame)}", flush=True)
-                if sub == 2:
-                    state.begin_prep_fill()
+            action = try_consume_pending(conn, pending, peer, state)
+            if action == "consumed":
                 continue
-
-            if len(pending) == 4 and pending[0] == 203:
-                frame = bytes(pending)
-                pending.clear()
-                state.apply_valve_commands(frame)
-                reply = state.build_status()
-                estop, suspects = state.alarm_snapshot()
-                # Не спамим консоль на каждый ping HMI — иначе нельзя ввести suspect.
-                alarm_key = (estop, tuple(suspects))
-                if getattr(state, "_last_logged_alarms", None) != alarm_key:
-                    state._last_logged_alarms = alarm_key
+            if action == "full_frame":
+                frame = bytes(pending[:FRAME_SIZE])
+                del pending[:FRAME_SIZE]
+                changes = state.apply_valve_commands(frame)
+                reply, valves, sensors = state.build_reply()
+                if changes:
+                    detail = ", ".join(
+                        f"{name}:{old}->{new}" for name, old, new in changes
+                    )
+                    print(f"[plc] {peer} valves changed: {detail}", flush=True)
+                else:
                     print(
-                        f"[plc] {peer} status {STATUS_SIZE}B  {format_alarms(estop, suspects)}",
+                        f"[plc] {peer} OK  {format_bits(VALVE_NAMES, valves)} | "
+                        f"{format_bits(SENSOR_NAMES, sensors)}",
                         flush=True,
                     )
                 try_send_reply(conn, reply, peer)
                 continue
 
-            if len(pending) == 4 and pending[0] == SET_STATUS_TAG:
-                frame = bytes(pending)
-                pending.clear()
-                index = frame[1]
-                value = frame[2]
-                try:
-                    state.set_alarm_int(index, value)
-                    print(f"[plc] {peer} set int16[{index}]={value}", flush=True)
-                except ValueError as exc:
-                    print(f"[plc] {peer} set rejected: {exc}", flush=True)
-                continue
-
-            if len(pending) == 4 and pending[0] == CLEAR_ALARMS_TAG:
-                pending.clear()
-                state.clear_alarms()
-                print(f"[plc] {peer} alarms cleared", flush=True)
-                continue
-
-            frame = bytes(pending[:FRAME_SIZE])
-            pending = pending[FRAME_SIZE:]
-
-            changes = state.apply_valve_commands(frame)
-            reply, valves, sensors = state.build_reply()
-            if changes:
-                detail = ", ".join(f"{name}:{old}->{new}" for name, old, new in changes)
-                print(f"[plc] {peer} valves changed: {detail}", flush=True)
-            else:
-                print(
-                    f"[plc] {peer} OK  {format_bits(VALVE_NAMES, valves)} | "
-                    f"{format_bits(SENSOR_NAMES, sensors)}",
-                    flush=True,
-                )
-
-            # Reply is for status clients (HMI). Write-only Behaviour is fine
-            # if this soft-fails — command was already applied.
-            try_send_reply(conn, reply, peer)
+            chunk = conn.recv(FRAME_SIZE - len(pending) if pending else FRAME_SIZE)
+            if not chunk:
+                print(f"[plc] disconnected {peer}", flush=True)
+                return
+            pending.extend(chunk)
     except (ConnectionResetError, BrokenPipeError, OSError) as exc:
         print(f"[plc] {peer} error: {exc}", flush=True)
     finally:
@@ -496,7 +574,8 @@ def run_server_console(state: PlcState, stop: threading.Event) -> None:
     if not sys.stdin.isatty():
         return
     print(
-        "[plc] console: estop 0|1 | suspect 51=1,53=0 | clear | status | help | quit",
+        "[plc] console: service 0|1 | do N=0|1 | estop 0|1 | suspect 51=1 | "
+        "clear | status | help | quit",
         flush=True,
     )
     while not stop.is_set():
@@ -514,17 +593,40 @@ def run_server_console(state: PlcState, stop: threading.Event) -> None:
             return
         if line in ("h", "help", "?"):
             print(
-                "  estop 0|1              — грибок (int16[50])\n"
-                "  suspect 51=1,53=0      — подозрения (int16[51..59])\n"
+                "  service 0|1            — сервисный режим\n"
+                "  do N=0|1               — DO 0..49 (только в сервисе)\n"
+                "  estop 0|1              — грибок (вне кадра 50 int16)\n"
+                "  suspect 51=1,53=0      — подозрения (вне кадра 50 int16)\n"
                 "  clear                  — сбросить грибок и подозрения\n"
-                "  status                 — текущие аварии\n"
+                "  status                 — текущие аварии и сервис\n"
                 "  quit                   — остановить сервер",
                 flush=True,
             )
             continue
         if line == "status":
             estop, suspects = state.alarm_snapshot()
-            print(f"[plc] {format_alarms(estop, suspects)}", flush=True)
+            mode = "on" if state.service_on() else "off"
+            print(f"[plc] service={mode} {format_alarms(estop, suspects)}", flush=True)
+            continue
+        if line.startswith("service "):
+            try:
+                val = int(line.split(None, 1)[1].strip())
+                state.set_service_mode(bool(val))
+                print(f"[plc] service={'on' if val else 'off'}", flush=True)
+            except (ValueError, IndexError) as exc:
+                print(f"[plc] error: {exc}", flush=True)
+            continue
+        if line.startswith("do "):
+            try:
+                spec = line.split(None, 1)[1].strip()
+                left, right = spec.split("=", 1)
+                err = state.set_do(int(left.strip()), int(right.strip()))
+                if err:
+                    print(f"[plc] error: {err}", flush=True)
+                else:
+                    print(f"[plc] {spec}", flush=True)
+            except (ValueError, IndexError) as exc:
+                print(f"[plc] error: {exc}", flush=True)
             continue
         if line == "clear":
             state.clear_alarms()

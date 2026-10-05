@@ -73,6 +73,12 @@ public:
     // [7, 1, 1, 0] — деталь 1, [7, 1, 2, 0] — деталь 2.
     static QByteArray programSelectCommand(int program);
 
+    // Сервисный режим: [99, 1] вход, [99, 0] выход.
+    static QByteArray serviceModeCommand(bool on);
+
+    // Дискретный выход: [2, n, 1] вкл, [2, n, 0] выкл.
+    static QByteArray doCommand(int n, bool on);
+
     // No successful ping-pong for this long ⇒ PLC is down.
     static constexpr qint64 kTimeoutMs = 3000;
 
@@ -80,9 +86,11 @@ public:
     ~PlcClient() override;
 
     // readyValue/readyMask длиной kStatusSize. Пустые — value нули, mask 0xFF.
+    // statusBytes — сколько байт ждать в ответ на ping (100 или 120).
     void start(const QString &host, quint16 port,
                const QByteArray &readyValue = {},
-               const QByteArray &readyMask = {});
+               const QByteArray &readyMask = {},
+               int statusBytes = kStatusSize);
     void stop();
 
     // 60 int16 пришли недавно — это и есть готовность ПЛК.

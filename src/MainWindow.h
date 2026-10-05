@@ -22,6 +22,7 @@ class NatsClient;
 class PlcClient;
 class PrepOverlay;
 class RecoveryOverlay;
+class QCloseEvent;
 class QGraphicsView;
 class QLabel;
 class QResizeEvent;
@@ -39,6 +40,7 @@ public:
 protected:
     void resizeEvent(QResizeEvent *event) override;
     void showEvent(QShowEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
 
 private slots:
     void on_btnStart_clicked();
@@ -47,6 +49,7 @@ private slots:
     void on_btnProg1_clicked();
     void on_btnProg2_clicked();
     void on_btnAdmin_clicked();
+    void on_btnService_clicked();
     void on_btnExportLog_clicked();
 
 private:
@@ -92,6 +95,8 @@ private:
     bool plcReady() const;
     bool bufferReady() const;
     bool plcEstopPressed() const;
+    bool canPowerOff() const;
+    void syncPowerOffLatch();
     void maybeEnterRecoveryFromPlc();
     void enterRecovery(const QString &reason);
     void openRecoveryOverlay();
@@ -146,6 +151,7 @@ private:
     quint16 m_plcPort = 1502;
     QByteArray m_plcReadyMask;
     QByteArray m_plcReadyValue;
+    int m_plcStatusBytes = 120;
 
     QGraphicsView *m_androidView = nullptr;
 
