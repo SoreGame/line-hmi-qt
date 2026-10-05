@@ -322,7 +322,7 @@ void PlcClient::excludeLiveSignals(QByteArray *mask)
     clear(kGeeseOffset);
     for (int i = 0; i < kWeldSensorCount; ++i)
         clear(kWeldOffset + i);
-    // Кнопки корпуса и подозрения (int16 49–59) меняются в работе — не входят в маску.
+    // Кнопки корпуса и подозрения (int16 50–59) меняются в работе — не входят в маску.
     for (int i = kPanelIntIndex; i <= kSuspicionLastIntIndex; ++i) {
         clear(i * kStatusIntBytes);
         clear(i * kStatusIntBytes + 1);

@@ -426,6 +426,14 @@ void MainWindow::startPlcClient()
                   .arg(m_plcStatusBytes / 2)
                   .arg(PlcClient::kVision1IntIndex)
                   .arg(PlcClient::kVision2IntIndex));
+    if (m_plcStatusBytes / 2 <= PlcClient::kEstopHeldIntIndex)
+        appendLog(LogLevel::Warn,
+                  QStringLiteral("Кадр ПЛК %1 байт: кнопки корпуса buffer[%2] и грибок buffer[%3] "
+                                 "не читаются — нужно не меньше %4 байт")
+                      .arg(m_plcStatusBytes)
+                      .arg(PlcClient::kPanelIntIndex)
+                      .arg(PlcClient::kEstopHeldIntIndex)
+                      .arg((PlcClient::kEstopHeldIntIndex + 1) * 2));
     ui->statusPlc->setToolTip(QStringLiteral("%1:%2").arg(m_plcHost).arg(m_plcPort));
     updatePlcIndicators();
 }
@@ -747,7 +755,14 @@ bool MainWindow::plcReady() const
 bool MainWindow::plcEstopPressed() const
 {
     return m_plc && m_plc->isOk()
-        && m_plc->statusInt16(PlcClient::kPanelIntIndex) == PlcClient::kPanelEstop;
+        && (m_plc->statusInt16(PlcClient::kPanelIntIndex) == PlcClient::kPanelEstop
+            || plcEstopHeld());
+}
+
+bool MainWindow::plcEstopHeld() const
+{
+    return m_plc && m_plc->isOk()
+        && m_plc->statusInt16(PlcClient::kEstopHeldIntIndex) == PlcClient::kEstopHeldValue;
 }
 
 bool MainWindow::canStartNow(QString *reason) const
@@ -784,19 +799,26 @@ void MainWindow::handlePanelButtons()
         return;
     const qint16 value = m_plc->statusInt16(PlcClient::kPanelIntIndex);
     // Первое чтение после запуска пульта: висящую защёлку СТОП/СТАРТ не исполняем.
+    const bool estop = plcEstopPressed();
     const bool changed = m_panelValueKnown && value != m_prevPanelValue;
+    const bool estopRising = m_panelValueKnown && estop && !m_prevEstopActive;
     m_panelValueKnown = true;
     m_prevPanelValue = value;
+    m_prevEstopActive = estop;
 
-    if (m_awaitEstopClear && value != PlcClient::kPanelEstop) {
+    if (m_awaitEstopClear && !estop) {
         m_awaitEstopClear = false;
         m_estopClearTimer->stop();
         appendLog(LogLevel::Ok, QStringLiteral("ПЛК снял e-stop · старт снова доступен"));
         refreshUi();
     }
 
-    if (value == PlcClient::kPanelEstop) {
-        maybeEnterRecoveryFromPlc(changed);
+    if (estop) {
+        // Повторный грибок во время выхода в стартовое положение — прервать выход.
+        if (estopRising && m_mode == Mode::Recovery && m_recovery && m_recovery->isExitRunning())
+            enterRecovery(QStringLiteral("EMERGENCY STOP · ПЛК"));
+        else
+            maybeEnterRecoveryFromPlc(estopRising);
         return;
     }
     if (!changed)
@@ -1620,7 +1642,8 @@ void MainWindow::closePrepOverlay()
 
 void MainWindow::maybeEnterRecoveryFromPlc(bool changed)
 {
-    // По уровню: 30 держится на ПЛК до 7 5, поэтому пропущенный фронт не теряет аварию.
+    // По уровню: 30 держится на ПЛК до 7 5, грибок — пока зажат,
+    // поэтому пропущенный фронт не теряет аварию.
     if (!plcEstopPressed() || m_estopPending || m_awaitEstopClear || m_mode == Mode::Recovery)
         return;
     // Игнорирование: старт мимо аварии разрешён, висящая 30 не возвращает в неё —
@@ -1686,6 +1709,7 @@ void MainWindow::openRecoveryOverlay()
 
     const ConnectionSettings cfg = ConnectionSettings::load();
     auto *overlay = new RecoveryOverlay(m_nats, cfg.estopScript, cfg.ignoreLaunchLocks,
+                                        [this] { return plcEstopHeld(); },
                                         ui->centralwidget);
     m_recovery = overlay;
     overlay->setGeometry(ui->centralwidget->rect());

@@ -50,7 +50,7 @@ constexpr int kLegacyStatusSize = PlcClient::kMinStatusSize; // прежний �
 
 QByteArray defaultPlcMask()
 {
-    // Первые 100 байт — прежняя проверка. Байты int16 49–59 (кнопки корпуса/подозрения)
+    // Первые 100 байт — прежняя проверка. Байты int16 50–59 (кнопки корпуса/подозрения)
     // в маску не входят: excludeLiveSignals обнуляет их.
     QByteArray mask(kPlcStatusSize, 0);
     const int checked = qMin(kLegacyStatusSize, kPlcStatusSize);

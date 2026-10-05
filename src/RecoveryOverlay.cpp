@@ -40,10 +40,11 @@ const char *kChecklistItems[] = {
 } // namespace
 
 RecoveryOverlay::RecoveryOverlay(NatsClient *nats, const QString &exitScript, bool allowStart,
-                                 QWidget *parent)
+                                 std::function<bool()> estopHeld, QWidget *parent)
     : QWidget(parent)
     , m_nats(nats)
     , m_exitScript(exitScript)
+    , m_estopHeld(std::move(estopHeld))
 {
     setAttribute(Qt::WA_StyledBackground, false);
     setFocusPolicy(Qt::StrongFocus);
@@ -77,7 +78,7 @@ RecoveryOverlay::RecoveryOverlay(NatsClient *nats, const QString &exitScript, bo
         " font-size:15px; font-weight:600; background:transparent;"));
     cardLayout->addWidget(subtitle);
 
-    m_status = new QLabel(QStringLiteral("Выполните пункты и нажмите «Далее»"), card);
+    m_status = new QLabel(QStringLiteral("Выполните пункты и нажмите «Выход из e-stop»"), card);
     m_status->setWordWrap(true);
     m_status->setStyleSheet(QStringLiteral(
         "color:#1F2126; font-family:\"Inter\",\"Segoe UI\",sans-serif;"
@@ -102,7 +103,7 @@ RecoveryOverlay::RecoveryOverlay(NatsClient *nats, const QString &exitScript, bo
     auto *actions = new QVBoxLayout();
     actions->setSpacing(12);
 
-    m_btnNext = new QPushButton(QStringLiteral("Далее"), card);
+    m_btnNext = new QPushButton(QStringLiteral("Выход из e-stop"), card);
     m_btnNext->setCursor(Qt::PointingHandCursor);
     m_btnNext->setFocusPolicy(Qt::NoFocus);
     m_btnNext->setFixedSize(300, 68);
@@ -154,6 +155,14 @@ void RecoveryOverlay::onNextClicked()
     if (m_phase != Phase::Checklist)
         return;
 
+    if (m_estopHeld && m_estopHeld()) {
+        m_status->setText(QStringLiteral("Физически отожмите кнопку e-stop"));
+        emit note(Note::Warn, QStringLiteral("Выход из e-stop: грибок зажат · физически отожмите кнопку"));
+        QMessageBox::warning(this, QStringLiteral("E-stop"),
+                             QStringLiteral("Физически отожмите кнопку"));
+        return;
+    }
+
     m_phase = Phase::Confirming;
     refreshButtons();
 
@@ -167,7 +176,14 @@ void RecoveryOverlay::onNextClicked()
 
     if (answer != QMessageBox::Yes) {
         m_phase = Phase::Checklist;
-        m_status->setText(QStringLiteral("Выполните пункты и нажмите «Далее»"));
+        m_status->setText(QStringLiteral("Выполните пункты и нажмите «Выход из e-stop»"));
+        refreshButtons();
+        return;
+    }
+    if (m_estopHeld && m_estopHeld()) {
+        m_phase = Phase::Checklist;
+        m_status->setText(QStringLiteral("Физически отожмите кнопку e-stop"));
+        emit note(Note::Warn, QStringLiteral("Выход из e-stop: грибок зажат · физически отожмите кнопку"));
         refreshButtons();
         return;
     }
@@ -260,7 +276,7 @@ void RecoveryOverlay::onScriptStatus(bool running, bool completed, const QString
 
     m_phase = Phase::Checklist;
     m_waitFilename.clear();
-    m_status->setText(QStringLiteral("Выход прерван. Выполните пункты и нажмите «Далее»"));
+    m_status->setText(QStringLiteral("Выход прерван. Выполните пункты и нажмите «Выход из e-stop»"));
     emit note(Note::Err, QStringLiteral("Восстановление · '%1' не завершился")
                              .arg(m_exitScript));
     refreshButtons();
@@ -282,7 +298,7 @@ void RecoveryOverlay::publishStopAndReset(const QString &message)
     m_waitFilename.clear();
     m_sawScriptRunning = false;
     m_phase = Phase::Checklist;
-    m_status->setText(QStringLiteral("Выполните пункты и нажмите «Далее»"));
+    m_status->setText(QStringLiteral("Выполните пункты и нажмите «Выход из e-stop»"));
     refreshButtons();
 
     auto gate = m_gate;

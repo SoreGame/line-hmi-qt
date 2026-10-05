@@ -95,11 +95,13 @@ private:
     bool modulesReady() const;
     bool plcReady() const;
     bool bufferReady() const;
+    // E-stop на ПЛК: 30 в int16[50] или зажатый грибок в int16[51].
     bool plcEstopPressed() const;
+    bool plcEstopHeld() const;
     bool canStartNow(QString *reason = nullptr) const;
     bool canPowerOff() const;
     void syncPowerOffLatch();
-    // Кнопки корпуса (int16[49] ПЛК) — те же действия, что кнопки на экране.
+    // Кнопки корпуса (int16[50] ПЛК) — те же действия, что кнопки на экране.
     void handlePanelButtons();
     void panelStopPressed();
     void panelStartPressed();
@@ -195,11 +197,12 @@ private:
     bool m_prevPlcOk = false;
     qint16 m_prevPanelValue = 0;
     bool m_panelValueKnown = false;
+    bool m_prevEstopActive = false;
     // Аварийный стоп запрошен, окно восстановления ещё не открыто.
     // Пока стоит — exec/stop не переводят пульт в Run/Ready.
     bool m_estopPending = false;
     QString m_estopPendingReason;
-    // После 7 5: ждём, пока ПЛК снимет 30 в int16[49]. Старт заблокирован.
+    // После 7 5: ждём, пока ПЛК снимет 30 в int16[50] и грибок отжат. Старт заблокирован.
     bool m_awaitEstopClear = false;
     QTimer *m_estopClearTimer = nullptr;
     bool m_moduleStateInitialized = false;

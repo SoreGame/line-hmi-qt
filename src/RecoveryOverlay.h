@@ -5,6 +5,7 @@
 #include <QWidget>
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <mutex>
 
@@ -13,7 +14,8 @@ class QLabel;
 class QPushButton;
 
 // Окно поверх пульта после аварийного стопа: инструкция руками, затем
-// скрипт выхода из e-stop (имя из админки). Датчики кнопку «Далее» не держат.
+// скрипт выхода из e-stop (имя из админки). Кнопку «Выход из e-stop» держит
+// только зажатый грибок.
 class RecoveryOverlay : public QWidget
 {
     Q_OBJECT
@@ -22,8 +24,9 @@ public:
     enum class Note { Info, Ok, Warn, Err };
 
     // allowStart: кнопка «Старт» без чек-листа (режим «Игнорировать блокировки запуска»).
+    // estopHeld: грибок физически зажат — «Выход из e-stop» не запускается.
     RecoveryOverlay(NatsClient *nats, const QString &exitScript, bool allowStart,
-                    QWidget *parent = nullptr);
+                    std::function<bool()> estopHeld, QWidget *parent = nullptr);
 
     void onScriptStatus(bool running, bool completed, const QString &filename);
     // Повторный грибок во время выхода: стоп скрипта и снова чек-лист.
@@ -48,6 +51,7 @@ private:
 
     NatsClient *m_nats = nullptr;
     QString m_exitScript;
+    std::function<bool()> m_estopHeld;
     Phase m_phase = Phase::Checklist;
     QString m_waitFilename;
     bool m_sawScriptRunning = false;
