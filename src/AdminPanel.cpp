@@ -314,7 +314,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     m_plcPort->setFixedWidth(88);
 
     m_plcStatusBytes = new QSpinBox(networkPanel);
-    m_plcStatusBytes->setRange(100, 120);
+    m_plcStatusBytes->setRange(PlcClient::kMinStatusSize, PlcClient::kStatusSize);
     m_plcStatusBytes->setSingleStep(2);
     m_plcStatusBytes->setValue(initial.plcStatusBytes > 0 ? initial.plcStatusBytes : 120);
     m_plcStatusBytes->setSuffix(QStringLiteral(" байт"));
@@ -1968,7 +1968,7 @@ void AdminPanel::refreshPlcBufferLog()
 
     QString line = ts;
     line += QLatin1Char(' ');
-    for (int i = 0; i < PlcClient::kStatusIntCount; ++i) {
+    for (int i = 0; i < m_plc->statusIntCount(); ++i) {
         if (i > 0)
             line += QLatin1Char(' ');
         line += QString::number(m_plc->statusInt16(i));

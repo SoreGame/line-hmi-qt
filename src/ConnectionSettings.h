@@ -10,12 +10,12 @@ struct ConnectionSettings {
     quint16 natsPort = 4222;
     QString plcHost = QStringLiteral("192.168.58.88");
     quint16 plcPort = 2025;
-    // 120 байт: 60 int16 (старые конфиги на 100 байт тоже принимаются).
+    // До 1000 байт (500 int16); в config.json можно короче, от 100 байт — хвост не проверяется.
     // Маска 0x00 — байт не проверяется.
     QByteArray plcReadyMask;
     QByteArray plcReadyValue;
     QString plcPatternWarning;
-    // Ожидаемый размер статус-кадра ПЛК в байтах (100 = 50 int16, 120 = 60 int16).
+    // Ожидаемый размер статус-кадра ПЛК в байтах: чётное, 100..1000 (50..500 int16).
     int plcStatusBytes = 120;
     bool autostart = false;
     bool hmiAutostart = false;

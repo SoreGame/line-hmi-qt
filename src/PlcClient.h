@@ -12,13 +12,14 @@
 #include <mutex>
 
 // TCP-клиент: ПЛК — сервер, пульт к нему подключается.
-// Раз в секунду шлём [203,0,0,0] и ждём 60 int16 (little-endian), это 120 байт.
+// Раз в секунду шлём [203,0,0,0] и ждём statusBytes (100..1000, little-endian int16).
 // ПЛК готов, если этот пакет пришёл. Содержимое для готовности не сравнивается.
 class PlcClient : public QObject
 {
     Q_OBJECT
 public:
-    static constexpr int kStatusIntCount = 60;
+    static constexpr int kStatusIntCount = 500;
+    static constexpr int kMinStatusSize = 100;
     static constexpr int kStatusIntBytes = 2; // int16, little-endian
     static constexpr int kStatusSize = kStatusIntCount * kStatusIntBytes;
     static constexpr int kValveCount = 12;
@@ -90,14 +91,14 @@ public:
     ~PlcClient() override;
 
     // readyValue/readyMask длиной kStatusSize. Пустые — value нули, mask 0xFF.
-    // statusBytes — сколько байт ждать в ответ на ping (100 или 120).
+    // statusBytes — сколько байт ждать в ответ на ping (чётное, 100..kStatusSize).
     void start(const QString &host, quint16 port,
                const QByteArray &readyValue = {},
                const QByteArray &readyMask = {},
                int statusBytes = kStatusSize);
     void stop();
 
-    // 60 int16 пришли недавно — это и есть готовность ПЛК.
+    // Кадр статуса пришёл недавно — это и есть готовность ПЛК.
     bool isOk() const;
     bool matchesMask() const;
     // Кадр свежий и в байте камеры пришла 1.
@@ -114,6 +115,8 @@ public:
     QVector<quint8> sensors() const;
     quint8 statusByte(int index) const;
     qint16 statusInt16(int index) const;
+    // Сколько int16 реально присылает ПЛК (statusBytes / 2).
+    int statusIntCount() const { return m_statusBytes.load(std::memory_order_relaxed) / kStatusIntBytes; }
     bool weldingReady() const;
 
     // Пишет кадр в текущее соединение с ПЛК (тот же сокет, что и опрос статуса).
@@ -143,6 +146,7 @@ private:
     std::atomic<quint8> m_mismatchExpected{0};
     std::atomic<quint8> m_vision1{0};
     std::atomic<quint8> m_vision2{0};
+    std::atomic<int> m_statusBytes{kStatusSize};
 };
 
 #endif // PLCCLIENT_H

@@ -98,7 +98,7 @@ import time
 from typing import Iterable
 
 FRAME_SIZE = 1024
-# 100 байт — int16[0..49]; --status-bytes 120 — ещё int16[50..59] (подозрения), как PlcClient.
+# 100 байт — int16[0..49]; --status-bytes до 1000 (500 int16), как PlcClient; подозрения 51..59 нужны ≥120.
 STATUS_INT_COUNT = 50
 STATUS_INT_BYTES = 2
 STATUS_SIZE = STATUS_INT_COUNT * STATUS_INT_BYTES
@@ -979,7 +979,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--status-bytes",
         type=int,
-        choices=(100, 120),
         default=100,
         help="размер кадра статуса; 120 — ещё int16[50..59] (подозрения)",
     )
@@ -1005,6 +1004,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     global STATUS_INT_COUNT, STATUS_SIZE
     args = build_arg_parser().parse_args(argv)
+    if not (100 <= args.status_bytes <= 1000) or args.status_bytes % 2:
+        print("--status-bytes: чётное число 100..1000", file=sys.stderr)
+        return 2
     STATUS_INT_COUNT = args.status_bytes // STATUS_INT_BYTES
     STATUS_SIZE = args.status_bytes
     if args.client:

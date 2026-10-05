@@ -32,7 +32,7 @@ bool readExact(QTcpSocket &sock, QByteArray *out, int nbytes, int timeoutMs)
     return out->size() >= nbytes;
 }
 
-// ПЛК отдаёт statusBytes (100 = старый кадр, 120 = 60 int16).
+// ПЛК отдаёт statusBytes (100..kStatusSize).
 bool readStatusFrame(QTcpSocket &sock, QByteArray *out, int timeoutMs, int statusBytes)
 {
     const int expected = qBound(kLegacyStatusSize, statusBytes, PlcClient::kStatusSize);
@@ -70,7 +70,7 @@ public:
         , m_port(port)
         , m_readyValue(std::move(readyValue))
         , m_readyMask(std::move(readyMask))
-        , m_statusBytes(qBound(100, statusBytes, PlcClient::kStatusSize))
+        , m_statusBytes(qBound(PlcClient::kMinStatusSize, statusBytes, PlcClient::kStatusSize))
     {
     }
 
@@ -357,6 +357,7 @@ void PlcClient::start(const QString &host, quint16 port,
         std::lock_guard<std::mutex> lock(m_dataMutex);
         m_status.fill(0);
     }
+    m_statusBytes.store(qBound(kMinStatusSize, statusBytes, kStatusSize), std::memory_order_relaxed);
     m_worker = new Worker(this, host, port, std::move(value), std::move(mask), statusBytes);
     m_worker->start();
 }

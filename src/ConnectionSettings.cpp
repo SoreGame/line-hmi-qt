@@ -46,7 +46,7 @@ QStringList configSearchPaths()
 }
 
 constexpr int kPlcStatusSize = PlcClient::kStatusSize;
-constexpr int kLegacyStatusSize = 100; // прежний кадр 50 int16
+constexpr int kLegacyStatusSize = PlcClient::kMinStatusSize; // прежний кадр 50 int16
 
 QByteArray defaultPlcMask()
 {
@@ -72,9 +72,8 @@ QByteArray decodeHex100(const QString &hex, bool *ok)
     s.remove(QLatin1Char('\n'));
     s.remove(QLatin1Char('\r'));
     const int nbytes = s.size() / 2;
-    const bool full = nbytes == kPlcStatusSize;
-    const bool legacy = nbytes == kLegacyStatusSize;
-    if (s.size() % 2 != 0 || !(full || legacy)) {
+    // Любая чётная длина 100..kPlcStatusSize; хвост до kPlcStatusSize — нули (не проверяется).
+    if (s.size() % 4 != 0 || nbytes < kLegacyStatusSize || nbytes > kPlcStatusSize) {
         *ok = false;
         return {};
     }
@@ -114,9 +113,11 @@ void takePlcPattern(const QJsonObject &plc, const char *key, const QByteArray &f
         *dst = fallback;
         if (warning->isEmpty()) {
             *warning = QStringLiteral(
-                "plc.%1 в config.json должен быть hex из 100 или 120 байт "
-                "(50 или 60 int16) — взята маска по умолчанию")
-                           .arg(QLatin1String(key));
+                "plc.%1 в config.json должен быть hex из %2..%3 байт "
+                "(чётное число) — взята маска по умолчанию")
+                           .arg(QLatin1String(key))
+                           .arg(kLegacyStatusSize)
+                           .arg(kPlcStatusSize);
         }
         return;
     }
@@ -250,10 +251,11 @@ bool writeConfigFile(const QString &path, const ConnectionSettings &cfg)
     QJsonObject plc = root.value(QStringLiteral("plc")).toObject();
     plc.insert(QStringLiteral("ip"), cfg.plcHost);
     plc.insert(QStringLiteral("port"), cfg.plcPort);
+    // В файл — только байты кадра: дальше statusBytes ПЛК ничего не шлёт.
     if (cfg.plcReadyMask.size() == kPlcStatusSize)
-        plc.insert(QStringLiteral("ready_mask"), encodeHex100(cfg.plcReadyMask));
+        plc.insert(QStringLiteral("ready_mask"), encodeHex100(cfg.plcReadyMask.left(cfg.plcStatusBytes)));
     if (cfg.plcReadyValue.size() == kPlcStatusSize)
-        plc.insert(QStringLiteral("ready_value"), encodeHex100(cfg.plcReadyValue));
+        plc.insert(QStringLiteral("ready_value"), encodeHex100(cfg.plcReadyValue.left(cfg.plcStatusBytes)));
     plc.insert(QStringLiteral("status_bytes"), cfg.plcStatusBytes);
 
     root.insert(QStringLiteral("server"), server);
