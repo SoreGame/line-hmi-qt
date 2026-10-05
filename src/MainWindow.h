@@ -105,7 +105,7 @@ private:
     void handlePanelButtons();
     void panelStopPressed();
     void panelStartPressed();
-    void maybeEnterRecoveryFromPlc(bool changed);
+    void maybeEnterRecoveryFromPlc();
     void forceLeaveRecovery();
     void enterRecovery(const QString &reason);
     void openRecoveryOverlay();

@@ -762,6 +762,7 @@ bool MainWindow::plcEstopPressed() const
 bool MainWindow::plcEstopHeld() const
 {
     return m_plc && m_plc->isOk()
+        && m_plc->statusIntCount() > PlcClient::kEstopHeldIntIndex
         && m_plc->statusInt16(PlcClient::kEstopHeldIntIndex) == PlcClient::kEstopHeldValue;
 }
 
@@ -801,7 +802,8 @@ void MainWindow::handlePanelButtons()
     // Первое чтение после запуска пульта: висящую защёлку СТОП/СТАРТ не исполняем.
     const bool estop = plcEstopPressed();
     const bool changed = m_panelValueKnown && value != m_prevPanelValue;
-    const bool estopRising = m_panelValueKnown && estop && !m_prevEstopActive;
+    // E-stop, висящий уже при запуске пульта, — тоже фронт: окно открывается.
+    const bool estopRising = estop && !m_prevEstopActive;
     m_panelValueKnown = true;
     m_prevPanelValue = value;
     m_prevEstopActive = estop;
@@ -814,11 +816,14 @@ void MainWindow::handlePanelButtons()
     }
 
     if (estop) {
-        // Повторный грибок во время выхода в стартовое положение — прервать выход.
-        if (estopRising && m_mode == Mode::Recovery && m_recovery && m_recovery->isExitRunning())
+        // Новый e-stop с ПЛК — то же, что кнопка E-STOP на экране, в любом режиме.
+        // Во время выхода в стартовое положение — прервать выход.
+        const bool alreadyOpen = m_estopPending
+            || (m_mode == Mode::Recovery && m_recovery && !m_recovery->isExitRunning());
+        if (estopRising && !alreadyOpen)
             enterRecovery(QStringLiteral("EMERGENCY STOP · ПЛК"));
         else
-            maybeEnterRecoveryFromPlc(estopRising);
+            maybeEnterRecoveryFromPlc();
         return;
     }
     if (!changed)
@@ -1640,15 +1645,15 @@ void MainWindow::closePrepOverlay()
     m_prep = nullptr;
 }
 
-void MainWindow::maybeEnterRecoveryFromPlc(bool changed)
+void MainWindow::maybeEnterRecoveryFromPlc()
 {
     // По уровню: 30 держится на ПЛК до 7 5, грибок — пока зажат,
     // поэтому пропущенный фронт не теряет аварию.
     if (!plcEstopPressed() || m_estopPending || m_awaitEstopClear || m_mode == Mode::Recovery)
         return;
-    // Игнорирование: старт мимо аварии разрешён, висящая 30 не возвращает в неё —
-    // только новое нажатие грибка.
-    if (!changed && ConnectionSettings::load().ignoreLaunchLocks)
+    // Игнорирование: старт мимо аварии разрешён, висящий e-stop не возвращает в неё —
+    // только новый фронт (см. handlePanelButtons).
+    if (ConnectionSettings::load().ignoreLaunchLocks)
         return;
     enterRecovery(QStringLiteral("EMERGENCY STOP · ПЛК"));
 }
