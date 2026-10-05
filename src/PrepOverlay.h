@@ -25,7 +25,8 @@ public:
     enum class Program { Detail1, Detail2 };
     enum class Note { Info, Ok, Warn, Err };
 
-    PrepOverlay(Program program, const QString &initFilename, int countdownSec,
+    // allowSkip: кнопка «Пропустить» (режим «Игнорировать блокировки запуска»).
+    PrepOverlay(Program program, const QString &initFilename, int countdownSec, bool allowSkip,
                 NatsClient *nats, PlcClient *plc, QWidget *parent = nullptr);
 
     void onScriptStatus(bool running, bool completed, const QString &filename);
@@ -51,6 +52,7 @@ private:
     void onCountdownTick();
     void finishCountdown();
     void stopCountdown();
+    void skipPreparation();
     void considerLaunchPreprog();
     void publishScript(const QString &filename, const QString &inlineCode, bool fromKv);
     void beginSmoothStop();
@@ -82,6 +84,7 @@ private:
     QLabel *m_status = nullptr;
     QLabel *m_rows[4] = {};
     QLabel *m_countdownLabel = nullptr;
+    QPushButton *m_btnSkip = nullptr;
     QPushButton *m_btnStop = nullptr;
     QPushButton *m_btnEmergency = nullptr;
 };

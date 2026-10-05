@@ -1241,15 +1241,19 @@ void MainWindow::on_btnStart_clicked()
     if (m_prepArming || m_prep)
         return;
 
+    const bool ignoreLoadCell = ConnectionSettings::load().ignoreLoadCell;
+    const QByteArray frame = PlcClient::startCommand(ignoreLoadCell);
+
     if (ConnectionSettings::load().ignoreLaunchLocks) {
+        // Ответ ПЛК не ждём: окно открывается сразу, в нём есть «Пропустить».
         appendLog(LogLevel::Warn,
                   QStringLiteral("Старт без блокировок · ПЛК/Vision/буфер не проверяются"));
-        startSelectedProgramScript(/*fromLine=*/1);
+        m_plcAcks.append(PlcAck::Start);
+        m_plc->sendCommand(frame);
+        openPrepOverlay();
         return;
     }
 
-    const bool ignoreLoadCell = ConnectionSettings::load().ignoreLoadCell;
-    const QByteArray frame = PlcClient::startCommand(ignoreLoadCell);
     m_prepArming = true;
     ui->btnStart->setEnabled(false);
     appendLog(LogLevel::Info,
@@ -1271,8 +1275,8 @@ void MainWindow::openPrepOverlay()
     const ConnectionSettings cfg = ConnectionSettings::load();
     const QString initScript = m_program == Program::Detail1 ? cfg.initScriptDetail1
                                                              : cfg.initScriptDetail2;
-    auto *overlay = new PrepOverlay(program, initScript, cfg.startCountdownSec, m_nats, m_plc,
-                                    ui->centralwidget);
+    auto *overlay = new PrepOverlay(program, initScript, cfg.startCountdownSec,
+                                    cfg.ignoreLaunchLocks, m_nats, m_plc, ui->centralwidget);
     m_prep = overlay;
     overlay->setGeometry(ui->centralwidget->rect());
 

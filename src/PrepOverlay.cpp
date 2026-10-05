@@ -51,6 +51,12 @@ const char *kCountdownStyle =
     "background:#388F51; color:white; border:none; border-radius:10px;"
     " font-family:\"Inter\",\"Segoe UI\",sans-serif; font-size:20px; font-weight:700;";
 
+const char *kBtnSkip =
+    "QPushButton{background:#5B6470; color:white; border:none; border-radius:10px;"
+    " font-family:\"Inter\",\"Segoe UI\",sans-serif; font-size:18px; font-weight:700;}"
+    " QPushButton:pressed{background:#4A525C;}"
+    " QPushButton:disabled{background:#A9B0B8; color:white;}";
+
 const char *kBtnStop =
     "QPushButton{background:#C45C1A; color:white; border:none; border-radius:10px;"
     " font-family:\"Inter\",\"Segoe UI\",sans-serif; font-size:18px; font-weight:700;}"
@@ -66,7 +72,7 @@ const char *kBtnEmergency =
 } // namespace
 
 PrepOverlay::PrepOverlay(Program program, const QString &initFilename, int countdownSec,
-                         NatsClient *nats, PlcClient *plc, QWidget *parent)
+                         bool allowSkip, NatsClient *nats, PlcClient *plc, QWidget *parent)
     : QWidget(parent)
     , m_program(program)
     , m_initFilename(initFilename)
@@ -141,13 +147,16 @@ PrepOverlay::PrepOverlay(Program program, const QString &initFilename, int count
     m_countdownLabel->setStyleSheet(QString::fromUtf8(kCountdownStyle));
     m_countdownLabel->hide();
 
+    m_btnSkip = new QPushButton(QStringLiteral("Пропустить"), card);
+    m_btnSkip->setVisible(allowSkip);
     m_btnStop = new QPushButton(QStringLiteral("Стоп"), card);
     m_btnEmergency = new QPushButton(QStringLiteral("Экстренная остановка"), card);
-    for (QPushButton *button : {m_btnStop, m_btnEmergency}) {
+    for (QPushButton *button : {m_btnSkip, m_btnStop, m_btnEmergency}) {
         button->setCursor(Qt::PointingHandCursor);
         button->setFocusPolicy(Qt::NoFocus);
         button->setFixedSize(300, 68);
     }
+    m_btnSkip->setStyleSheet(QString::fromUtf8(kBtnSkip));
     m_btnStop->setStyleSheet(QString::fromUtf8(kBtnStop));
     m_btnEmergency->setStyleSheet(QString::fromUtf8(kBtnEmergency));
 
@@ -157,6 +166,7 @@ PrepOverlay::PrepOverlay(Program program, const QString &initFilename, int count
     connect(m_countdownTimer, &QTimer::timeout, this, &PrepOverlay::onCountdownTick);
 
     actions->addWidget(m_countdownLabel);
+    actions->addWidget(m_btnSkip);
     actions->addWidget(m_btnStop);
     actions->addWidget(m_btnEmergency);
     actions->addStretch();
@@ -169,6 +179,7 @@ PrepOverlay::PrepOverlay(Program program, const QString &initFilename, int count
     root->addLayout(row);
     root->addStretch();
 
+    connect(m_btnSkip, &QPushButton::clicked, this, &PrepOverlay::skipPreparation);
     connect(m_btnStop, &QPushButton::clicked, this, &PrepOverlay::beginSmoothStop);
     connect(m_btnEmergency, &QPushButton::clicked, this, &PrepOverlay::beginEmergencyStop);
 
@@ -226,6 +237,7 @@ void PrepOverlay::refreshButtons()
         if (state != TaskState::Done)
             allDone = false;
     }
+    m_btnSkip->setEnabled(m_phase == Phase::Running);
     m_btnStop->setEnabled(m_phase == Phase::Running || m_phase == Phase::Countdown);
     m_btnEmergency->setEnabled(m_phase != Phase::Exit);
     m_countdownLabel->setVisible(m_phase == Phase::Countdown);
@@ -279,6 +291,20 @@ void PrepOverlay::finishCountdown()
 void PrepOverlay::stopCountdown()
 {
     m_countdownTimer->stop();
+}
+
+void PrepOverlay::skipPreparation()
+{
+    if (m_phase != Phase::Running)
+        return;
+    {
+        std::lock_guard<std::mutex> lock(*m_gate);
+        m_epoch->fetch_add(1, std::memory_order_relaxed);
+    }
+    // Запущенный init-скрипт behaviour прервёт сам при exec основной программы.
+    m_waitFilename.clear();
+    emit note(Note::Warn, QStringLiteral("Инициализация пропущена оператором"));
+    beginCountdown();
 }
 
 void PrepOverlay::onPlcState()
