@@ -761,6 +761,7 @@ bool MainWindow::plcEstopPressed() const
 
 bool MainWindow::plcEstopHeld() const
 {
+    // Зажат = 0: без ячейки в кадре нули не должны выглядеть зажатым грибком.
     return m_plc && m_plc->isOk()
         && m_plc->statusIntCount() > PlcClient::kEstopHeldIntIndex
         && m_plc->statusInt16(PlcClient::kEstopHeldIntIndex) == PlcClient::kEstopHeldValue;

@@ -55,14 +55,14 @@ public:
     // Ячейки, меняющиеся в работе (индексы 50–59). В маску готовности не входят.
     // 50: кнопки корпуса, защёлка ПЛК: 10 — СТОП (снимается по 7 3),
     // 20 — зелёная/СТАРТ (по 7 1 1 x), 30 — e-stop (только по 7 5).
-    // 51: грибок e-stop, 1 = зажат, 0 = отжат. В кадре короче 104 байт не читается.
+    // 51: грибок e-stop, 0 = зажат, 1 = отжат. В кадре короче 104 байт не читается.
     // 52–59: подозрения, 1 = показать на левой панели.
     static constexpr int kPanelIntIndex = 50;
     static constexpr qint16 kPanelStop = 10;
     static constexpr qint16 kPanelStart = 20;
     static constexpr qint16 kPanelEstop = 30;
     static constexpr int kEstopHeldIntIndex = 51;
-    static constexpr qint16 kEstopHeldValue = 1;
+    static constexpr qint16 kEstopHeldValue = 0;
     static constexpr int kSuspicionFirstIntIndex = 52;
     static constexpr int kSuspicionLastIntIndex = 59;
     static constexpr qint16 kSuspicionActiveValue = 1;

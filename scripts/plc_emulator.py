@@ -28,13 +28,13 @@ Service panel (no reply):
 
 Set alarms from the server console, or from a client:
   [204, index, value, 0]  — set int16 index 51..59 to 0/1, index 50 to 0/10/20/30
-  [205, 0, 0, 0]          — clear panel buttons and suspicions, mushroom → 0 (отжат)
+  [205, 0, 0, 0]          — clear panel buttons and suspicions, mushroom → 1 (отжат)
 
 Кнопки корпуса, int16[50] — защёлка, как на настоящем ПЛК:
   10 — СТОП, снимается по [7, 3, 0, 0]
   20 — зелёная/СТАРТ, снимается по старту [7, 1, 1, x]
   30 — e-stop, снимается только по [7, 5, 0, 0]
-Грибок e-stop, int16[51]: 1 = зажат, 0 = отжат (по умолчанию). Физическая кнопка — команды его не меняют.
+Грибок e-stop, int16[51]: 0 = зажат, 1 = отжат (по умолчанию). Физическая кнопка — команды его не меняют.
 Подозрения int16[52..59]. По умолчанию кадр 120 байт (60 int16).
 В сервисном режиме int16[0..49] показывают DO, как и раньше.
 
@@ -83,7 +83,7 @@ Server console (while listening, TTY only; status-ping не печатается
   service 0|1
   do N=0|1
   panel stop|start|estop|0 — int16[50] (10/20/30/0)
-  mushroom 0|1  — грибок int16[51]: 1 = зажат, 0 = отжат
+  mushroom 0|1  — грибок int16[51]: 0 = зажат, 1 = отжат
   suspect 52=1,53=0  — int16[52..59]
   clear
   status
@@ -232,7 +232,7 @@ class PlcState:
         self.valves = [0] * VALVE_COUNT
         self.sensors = [0] * SENSOR_COUNT
         self.panel = 0
-        self.mushroom = 0
+        self.mushroom = 1
         self.suspicions = [0] * (SUSPICION_LAST - SUSPICION_FIRST + 1)
         # idle: int16 сварки = 1 для чек-листа. filling: байты предподготовки 0→1.
         self.phase = "idle"
@@ -303,7 +303,7 @@ class PlcState:
     def clear_alarms(self) -> None:
         with self._lock:
             self.panel = 0
-            self.mushroom = 0
+            self.mushroom = 1
             for i in range(len(self.suspicions)):
                 self.suspicions[i] = 0
 
@@ -425,7 +425,7 @@ class PlcState:
 
 
 def format_alarms(panel: int, mushroom: int, suspicions: list[int]) -> str:
-    parts = [f"panel={panel}", f"mushroom={mushroom}{'(зажат)' if mushroom == 1 else ''}"]
+    parts = [f"panel={panel}", f"mushroom={mushroom}{'(зажат)' if mushroom == 0 else ''}"]
     for i, v in enumerate(suspicions):
         if v:
             parts.append(f"{SUSPICION_FIRST + i}={v}")
@@ -645,7 +645,7 @@ def run_server_console(state: PlcState, stop: threading.Event) -> None:
                 "  service 0|1            — сервисный режим\n"
                 "  do N=0|1               — DO 0..49 (только в сервисе)\n"
                 "  panel stop|start|estop|0 — кнопки корпуса, int16[50] = 10/20/30/0\n"
-                "  mushroom 0|1           — грибок int16[51]: 1 = зажат, 0 = отжат\n"
+                "  mushroom 0|1           — грибок int16[51]: 0 = зажат, 1 = отжат\n"
                 "  suspect 52=1,53=0      — подозрения int16[52..59]\n"
                 "  clear                  — сбросить кнопки, грибок и подозрения\n"
                 "  status                 — текущие аварии и сервис\n"
@@ -989,7 +989,7 @@ def run_client(
             continue
         print(
             "unknown command; try: poll | status | set 1=1 | panel stop | "
-            "mushroom 1 | suspect 52=1 | clear | quit"
+            "mushroom 0 | suspect 52=1 | clear | quit"
         )
 
 
@@ -1011,7 +1011,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=int,
         choices=(0, 1),
         default=None,
-        help="client: int16[51] грибок: 1 = зажат, 0 = отжат",
+        help="client: int16[51] грибок: 0 = зажат, 1 = отжат",
     )
     p.add_argument(
         "--status-bytes",
@@ -1028,7 +1028,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--clear-alarms",
         action="store_true",
-        help="client: clear panel and suspicions, mushroom → 0",
+        help="client: clear panel and suspicions, mushroom → 1",
     )
     p.add_argument(
         "--status",
