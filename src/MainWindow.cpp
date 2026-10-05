@@ -211,6 +211,11 @@ MainWindow::MainWindow(QWidget *parent)
         if (!m_awaitEstopClear)
             return;
         m_awaitEstopClear = false;
+        if (ConnectionSettings::load().ignoreLaunchLocks) {
+            appendLog(LogLevel::Warn, QStringLiteral("ПЛК не снял e-stop после 7 5 · игнорируется"));
+            refreshUi();
+            return;
+        }
         if (!plcReady()) {
             appendLog(LogLevel::Warn, QStringLiteral("ПЛК не на связи · снятие e-stop не подтверждено"));
             refreshUi();
@@ -754,17 +759,20 @@ bool MainWindow::canStartNow(QString *reason) const
     };
     if (m_mode == Mode::Run)
         return fail(QStringLiteral("программа уже работает"));
+    if ((m_execWatcher && m_execWatcher->isRunning())
+        || (m_stopWatcher && m_stopWatcher->isRunning()))
+        return fail(QStringLiteral("выполняется предыдущая команда"));
+    if (m_prepArming || m_prep)
+        return fail(QStringLiteral("идёт предподготовка"));
+    // Игнорирование блокировок: авария и готовность модулей Старт не держат.
+    if (ConnectionSettings::load().ignoreLaunchLocks)
+        return true;
     if (m_mode == Mode::Recovery || m_recovery || m_estopPending)
         return fail(QStringLiteral("идёт восстановление после аварийного стопа"));
     if (plcEstopPressed())
         return fail(QStringLiteral("на ПЛК активен e-stop"));
     if (m_awaitEstopClear)
         return fail(QStringLiteral("ПЛК ещё не снял e-stop"));
-    if ((m_execWatcher && m_execWatcher->isRunning())
-        || (m_stopWatcher && m_stopWatcher->isRunning()))
-        return fail(QStringLiteral("выполняется предыдущая команда"));
-    if (m_prepArming || m_prep)
-        return fail(QStringLiteral("идёт предподготовка"));
     if (!modulesReady())
         return fail(QStringLiteral("система не готова"));
     return true;
@@ -788,7 +796,7 @@ void MainWindow::handlePanelButtons()
     }
 
     if (value == PlcClient::kPanelEstop) {
-        maybeEnterRecoveryFromPlc();
+        maybeEnterRecoveryFromPlc(changed);
         return;
     }
     if (!changed)
@@ -1309,7 +1317,7 @@ void MainWindow::applyModeVisuals()
     case Mode::Recovery:
         ui->statusReady->setText(QStringLiteral("●  Готовность · АВАРИЯ"));
         ui->statusReady->setStyleSheet(QString::fromUtf8(kPillErr));
-        ui->btnStart->setEnabled(false);
+        ui->btnStart->setEnabled(canStartNow());
         ui->btnProg1->setEnabled(false);
         ui->btnProg2->setEnabled(false);
         ui->btnStop->setEnabled(false);
@@ -1328,6 +1336,9 @@ void MainWindow::on_btnStart_clicked()
         appendLog(LogLevel::Warn, QStringLiteral("Старт недоступен: %1").arg(why));
         return;
     }
+    if (m_mode == Mode::Recovery || m_recovery || m_estopPending || m_awaitEstopClear
+        || plcEstopPressed())
+        forceLeaveRecovery();
 
     const bool ignoreLoadCell = ConnectionSettings::load().ignoreLoadCell;
     const QByteArray frame = PlcClient::startCommand(ignoreLoadCell);
@@ -1607,12 +1618,35 @@ void MainWindow::closePrepOverlay()
     m_prep = nullptr;
 }
 
-void MainWindow::maybeEnterRecoveryFromPlc()
+void MainWindow::maybeEnterRecoveryFromPlc(bool changed)
 {
     // По уровню: 30 держится на ПЛК до 7 5, поэтому пропущенный фронт не теряет аварию.
     if (!plcEstopPressed() || m_estopPending || m_awaitEstopClear || m_mode == Mode::Recovery)
         return;
+    // Игнорирование: старт мимо аварии разрешён, висящая 30 не возвращает в неё —
+    // только новое нажатие грибка.
+    if (!changed && ConnectionSettings::load().ignoreLaunchLocks)
+        return;
     enterRecovery(QStringLiteral("EMERGENCY STOP · ПЛК"));
+}
+
+void MainWindow::forceLeaveRecovery()
+{
+    if (m_recovery) {
+        m_recovery->deleteLater();
+        m_recovery = nullptr;
+    }
+    m_mode = Mode::Ready;
+    m_estopPending = false;
+    m_awaitEstopClear = false;
+    m_estopClearTimer->stop();
+    m_lastChecklistTasks.clear();
+    RuntimeState::setRecoveryPending(false);
+    appendLog(LogLevel::Warn,
+              QStringLiteral("Игнорирование блокировок · выход из аварии без восстановления"));
+    sendPlcControl(5);
+    refreshUi();
+    updateLeftPanel();
 }
 
 void MainWindow::enterRecovery(const QString &reason)
@@ -1650,7 +1684,8 @@ void MainWindow::openRecoveryOverlay()
     if (m_recovery)
         return;
 
-    auto *overlay = new RecoveryOverlay(m_nats, ConnectionSettings::load().estopScript,
+    const ConnectionSettings cfg = ConnectionSettings::load();
+    auto *overlay = new RecoveryOverlay(m_nats, cfg.estopScript, cfg.ignoreLaunchLocks,
                                         ui->centralwidget);
     m_recovery = overlay;
     overlay->setGeometry(ui->centralwidget->rect());
@@ -1667,6 +1702,7 @@ void MainWindow::openRecoveryOverlay()
         appendLog(mapped, message);
     });
     connect(overlay, &RecoveryOverlay::finished, this, &MainWindow::onRecoveryFinished);
+    connect(overlay, &RecoveryOverlay::startRequested, this, &MainWindow::on_btnStart_clicked);
 
     appendLog(LogLevel::Warn, QStringLiteral("Восстановление · чек-лист"));
     overlay->show();

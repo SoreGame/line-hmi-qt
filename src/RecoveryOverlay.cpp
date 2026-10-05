@@ -25,6 +25,12 @@ const char *kBtnNext =
     " QPushButton:pressed{background:#2F7A44;}"
     " QPushButton:disabled{background:#A9B0B8; color:white;}";
 
+const char *kBtnStart =
+    "QPushButton{background:#5B6470; color:white; border:none; border-radius:10px;"
+    " font-family:\"Inter\",\"Segoe UI\",sans-serif; font-size:18px; font-weight:700;}"
+    " QPushButton:pressed{background:#4A525C;}"
+    " QPushButton:disabled{background:#A9B0B8; color:white;}";
+
 const char *kChecklistItems[] = {
     "Если зажата физическая кнопка — отожмите её",
     "Выключите вакуум",
@@ -33,7 +39,8 @@ const char *kChecklistItems[] = {
 
 } // namespace
 
-RecoveryOverlay::RecoveryOverlay(NatsClient *nats, const QString &exitScript, QWidget *parent)
+RecoveryOverlay::RecoveryOverlay(NatsClient *nats, const QString &exitScript, bool allowStart,
+                                 QWidget *parent)
     : QWidget(parent)
     , m_nats(nats)
     , m_exitScript(exitScript)
@@ -101,6 +108,14 @@ RecoveryOverlay::RecoveryOverlay(NatsClient *nats, const QString &exitScript, QW
     m_btnNext->setFixedSize(300, 68);
     m_btnNext->setStyleSheet(QString::fromUtf8(kBtnNext));
     actions->addWidget(m_btnNext);
+
+    m_btnStart = new QPushButton(QStringLiteral("Старт без восстановления"), card);
+    m_btnStart->setCursor(Qt::PointingHandCursor);
+    m_btnStart->setFocusPolicy(Qt::NoFocus);
+    m_btnStart->setFixedSize(300, 68);
+    m_btnStart->setStyleSheet(QString::fromUtf8(kBtnStart));
+    m_btnStart->setVisible(allowStart);
+    actions->addWidget(m_btnStart);
     actions->addStretch();
     body->addLayout(actions);
 
@@ -112,6 +127,7 @@ RecoveryOverlay::RecoveryOverlay(NatsClient *nats, const QString &exitScript, QW
     root->addStretch();
 
     connect(m_btnNext, &QPushButton::clicked, this, &RecoveryOverlay::onNextClicked);
+    connect(m_btnStart, &QPushButton::clicked, this, &RecoveryOverlay::startRequested);
     refreshButtons();
 }
 
@@ -130,6 +146,7 @@ bool RecoveryOverlay::isExitRunning() const
 void RecoveryOverlay::refreshButtons()
 {
     m_btnNext->setEnabled(m_phase == Phase::Checklist);
+    m_btnStart->setEnabled(m_phase != Phase::Confirming && m_phase != Phase::Done);
 }
 
 void RecoveryOverlay::onNextClicked()

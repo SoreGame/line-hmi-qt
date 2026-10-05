@@ -21,7 +21,9 @@ class RecoveryOverlay : public QWidget
 public:
     enum class Note { Info, Ok, Warn, Err };
 
-    RecoveryOverlay(NatsClient *nats, const QString &exitScript, QWidget *parent = nullptr);
+    // allowStart: кнопка «Старт» без чек-листа (режим «Игнорировать блокировки запуска»).
+    RecoveryOverlay(NatsClient *nats, const QString &exitScript, bool allowStart,
+                    QWidget *parent = nullptr);
 
     void onScriptStatus(bool running, bool completed, const QString &filename);
     // Повторный грибок во время выхода: стоп скрипта и снова чек-лист.
@@ -31,6 +33,7 @@ public:
 signals:
     void note(Note level, const QString &message);
     void finished();
+    void startRequested();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -57,6 +60,7 @@ private:
 
     QLabel *m_status = nullptr;
     QPushButton *m_btnNext = nullptr;
+    QPushButton *m_btnStart = nullptr;
 };
 
 #endif // RECOVERYOVERLAY_H
