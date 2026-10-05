@@ -1226,22 +1226,23 @@ void MainWindow::onScriptStatus(bool running, bool completed, int /*line*/,
 void MainWindow::applyProgramVisuals()
 {
     const bool d1 = (m_program == Program::Detail1);
+    const bool d2 = (m_program == Program::Detail2);
     ui->btnProg1->setStyleSheet(QString::fromUtf8(d1 ? kProgSelected : kProgIdle));
-    ui->btnProg2->setStyleSheet(QString::fromUtf8(d1 ? kProgIdle : kProgSelected));
+    ui->btnProg2->setStyleSheet(QString::fromUtf8(d2 ? kProgSelected : kProgIdle));
 
     ui->btnProg1->setText(d1
                               ? QStringLiteral("Деталь 1\nВыбрано\nпоток Б1+Б2")
                               : QStringLiteral("Деталь 1\nДоступно\nпоток Б1+Б2"));
-    ui->btnProg2->setText(d1
-                              ? QStringLiteral("Деталь 2\nДоступно\nпоток Б1+Б3")
-                              : QStringLiteral("Деталь 2\nВыбрано\nпоток Б1+Б3"));
+    ui->btnProg2->setText(d2
+                              ? QStringLiteral("Деталь 2\nВыбрано\nпоток Б1+Б3")
+                              : QStringLiteral("Деталь 2\nДоступно\nпоток Б1+Б3"));
 
-    ui->labelFlow->setText(d1
-                               ? QStringLiteral("Поток: Бункер 1 + 2")
-                               : QStringLiteral("Поток: Бункер 1 + 3"));
-    ui->labelFeed->setText(d1
-                               ? QStringLiteral("подача · Б1+Б2")
-                               : QStringLiteral("подача · Б1+Б3"));
+    ui->labelFlow->setText(d1   ? QStringLiteral("Поток: Бункер 1 + 2")
+                           : d2 ? QStringLiteral("Поток: Бункер 1 + 3")
+                                : QStringLiteral("Поток: программа не выбрана"));
+    ui->labelFeed->setText(d1   ? QStringLiteral("подача · Б1+Б2")
+                           : d2 ? QStringLiteral("подача · Б1+Б3")
+                                : QStringLiteral("подача · —"));
 
     // Active bunkers by program
     const char *active =
@@ -1274,6 +1275,22 @@ void MainWindow::applyProgramVisuals()
         ui->lineB3Down->setFixedWidth(2);
         ui->lineB1B2->setStyleSheet(QString::fromUtf8(lineActive));
         ui->lineB1B2->setFixedHeight(3);
+        ui->lineB2B3->setStyleSheet(QString::fromUtf8(lineIdle));
+        ui->lineB2B3->setFixedHeight(2);
+    } else if (!d2) {
+        // Программа не выбрана: Б2 и Б3 не в потоке.
+        for (QWidget *bunker : {ui->bunker2, ui->bunker3})
+            bunker->setStyleSheet(QString::fromUtf8(idle));
+        for (QLabel *led : {ui->bunker2Led, ui->bunker3Led}) {
+            led->setText(QStringLiteral("● Не выбрано"));
+            led->setStyleSheet(QStringLiteral("color:#737880; font-size:11px;"));
+        }
+        ui->lineB2Down->setStyleSheet(QString::fromUtf8(lineIdle));
+        ui->lineB2Down->setFixedWidth(2);
+        ui->lineB3Down->setStyleSheet(QString::fromUtf8(lineIdle));
+        ui->lineB3Down->setFixedWidth(2);
+        ui->lineB1B2->setStyleSheet(QString::fromUtf8(lineIdle));
+        ui->lineB1B2->setFixedHeight(2);
         ui->lineB2B3->setStyleSheet(QString::fromUtf8(lineIdle));
         ui->lineB2B3->setFixedHeight(2);
     } else {
@@ -1361,6 +1378,12 @@ void MainWindow::on_btnStart_clicked()
     QString why;
     if (!canStartNow(&why)) {
         appendLog(LogLevel::Warn, QStringLiteral("Старт недоступен: %1").arg(why));
+        return;
+    }
+    if (m_program == Program::None) {
+        appendLog(LogLevel::Warn, QStringLiteral("Старт недоступен: программа не выбрана"));
+        QMessageBox::warning(this, QStringLiteral("Старт"),
+                             QStringLiteral("Выберите программу перед запуском"));
         return;
     }
     if (m_mode == Mode::Recovery || m_recovery || m_estopPending || m_awaitEstopClear
@@ -1453,6 +1476,8 @@ QString MainWindow::scriptFilenameForProgram(Program p) const
     // введено в поле "Имя файла" при сохранении). Задаются в админке.
     const ConnectionSettings cfg = ConnectionSettings::load();
     switch (p) {
+    case Program::None:
+        return {};
     case Program::Detail1:
         return cfg.mainScriptDetail1;
     case Program::Detail2:

@@ -55,7 +55,7 @@ private slots:
 
 private:
     enum class Mode { Ready, Run, Recovery };
-    enum class Program { Detail1, Detail2 };
+    enum class Program { None, Detail1, Detail2 };
     enum class LogLevel { Info, Ok, Warn, Err };
     // Очередь кадров на ПЛК: commandFinished приходит в том же порядке.
     enum class PlcAck { Program, Start, Control };
@@ -137,7 +137,8 @@ private:
 
     Ui::MainWindow *ui = nullptr;
     Mode m_mode = Mode::Ready;
-    Program m_program = Program::Detail1;
+    // До выбора оператором программа не выбрана: Старт выдаёт сообщение.
+    Program m_program = Program::None;
 
     NatsClient *m_nats = nullptr;
     PlcClient *m_plc = nullptr;
