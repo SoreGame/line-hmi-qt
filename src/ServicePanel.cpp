@@ -48,9 +48,9 @@ const char *kToggleOnBtn =
 
 const char *kDoBtn =
     "QPushButton {"
-    "  background:#FFFFFF; color:#1F2126; border:1px solid #DBDEE3; border-radius:4px;"
-    "  padding:0px 2px;"
-    "  font-family:\"Inter\",\"Segoe UI\",sans-serif; font-size:10px; font-weight:600;"
+    "  background:#FFFFFF; color:#1F2126; border:1px solid #DBDEE3; border-radius:6px;"
+    "  padding:0px 4px;"
+    "  font-family:\"Inter\",\"Segoe UI\",sans-serif; font-size:18px; font-weight:700;"
     "}"
     "QPushButton:pressed { background:#F0F2F5; }"
     "QPushButton:checked {"
@@ -69,7 +69,9 @@ const char *kTableStyle =
 
 constexpr int kBufColW = 72;
 constexpr int kBufRowH = 26;
-constexpr int kDoColW = 56;
+constexpr int kDoBtnW = 112;
+constexpr int kDoBtnH = 52;
+constexpr int kDoSpacing = 6;
 
 void paintBufferCell(QLabel *lab, int n, bool hasValue, qint16 value)
 {
@@ -191,16 +193,17 @@ ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
     const int bodyX = 12;
     const int bodyY = 64;
     const int gap = 12;
-    const int bufTableW = kCols * kBufColW;
-    const int bufTableH = kRows * kBufRowH;
+    const int bufTableW = kBufCols * kBufColW;
+    const int bufTableH = kBufRows * kBufRowH;
     const int bufferW = bufTableW + 20;
     const int bufferH = 28 + 18 + bufTableH + 16;
-    const int doW = kCols * kDoColW + 24;
+    const int doW = kDoCols * kDoBtnW + (kDoCols - 1) * kDoSpacing + 20;
 
     auto *bufferPanel = makePanel(QStringLiteral("bufferPanel"), this);
     bufferPanel->setGeometry(bodyX, bodyY, bufferW, bufferH);
 
-    auto *bufferTitle = makeTitle(QStringLiteral("Буфер ПЛК (50 int16)"), bufferPanel);
+    auto *bufferTitle =
+        makeTitle(QStringLiteral("Буфер ПЛК (%1 int16)").arg(kBufCellCount), bufferPanel);
     m_bufferStatus = new QLabel(bufferPanel);
     m_bufferStatus->setStyleSheet(QStringLiteral(
         "QLabel {"
@@ -209,7 +212,7 @@ ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
         "  background:transparent; border:none;"
         "}"));
 
-    m_bufferTable = new QTableWidget(kRows, kCols, bufferPanel);
+    m_bufferTable = new QTableWidget(kBufRows, kBufCols, bufferPanel);
     m_bufferTable->setStyleSheet(QLatin1String(kTableStyle));
     m_bufferTable->setFrameShape(QFrame::NoFrame);
     m_bufferTable->setShowGrid(true);
@@ -226,13 +229,13 @@ ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
     m_bufferTable->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_bufferTable->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_bufferTable->setFixedSize(bufTableW, bufTableH);
-    for (int col = 0; col < kCols; ++col)
+    for (int col = 0; col < kBufCols; ++col)
         m_bufferTable->setColumnWidth(col, kBufColW);
 
-    for (int row = 0; row < kRows; ++row) {
+    for (int row = 0; row < kBufRows; ++row) {
         m_bufferTable->setRowHeight(row, kBufRowH);
-        for (int col = 0; col < kCols; ++col) {
-            const int n = row * kCols + col;
+        for (int col = 0; col < kBufCols; ++col) {
+            const int n = row * kBufCols + col;
             auto *lab = new QLabel(m_bufferTable);
             lab->setAlignment(Qt::AlignCenter);
             lab->setTextFormat(Qt::RichText);
@@ -248,36 +251,34 @@ ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
     bufferLay->addWidget(bufferTitle);
     bufferLay->addWidget(m_bufferStatus);
     bufferLay->addWidget(m_bufferTable, 0, Qt::AlignLeft | Qt::AlignTop);
+    bufferLay->addStretch(1);
     bufferLay->activate();
-    const int tablesH = qMax(bufferH, bufferPanel->sizeHint().height());
-    bufferPanel->setGeometry(bodyX, bodyY, bufferW, tablesH);
 
     auto *doPanel = makePanel(QStringLiteral("doPanel"), this);
-    doPanel->setGeometry(bodyX + bufferW + gap, bodyY, doW, tablesH);
 
-    auto *doTitle = makeTitle(QStringLiteral("DO 0..49"), doPanel);
+    auto *doTitle = makeTitle(QStringLiteral("DO 0..%1").arg(kDoCount - 1), doPanel);
     auto *doGrid = new QWidget(doPanel);
     auto *doLay = new QGridLayout(doGrid);
     doLay->setContentsMargins(0, 0, 0, 0);
-    doLay->setHorizontalSpacing(3);
-    doLay->setVerticalSpacing(2);
-    m_doButtons.resize(kCellCount);
-    for (int n = 0; n < kCellCount; ++n) {
+    doLay->setHorizontalSpacing(kDoSpacing);
+    doLay->setVerticalSpacing(kDoSpacing);
+    m_doButtons.resize(kDoCount);
+    for (int n = 0; n < kDoCount; ++n) {
         auto *btn = new QPushButton(QString::number(n), doGrid);
         btn->setCheckable(true);
         btn->setChecked(false);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFocusPolicy(Qt::NoFocus);
-        btn->setMinimumSize(kDoColW - 3, 22);
+        btn->setMinimumSize(kDoBtnW, kDoBtnH);
         btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
         btn->setStyleSheet(QLatin1String(kDoBtn));
         m_doButtons[n] = btn;
-        doLay->addWidget(btn, n / kCols, n % kCols);
+        doLay->addWidget(btn, n / kDoCols, n % kDoCols);
         connect(btn, &QPushButton::toggled, this, [this, n](bool on) { onDoToggled(n, on); });
     }
-    for (int r = 0; r < kRows; ++r)
+    for (int r = 0; r < kDoRows; ++r)
         doLay->setRowStretch(r, 1);
-    for (int c = 0; c < kCols; ++c)
+    for (int c = 0; c < kDoCols; ++c)
         doLay->setColumnStretch(c, 1);
 
     auto *doPanelLay = new QVBoxLayout(doPanel);
@@ -285,6 +286,12 @@ ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
     doPanelLay->setSpacing(4);
     doPanelLay->addWidget(doTitle);
     doPanelLay->addWidget(doGrid, 1);
+    doPanelLay->activate();
+
+    const int tablesH = qMax(qMax(bufferH, bufferPanel->sizeHint().height()),
+                             doPanel->sizeHint().height());
+    bufferPanel->setGeometry(bodyX, bodyY, bufferW, tablesH);
+    doPanel->setGeometry(bodyX + bufferW + gap, bodyY, doW, tablesH);
 
     auto *togglesPanel = new QFrame(this);
     togglesPanel->setObjectName(QStringLiteral("togglesPanel"));
@@ -377,8 +384,9 @@ void ServicePanel::refreshBufferTable()
 
     if (!m_plc) {
         m_bufferStatus->setText(QStringLiteral("ПЛК-клиент не подключён"));
-        for (int n = 0; n < kCellCount; ++n) {
-            auto *lab = qobject_cast<QLabel *>(m_bufferTable->cellWidget(n / kCols, n % kCols));
+        for (int n = 0; n < kBufCellCount; ++n) {
+            auto *lab =
+                qobject_cast<QLabel *>(m_bufferTable->cellWidget(n / kBufCols, n % kBufCols));
             paintBufferCell(lab, n, false, 0);
         }
         return;
@@ -389,12 +397,14 @@ void ServicePanel::refreshBufferTable()
         return;
     }
 
-    m_bufferStatus->setText(QStringLiteral("Кадр ок, 50 int16"));
-    for (int n = 0; n < kCellCount; ++n) {
-        const int row = n / kCols;
-        const int col = n % kCols;
+    // Ячейки за пределами кадра ПЛК (status_bytes) показываем прочерком, а не нулём.
+    const int received = m_plc->statusIntCount();
+    m_bufferStatus->setText(QStringLiteral("Кадр ок, %1 int16").arg(received));
+    for (int n = 0; n < kBufCellCount; ++n) {
+        const int row = n / kBufCols;
+        const int col = n % kBufCols;
         auto *lab = qobject_cast<QLabel *>(m_bufferTable->cellWidget(row, col));
-        paintBufferCell(lab, n, true, m_plc->statusInt16(n));
+        paintBufferCell(lab, n, n < received, m_plc->statusInt16(n));
     }
 }
 

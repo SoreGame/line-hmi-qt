@@ -16,10 +16,6 @@
 
 namespace {
 
-constexpr double kHomeDurationSec = 5.0;
-const char *kHomePoint = "home";
-const char *kHomeScriptName = "prep-home.chai";
-
 const char *kTaskNames[] = {
     "Заполняем ламели",
     "Заполняем гуси",
@@ -425,13 +421,14 @@ void PrepOverlay::publishScript(const QString &filename, const QString &inlineCo
         if (error.isEmpty())
             return;
 
-        if (filename == QLatin1String(kHomeScriptName)) {
+        if (m_phase == Phase::Stopping) {
             emit note(Note::Err, error);
-            powerOffRobot(QStringLiteral("Стоп · не удалось отвести робота: %1").arg(error),
-                          Note::Err);
+            powerOffRobot(QStringLiteral("Стоп · '%1' не запущена, приводы выключены").arg(filename),
+                          Note::Warn);
             return;
         }
 
+        m_waitFilename.clear();
         if (m_phase != Phase::Running)
             return;
         setTask(2, TaskState::Error);
@@ -449,35 +446,32 @@ void PrepOverlay::onScriptStatus(bool running, bool completed, const QString &fi
 
     if (running) {
         m_sawScriptRunning = true;
-        if (m_status) {
-            m_status->setText(filename == QLatin1String(kHomeScriptName)
-                                  ? QStringLiteral("Отвод в домашнюю точку")
-                                  : QStringLiteral("Подпрограмма выполняется"));
-        }
+        if (m_status && m_phase == Phase::Running)
+            m_status->setText(QStringLiteral("Подпрограмма выполняется"));
     }
     if (running || (!completed && !m_sawScriptRunning))
         return;
 
-    const bool home = filename == QLatin1String(kHomeScriptName);
     m_waitFilename.clear();
 
-    if (completed) {
-        if (home) {
-            m_status->setText(QStringLiteral("Робот в домашней точке, выключение"));
-            powerOffRobot(QStringLiteral("Стоп · робот в домашней точке, приводы выключены. ПЛК работает"),
+    if (m_phase == Phase::Stopping) {
+        if (completed) {
+            powerOffRobot(QStringLiteral("Стоп · '%1' завершён, робот в последней точке, "
+                                         "приводы выключены. ПЛК работает")
+                              .arg(filename),
                           Note::Ok);
-            return;
+        } else {
+            powerOffRobot(QStringLiteral("Стоп · '%1' прервана, приводы выключены").arg(filename),
+                          Note::Warn);
         }
+        return;
+    }
+
+    if (completed) {
         setTask(2, TaskState::Done);
         m_status->setText(QStringLiteral("Подпрограмма завершена, робот в точке"));
         emit note(Note::Ok, QStringLiteral("Робот готов · '%1' завершён").arg(filename));
         refreshButtons();
-        return;
-    }
-
-    if (home) {
-        emit note(Note::Err, QStringLiteral("Отвод в домашнюю точку прерван"));
-        powerOffRobot(QStringLiteral("Стоп · отвод прерван, приводы выключены"), Note::Warn);
         return;
     }
 
@@ -493,22 +487,24 @@ void PrepOverlay::beginSmoothStop()
         return;
 
     stopCountdown();
-    m_phase = Phase::Homing;
-    {
-        std::lock_guard<std::mutex> lock(*m_gate);
-        m_epoch->fetch_add(1, std::memory_order_relaxed);
+    if (m_waitFilename.isEmpty()) {
+        {
+            std::lock_guard<std::mutex> lock(*m_gate);
+            m_epoch->fetch_add(1, std::memory_order_relaxed);
+        }
+        m_status->setText(QStringLiteral("Стоп: выключение приводов, ПЛК не выключается"));
+        powerOffRobot(QStringLiteral("Стоп · предподготовка прервана, приводы выключены. ПЛК работает"),
+                      Note::Warn);
+        return;
     }
-    m_waitFilename = QString::fromUtf8(kHomeScriptName);
-    m_sawScriptRunning = false;
-    m_status->setText(QStringLiteral("Плавная остановка: отвод в домашнюю точку, ПЛК не выключается"));
-    refreshButtons();
-    emit note(Note::Info, QStringLiteral("Стоп · отвод робота в точку '%1', ПЛК остаётся включён")
-                              .arg(QString::fromUtf8(kHomePoint)));
 
-    const QString code = QStringLiteral("moveL(\"%1\", %2);\n")
-                             .arg(QString::fromUtf8(kHomePoint))
-                             .arg(kHomeDurationSec, 0, 'f', 0);
-    publishScript(m_waitFilename, code, /*fromKv=*/false);
+    // Подпрограмму доигрываем: робот остаётся в её последней точке.
+    m_phase = Phase::Stopping;
+    m_status->setText(QStringLiteral("Стоп: дожидаемся завершения '%1', робот останется в последней точке")
+                          .arg(m_waitFilename));
+    refreshButtons();
+    emit note(Note::Info, QStringLiteral("Стоп · дожидаемся завершения '%1', ПЛК остаётся включён")
+                              .arg(m_waitFilename));
 }
 
 void PrepOverlay::beginEmergencyStop()
@@ -597,7 +593,7 @@ void PrepOverlay::powerOffRobot(const QString &doneMessage, Note level)
 
 void PrepOverlay::failStop(const QString &message)
 {
-    m_phase = Phase::Homing;
+    m_phase = Phase::Stopping;
     m_status->setText(message);
     emit note(Note::Err, message);
     refreshButtons();

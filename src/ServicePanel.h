@@ -38,9 +38,12 @@ private:
 
     static constexpr int kWidth = 1920;
     static constexpr int kHeight = 1080;
-    static constexpr int kRows = 10;
-    static constexpr int kCols = 5;
-    static constexpr int kCellCount = kRows * kCols;
+    static constexpr int kBufRows = 12;
+    static constexpr int kBufCols = 5;
+    static constexpr int kBufCellCount = kBufRows * kBufCols;
+    static constexpr int kDoRows = 10;
+    static constexpr int kDoCols = 5;
+    static constexpr int kDoCount = kDoRows * kDoCols;
 
     PlcClient *m_plc = nullptr;
     QTableWidget *m_bufferTable = nullptr;

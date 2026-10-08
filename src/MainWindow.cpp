@@ -1192,7 +1192,6 @@ void MainWindow::onScriptStatus(bool running, bool completed, int /*line*/,
     const ConnectionSettings cfg = ConnectionSettings::load();
     if (filename == cfg.initScriptDetail1
         || filename == cfg.initScriptDetail2
-        || filename == QLatin1String("prep-home.chai")
         || filename == cfg.estopScript)
         return;
 

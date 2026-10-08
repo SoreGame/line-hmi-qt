@@ -47,7 +47,7 @@ protected:
     void showEvent(QShowEvent *event) override;
 
 private:
-    enum class Phase { Running, Countdown, Homing, Exit };
+    enum class Phase { Running, Countdown, Stopping, Exit };
     enum class TaskState { Pending, Active, Done, Error };
 
     void setTask(int index, TaskState state);
