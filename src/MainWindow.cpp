@@ -1756,7 +1756,15 @@ void MainWindow::openRecoveryOverlay()
         appendLog(mapped, message);
     });
     connect(overlay, &RecoveryOverlay::finished, this, &MainWindow::onRecoveryFinished);
-    connect(overlay, &RecoveryOverlay::startRequested, this, &MainWindow::on_btnStart_clicked);
+    connect(overlay, &RecoveryOverlay::startRequested, this, [this]() {
+        if (m_program != Program::None) {
+            on_btnStart_clicked();
+            return;
+        }
+        forceLeaveRecovery();
+        appendLog(LogLevel::Info,
+                  QStringLiteral("Программа не выбрана · пульт в Ready, старт не запускается"));
+    });
 
     appendLog(LogLevel::Warn, QStringLiteral("Восстановление · чек-лист"));
     overlay->show();

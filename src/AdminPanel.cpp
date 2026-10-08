@@ -1545,11 +1545,9 @@ void AdminPanel::fitArduinoPanel()
     const int x = table.right() + 1 + 12;
     const int y = table.y();
     const int w = table.width();
-    int bottom = m_layoutH - 12;
-    if (m_plcLogPanel && m_plcLogPanel->isVisible())
-        bottom = m_plcLogPanel->geometry().bottom();
-    const int minH = qMax(m_arduinoPanel->minimumSizeHint().height(), 120);
-    const int h = qMax(minH, bottom - y + 1);
+    const int h = qMax(qMax(m_arduinoPanel->minimumSizeHint().height(),
+                            m_arduinoPanel->sizeHint().height()),
+                       120);
     m_arduinoPanel->setGeometry(x, y, w, h);
     m_arduinoPanel->raise();
 }
