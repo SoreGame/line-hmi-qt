@@ -106,7 +106,7 @@ private:
     void panelStopPressed();
     void panelStartPressed();
     void maybeEnterRecoveryFromPlc();
-    void forceLeaveRecovery();
+    void forceLeaveRecovery(const QString &logMessage = QString());
     void enterRecovery(const QString &reason);
     void openRecoveryOverlay();
     void onRecoveryFinished();

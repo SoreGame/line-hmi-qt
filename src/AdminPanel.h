@@ -41,6 +41,7 @@ public:
 
 signals:
     void applyRequested(const ConnectionSettings &settings);
+    void estopResetRequested();
 
 private slots:
     void onApplyClicked();
@@ -166,6 +167,7 @@ private:
     QPushButton *m_btnShowCursor = nullptr;
     QPushButton *m_btnIgnoreLoadCell = nullptr;
     QPushButton *m_btnIgnoreLaunchLocks = nullptr;
+    QPushButton *m_btnResetEstop = nullptr;
     QLabel *m_droX = nullptr;
     QLabel *m_droY = nullptr;
     QLabel *m_droZ = nullptr;

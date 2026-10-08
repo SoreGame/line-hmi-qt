@@ -779,10 +779,19 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
                      QStringLiteral("Игнорировать блокировки запуска"),
                      initial.ignoreLaunchLocks);
 
+    m_btnResetEstop = new QPushButton(QStringLiteral("Сбросить e-stop на пульте"), m_togglesPanel);
+    m_btnResetEstop->setStyleSheet(QLatin1String(kSecondaryBtn));
+    m_btnResetEstop->setCursor(Qt::PointingHandCursor);
+    m_btnResetEstop->setFocusPolicy(Qt::NoFocus);
+    m_btnResetEstop->setMinimumHeight(44);
+    m_btnResetEstop->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+
     auto *targetHint = new QLabel(
         QStringLiteral("Пульт включается на этой панели. Автозапуск системы — на компьютере с NATS-хостом. "
                        "Игнорирование тензодатчика: вкл — старт 7 1 1 0, выкл — 7 1 1 1. "
-                       "Игнорировать блокировки запуска: можно стартовать цикл без ПЛК, Vision, CTRL и буфера."),
+                       "Игнорировать блокировки запуска: можно стартовать цикл без ПЛК, Vision, CTRL и буфера. "
+                       "Сбросить e-stop: выход из аварии без восстановления (7 5 на ПЛК) и сброс защёлки, "
+                       "после перезапуска пульт не откроет выход из e-stop."),
         m_togglesPanel);
     targetHint->setWordWrap(true);
     targetHint->setStyleSheet(QStringLiteral(
@@ -797,6 +806,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     togglesLay->addWidget(m_btnShowCursor);
     togglesLay->addWidget(m_btnIgnoreLoadCell);
     togglesLay->addWidget(m_btnIgnoreLaunchLocks);
+    togglesLay->addWidget(m_btnResetEstop);
     togglesLay->addWidget(targetHint);
 
     // --- Программы (.chai) под «Переключателями» ----------------------
@@ -1072,6 +1082,14 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     connect(m_btnShowCursor, &QPushButton::toggled, this, &AdminPanel::onShowCursorToggled);
     connect(m_btnIgnoreLoadCell, &QPushButton::toggled, this, &AdminPanel::onIgnoreLoadCellToggled);
     connect(m_btnIgnoreLaunchLocks, &QPushButton::toggled, this, &AdminPanel::onIgnoreLaunchLocksToggled);
+    connect(m_btnResetEstop, &QPushButton::clicked, this, [this]() {
+        const auto answer = QMessageBox::question(
+            this, QStringLiteral("Сбросить e-stop"),
+            QStringLiteral("Выйти из аварии без восстановления и сбросить защёлку e-stop на пульте?"),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (answer == QMessageBox::Yes)
+            emit estopResetRequested();
+    });
     connect(m_btnRefresh, &QPushButton::clicked, this, &AdminPanel::onRefreshClicked);
     connect(m_btnPrevPage, &QPushButton::clicked, this, [this]() { goToPage(m_page - 1); });
     connect(m_btnNextPage, &QPushButton::clicked, this, [this]() { goToPage(m_page + 1); });

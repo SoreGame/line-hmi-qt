@@ -1683,7 +1683,7 @@ void MainWindow::maybeEnterRecoveryFromPlc()
     enterRecovery(QStringLiteral("EMERGENCY STOP · ПЛК"));
 }
 
-void MainWindow::forceLeaveRecovery()
+void MainWindow::forceLeaveRecovery(const QString &logMessage)
 {
     if (m_recovery) {
         m_recovery->deleteLater();
@@ -1696,7 +1696,9 @@ void MainWindow::forceLeaveRecovery()
     m_lastChecklistTasks.clear();
     RuntimeState::setRecoveryPending(false);
     appendLog(LogLevel::Warn,
-              QStringLiteral("Игнорирование блокировок · выход из аварии без восстановления"));
+              logMessage.isEmpty()
+                  ? QStringLiteral("Игнорирование блокировок · выход из аварии без восстановления")
+                  : logMessage);
     sendPlcControl(5);
     refreshUi();
     updateLeftPanel();
@@ -1880,6 +1882,15 @@ void MainWindow::on_btnAdmin_clicked()
                   QStringLiteral("Настройки применены: NATS %1, ПЛК %2")
                       .arg(cfg.natsUrl(), cfg.plcEndpoint()));
         applyConnectionSettings(true);
+    });
+    connect(&panel, &AdminPanel::estopResetRequested, this, [this]() {
+        if (m_mode == Mode::Recovery || m_recovery || m_estopPending || m_awaitEstopClear) {
+            forceLeaveRecovery(QStringLiteral("Админ · сброс e-stop: выход из аварии без восстановления"));
+            return;
+        }
+        RuntimeState::setRecoveryPending(false);
+        appendLog(LogLevel::Warn, QStringLiteral("Админ · сброс e-stop: защёлка пульта снята"));
+        refreshUi();
     });
     panel.exec();
     appendLog(LogLevel::Info, QStringLiteral("Админ: панель закрыта"));
