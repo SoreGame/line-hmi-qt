@@ -809,7 +809,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     togglesLay->addWidget(m_btnResetEstop);
     togglesLay->addWidget(targetHint);
 
-    // --- Программы (.chai) под «Переключателями» ----------------------
+    // --- Программы (.chai) под «Тензодатчиком» -------------------------
     m_programsPanel = new QFrame(this);
     m_programsPanel->setObjectName(QStringLiteral("programsPanel"));
     m_programsPanel->setStyleSheet(QStringLiteral(
@@ -1521,9 +1521,9 @@ void AdminPanel::fitTablePanel()
         m_jogPanel->setGeometry(12, 64 + sharedH + 12, m_leftColW, m_jogPanel->height());
     }
     fitTogglesPanel();
-    fitProgramsPanel();
     fitPlcLogPanel();
     fitArduinoPanel();
+    fitProgramsPanel();
 }
 
 void AdminPanel::fitTogglesPanel()
@@ -1541,15 +1541,15 @@ void AdminPanel::fitTogglesPanel()
 
 void AdminPanel::fitProgramsPanel()
 {
-    if (!m_programsPanel || !m_togglesPanel)
+    if (!m_programsPanel || !m_arduinoPanel)
         return;
     if (m_programsPanel->layout())
         m_programsPanel->layout()->activate();
 
-    const QRect toggles = m_togglesPanel->geometry();
+    const QRect arduino = m_arduinoPanel->geometry();
     const int h = qMax(m_programsPanel->minimumSizeHint().height(),
                        m_programsPanel->sizeHint().height());
-    m_programsPanel->setGeometry(toggles.x(), toggles.bottom() + 1 + 12, toggles.width(), h);
+    m_programsPanel->setGeometry(arduino.x(), arduino.bottom() + 1 + 12, arduino.width(), h);
 }
 
 void AdminPanel::fitArduinoPanel()
