@@ -1,4 +1,5 @@
 #include "ConnectionSettings.h"
+#include "Texts.h"
 #include "ArduinoLink.h"
 #include "PlcClient.h"
 
@@ -112,7 +113,7 @@ void takePlcPattern(const QJsonObject &plc, const char *key, const QByteArray &f
     if (!ok) {
         *dst = fallback;
         if (warning->isEmpty()) {
-            *warning = QStringLiteral(
+            *warning = tx(
                 "plc.%1 в config.json должен быть hex из %2..%3 байт "
                 "(чётное число) — взята маска по умолчанию")
                            .arg(QLatin1String(key))

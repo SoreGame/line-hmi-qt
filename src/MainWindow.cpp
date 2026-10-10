@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "Texts.h"
 #include "ui_MainWindow.h"
 #include "AdminPanel.h"
 #include "ServicePanel.h"
@@ -163,16 +164,16 @@ MainWindow::MainWindow(QWidget *parent)
         std::fflush(stderr);
     }
 
-    appendLog(LogLevel::Info, QStringLiteral("Пульт запущен"));
+    appendLog(LogLevel::Info, tx("Пульт запущен"));
     appendLog(LogLevel::Info,
-              QStringLiteral("Инициализация: NATS, CTRL, Behaviour и кадр ПЛК "
+              tx("Инициализация: NATS, CTRL, Behaviour и кадр ПЛК "
                              "(камеры — байты в этом кадре)"));
     if (m_sessionLogFile.isOpen()) {
         appendLog(LogLevel::Info,
-                  QStringLiteral("Журнал пишется в файл: %1").arg(m_sessionLogPath));
+                  tx("Журнал пишется в файл: %1").arg(m_sessionLogPath));
     } else {
         appendLog(LogLevel::Err,
-                  QStringLiteral("Не удалось открыть файл журнала: %1").arg(m_sessionLogPath));
+                  tx("Не удалось открыть файл журнала: %1").arg(m_sessionLogPath));
     }
 
     auto *clockTimer = new QTimer(this);
@@ -212,16 +213,16 @@ MainWindow::MainWindow(QWidget *parent)
             return;
         m_awaitEstopClear = false;
         if (ConnectionSettings::load().ignoreLaunchLocks) {
-            appendLog(LogLevel::Warn, QStringLiteral("ПЛК не снял e-stop после 7 5 · игнорируется"));
+            appendLog(LogLevel::Warn, tx("ПЛК не снял e-stop после 7 5 · игнорируется"));
             refreshUi();
             return;
         }
         if (!plcReady()) {
-            appendLog(LogLevel::Warn, QStringLiteral("ПЛК не на связи · снятие e-stop не подтверждено"));
+            appendLog(LogLevel::Warn, tx("ПЛК не на связи · снятие e-stop не подтверждено"));
             refreshUi();
             return;
         }
-        enterRecovery(QStringLiteral("EMERGENCY STOP · ПЛК не снял e-stop после 7 5"));
+        enterRecovery(tx("EMERGENCY STOP · ПЛК не снял e-stop после 7 5"));
     });
 
     connect(m_nats, &NatsClient::scriptStatusReceived, this, &MainWindow::onScriptStatus);
@@ -245,10 +246,10 @@ MainWindow::MainWindow(QWidget *parent)
             if (!ok) {
                 appendLog(LogLevel::Err,
                           error.isEmpty()
-                              ? QStringLiteral("ПЛК не принял команду")
+                              ? tx("ПЛК не принял команду")
                               : error);
             } else if (ack == PlcAck::Program) {
-                appendLog(LogLevel::Ok, QStringLiteral("ПЛК: выбор программы отправлен"));
+                appendLog(LogLevel::Ok, tx("ПЛК: выбор программы отправлен"));
             }
             return;
         }
@@ -257,22 +258,22 @@ MainWindow::MainWindow(QWidget *parent)
         m_prepArming = false;
         if (!ok) {
             appendLog(LogLevel::Err,
-                      error.isEmpty() ? QStringLiteral("ПЛК не принял команду старта") : error);
+                      error.isEmpty() ? tx("ПЛК не принял команду старта") : error);
             refreshUi();
             return;
         }
-        appendLog(LogLevel::Ok, QStringLiteral("ПЛК: команда старта отправлена"));
+        appendLog(LogLevel::Ok, tx("ПЛК: команда старта отправлена"));
         openPrepOverlay();
     });
 
     if (!ConnectionSettings::isConfigured()) {
 #ifdef Q_OS_ANDROID
         appendLog(LogLevel::Err,
-                  QStringLiteral("Не найден или повреждён config.json. "
+                  tx("Не найден или повреждён config.json. "
                                    "Проверьте line-hmi-qt/config.json и пересоберите APK."));
 #else
         appendLog(LogLevel::Info,
-                  QStringLiteral("Укажите адрес NATS и ПЛК в Admin"));
+                  tx("Укажите адрес NATS и ПЛК в Admin"));
         QTimer::singleShot(0, this, &MainWindow::on_btnAdmin_clicked);
 #endif
         updateNatsStatusIndicator();
@@ -286,7 +287,7 @@ MainWindow::MainWindow(QWidget *parent)
     {
         const ConnectionSettings cfg = ConnectionSettings::load();
         appendLog(LogLevel::Info,
-                  QStringLiteral("Подключение из config.json: NATS %1, ПЛК %2")
+                  tx("Подключение из config.json: NATS %1, ПЛК %2")
                       .arg(cfg.natsUrl(), cfg.plcEndpoint()));
     }
 #endif
@@ -302,8 +303,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     if (recovery || unclean) {
         const QString reason = recovery
-            ? QStringLiteral("EMERGENCY STOP · восстановлено после перезапуска")
-            : QStringLiteral("EMERGENCY STOP · прошлое выключение было нештатным");
+            ? tx("EMERGENCY STOP · восстановлено после перезапуска")
+            : tx("EMERGENCY STOP · прошлое выключение было нештатным");
         QTimer::singleShot(0, this, [this, reason]() { enterRecovery(reason); });
     }
 }
@@ -418,7 +419,7 @@ void MainWindow::startPlcClient()
 {
     m_plc->start(m_plcHost, m_plcPort, m_plcReadyValue, m_plcReadyMask, m_plcStatusBytes);
     appendLog(LogLevel::Info,
-              QStringLiteral("Подключение к серверу ПЛК (%1:%2), кадр %3 байт (%4 int16). "
+              tx("Подключение к серверу ПЛК (%1:%2), кадр %3 байт (%4 int16). "
                              "Vision 1/2: buffer[%5]/buffer[%6] == 1")
                   .arg(m_plcHost)
                   .arg(m_plcPort)
@@ -428,7 +429,7 @@ void MainWindow::startPlcClient()
                   .arg(PlcClient::kVision2IntIndex));
     if (m_plcStatusBytes / 2 <= PlcClient::kEstopHeldIntIndex)
         appendLog(LogLevel::Warn,
-                  QStringLiteral("Кадр ПЛК %1 байт: кнопки корпуса buffer[%2] и грибок buffer[%3] "
+                  tx("Кадр ПЛК %1 байт: кнопки корпуса buffer[%2] и грибок buffer[%3] "
                                  "не читаются — нужно не меньше %4 байт")
                       .arg(m_plcStatusBytes)
                       .arg(PlcClient::kPanelIntIndex)
@@ -472,23 +473,23 @@ void MainWindow::beginNatsConnect(bool notifyOnError, bool quiet)
     std::fprintf(stderr, "NATS: connecting to %s …\n", qPrintable(url));
     std::fflush(stderr);
     if (!quiet) {
-        appendLog(LogLevel::Info, QStringLiteral("Подключение к NATS (%1)…").arg(url));
+        appendLog(LogLevel::Info, tx("Подключение к NATS (%1)…").arg(url));
     }
 
     const QFuture<QString> future = QtConcurrent::run([nats, url, bucket]() -> QString {
         QString err;
         if (!nats->connectToServer(url, &err)) {
             return QStringLiteral("fail\n") +
-                   QStringLiteral("NATS: не удалось подключиться (%1): %2").arg(url, err);
+                   tx("NATS: не удалось подключиться (%1): %2").arg(url, err);
         }
         if (!nats->openKvBucket(bucket, &err)) {
             return QStringLiteral("warn\n") +
-                   QStringLiteral("NATS подключён, но KV bucket '%1' недоступен: %2")
+                   tx("NATS подключён, но KV bucket '%1' недоступен: %2")
                        .arg(bucket, err);
         }
         if (!nats->startModuleWatch(&err)) {
             return QStringLiteral("fail\n") +
-                   QStringLiteral("Не удалось подписаться на статусы модулей: %1").arg(err);
+                   tx("Не удалось подписаться на статусы модулей: %1").arg(err);
         }
         return QString();
     });
@@ -507,12 +508,12 @@ void MainWindow::beginNatsConnect(bool notifyOnError, bool quiet)
                          qPrintable(m_natsUrl), kNatsScriptBucket);
             std::fflush(stderr);
             appendLog(LogLevel::Ok,
-                      QStringLiteral("NATS подключён (%1), bucket '%2'")
+                      tx("NATS подключён (%1), bucket '%2'")
                           .arg(m_natsUrl, QString::fromUtf8(kNatsScriptBucket)));
             m_prevNatsOk = true;
             m_natsFailureLogged = false;
             appendLog(LogLevel::Info,
-                      QStringLiteral("Ожидание CTRL и Behaviour…"));
+                      tx("Ожидание CTRL и Behaviour…"));
         } else {
             const bool isWarn = result.startsWith(QLatin1String("warn\n"));
             const QString message = result.section(QLatin1Char('\n'), 1);
@@ -562,10 +563,10 @@ void MainWindow::updatePlcIndicators()
 {
     const bool linked = m_plc && m_plc->isOk();
     if (linked) {
-        ui->statusPlc->setText(QStringLiteral("●  ПЛК · OK"));
+        ui->statusPlc->setText(tx("●  ПЛК · OK"));
         ui->statusPlc->setStyleSheet(QString::fromUtf8(kPillOk));
     } else {
-        ui->statusPlc->setText(QStringLiteral("●  ПЛК · ERR"));
+        ui->statusPlc->setText(tx("●  ПЛК · ERR"));
         ui->statusPlc->setStyleSheet(QString::fromUtf8(kPillErr));
     }
 
@@ -580,15 +581,15 @@ void MainWindow::updatePlcIndicators()
         };
         const BufferCheck checks[] = {
             {ui->valve1, PlcClient::kLamelStateOffset, PlcClient::kLamelStateReady, "Ламели"},
-            {ui->valve2, PlcClient::kGooseStateOffset, PlcClient::kGooseStateReady, "Гуси"},
-            {ui->valve3, PlcClient::kBigGooseStateOffset, PlcClient::kBigGooseStateReady, "Б. гуси"},
+            {ui->valve2, PlcClient::kGooseStateOffset, PlcClient::kGooseStateReady, "М. держатели"},
+            {ui->valve3, PlcClient::kBigGooseStateOffset, PlcClient::kBigGooseStateReady, "Б. держатели"},
         };
         for (const BufferCheck &check : checks) {
             if (!check.label)
                 continue;
             const qint16 actual = linked && m_plc ? m_plc->statusInt16(check.index) : -1;
             const bool ok = linked && actual == check.expected;
-            check.label->setText(QStringLiteral("●\n%1").arg(QString::fromUtf8(check.name)));
+            check.label->setText(QStringLiteral("●\n%1").arg(tx(check.name)));
             if (!linked) {
                 check.label->setStyleSheet(QString::fromUtf8(kModuleErr));
             } else if (ok) {
@@ -600,7 +601,7 @@ void MainWindow::updatePlcIndicators()
 
         if (ui->valve4) {
             const bool weldOk = linked && m_plc && m_plc->weldingReady();
-            ui->valve4->setText(QStringLiteral("●\nСварка"));
+            ui->valve4->setText(tx("●\nСварка"));
             if (!linked) {
                 ui->valve4->setStyleSheet(QString::fromUtf8(kModuleErr));
             } else if (weldOk) {
@@ -619,7 +620,7 @@ void MainWindow::updatePlcIndicators()
     } else {
         ui->nodeWelding->setStyleSheet(
             QStringLiteral("background:#EDF7F0; border:2px solid #59AD6B; border-radius:10px;"));
-        ui->nodeWeldingState->setText(QStringLiteral("● Готов"));
+        ui->nodeWeldingState->setText(tx("● Готов"));
         ui->nodeWeldingState->setStyleSheet(QString::fromUtf8(kModuleOk));
     }
 }
@@ -651,12 +652,12 @@ void MainWindow::updateModuleIndicators()
     setModuleIndicator(ui->subVision2, vision2Ok);
 
     if (ctrlOk && behaviourOk && vision1Ok && vision2Ok) {
-        ui->statusRobot->setText(QStringLiteral("●  Робот · OK"));
+        ui->statusRobot->setText(tx("●  Робот · OK"));
         ui->statusRobot->setStyleSheet(QString::fromUtf8(kPillOk));
         ui->nodeRobot->setStyleSheet(
             QStringLiteral("background:#EDF7F0; border:2px solid #59AD6B; border-radius:10px;"));
     } else {
-        ui->statusRobot->setText(QStringLiteral("●  Робот · ERR"));
+        ui->statusRobot->setText(tx("●  Робот · ERR"));
         ui->statusRobot->setStyleSheet(QString::fromUtf8(kPillErr));
         ui->nodeRobot->setStyleSheet(
             QStringLiteral("background:#FCEAEA; border:2px solid #D96B6B; border-radius:10px;"));
@@ -664,8 +665,8 @@ void MainWindow::updateModuleIndicators()
 
     const auto logPlc = [this](bool ready) {
         appendLog(ready ? LogLevel::Ok : LogLevel::Err,
-                  ready ? QStringLiteral("ПЛК готов: ответ получен")
-                        : QStringLiteral("ПЛК недоступен"));
+                  ready ? tx("ПЛК готов: ответ получен")
+                        : tx("ПЛК недоступен"));
     };
 
     if (!m_moduleStateInitialized) {
@@ -678,44 +679,44 @@ void MainWindow::updateModuleIndicators()
         m_prevPlcOk = plcOk;
         m_moduleStateInitialized = true;
         if (ctrlOk)
-            appendLog(LogLevel::Ok, QStringLiteral("CTRL включён"));
+            appendLog(LogLevel::Ok, tx("CTRL включён"));
         if (behaviourOk)
-            appendLog(LogLevel::Ok, QStringLiteral("Behaviour включён"));
+            appendLog(LogLevel::Ok, tx("Behaviour включён"));
         if (vision1Ok)
-            appendLog(LogLevel::Ok, QStringLiteral("Vision 1 включён"));
+            appendLog(LogLevel::Ok, tx("Vision 1 включён"));
         if (vision2Ok)
-            appendLog(LogLevel::Ok, QStringLiteral("Vision 2 включён"));
+            appendLog(LogLevel::Ok, tx("Vision 2 включён"));
         if (plcOk)
             logPlc(true);
     } else {
         if (natsOk != m_prevNatsOk) {
             appendLog(natsOk ? LogLevel::Ok : LogLevel::Err,
-                      natsOk ? QStringLiteral("NATS в сети")
-                             : QStringLiteral("NATS недоступен"));
+                      natsOk ? tx("NATS в сети")
+                             : tx("NATS недоступен"));
             m_prevNatsOk = natsOk;
         }
         if (ctrlOk != m_prevCtrlOk) {
             appendLog(ctrlOk ? LogLevel::Ok : LogLevel::Err,
-                      ctrlOk ? QStringLiteral("CTRL включён")
-                             : QStringLiteral("CTRL отключён"));
+                      ctrlOk ? tx("CTRL включён")
+                             : tx("CTRL отключён"));
             m_prevCtrlOk = ctrlOk;
         }
         if (behaviourOk != m_prevBehaviourOk) {
             appendLog(behaviourOk ? LogLevel::Ok : LogLevel::Err,
-                      behaviourOk ? QStringLiteral("Behaviour включён")
-                                  : QStringLiteral("Behaviour отключён"));
+                      behaviourOk ? tx("Behaviour включён")
+                                  : tx("Behaviour отключён"));
             m_prevBehaviourOk = behaviourOk;
         }
         if (vision1Ok != m_prevVision1Ok) {
             appendLog(vision1Ok ? LogLevel::Ok : LogLevel::Err,
-                      vision1Ok ? QStringLiteral("Vision 1 включён")
-                                : QStringLiteral("Vision 1 отключён"));
+                      vision1Ok ? tx("Vision 1 включён")
+                                : tx("Vision 1 отключён"));
             m_prevVision1Ok = vision1Ok;
         }
         if (vision2Ok != m_prevVision2Ok) {
             appendLog(vision2Ok ? LogLevel::Ok : LogLevel::Err,
-                      vision2Ok ? QStringLiteral("Vision 2 включён")
-                                : QStringLiteral("Vision 2 отключён"));
+                      vision2Ok ? tx("Vision 2 включён")
+                                : tx("Vision 2 отключён"));
             m_prevVision2Ok = vision2Ok;
         }
         if (plcOk != m_prevPlcOk) {
@@ -728,11 +729,11 @@ void MainWindow::updateModuleIndicators()
     if (modulesReady()) {
         if (!m_initReadyLogged) {
             appendLog(LogLevel::Ok,
-                      QStringLiteral("Инициализация завершена — можно выбрать программу и нажать Старт"));
+                      tx("Инициализация завершена — можно выбрать программу и нажать Старт"));
             m_initReadyLogged = true;
         }
     } else if (m_initReadyLogged) {
-        appendLog(LogLevel::Warn, QStringLiteral("Инициализация сброшена: система не готова"));
+        appendLog(LogLevel::Warn, tx("Инициализация сброшена: система не готова"));
         m_initReadyLogged = false;
     }
 
@@ -775,23 +776,23 @@ bool MainWindow::canStartNow(QString *reason) const
         return false;
     };
     if (m_mode == Mode::Run)
-        return fail(QStringLiteral("программа уже работает"));
+        return fail(tx("программа уже работает"));
     if ((m_execWatcher && m_execWatcher->isRunning())
         || (m_stopWatcher && m_stopWatcher->isRunning()))
-        return fail(QStringLiteral("выполняется предыдущая команда"));
+        return fail(tx("выполняется предыдущая команда"));
     if (m_prepArming || m_prep)
-        return fail(QStringLiteral("идёт предподготовка"));
+        return fail(tx("идёт предподготовка"));
     // Игнорирование блокировок: авария и готовность модулей Старт не держат.
     if (ConnectionSettings::load().ignoreLaunchLocks)
         return true;
     if (m_mode == Mode::Recovery || m_recovery || m_estopPending)
-        return fail(QStringLiteral("идёт восстановление после аварийного стопа"));
+        return fail(tx("идёт восстановление после аварийного стопа"));
     if (plcEstopPressed())
-        return fail(QStringLiteral("на ПЛК активен e-stop"));
+        return fail(tx("на ПЛК активен e-stop"));
     if (m_awaitEstopClear)
-        return fail(QStringLiteral("ПЛК ещё не снял e-stop"));
+        return fail(tx("ПЛК ещё не снял e-stop"));
     if (!modulesReady())
-        return fail(QStringLiteral("система не готова"));
+        return fail(tx("система не готова"));
     return true;
 }
 
@@ -812,7 +813,7 @@ void MainWindow::handlePanelButtons()
     if (m_awaitEstopClear && !estop) {
         m_awaitEstopClear = false;
         m_estopClearTimer->stop();
-        appendLog(LogLevel::Ok, QStringLiteral("ПЛК снял e-stop · старт снова доступен"));
+        appendLog(LogLevel::Ok, tx("ПЛК снял e-stop · старт снова доступен"));
         refreshUi();
     }
 
@@ -822,7 +823,7 @@ void MainWindow::handlePanelButtons()
         const bool alreadyOpen = m_estopPending
             || (m_mode == Mode::Recovery && m_recovery && !m_recovery->isExitRunning());
         if (estopRising && !alreadyOpen)
-            enterRecovery(QStringLiteral("EMERGENCY STOP · ПЛК"));
+            enterRecovery(tx("EMERGENCY STOP · ПЛК"));
         else
             maybeEnterRecoveryFromPlc();
         return;
@@ -838,26 +839,26 @@ void MainWindow::handlePanelButtons()
 void MainWindow::panelStopPressed()
 {
     if (m_mode == Mode::Run && !m_stopAfterCycle) {
-        appendLog(LogLevel::Info, QStringLiteral("Кнопка СТОП на корпусе"));
+        appendLog(LogLevel::Info, tx("Кнопка СТОП на корпусе"));
         on_btnStop_clicked();
         return;
     }
     if (m_prep && m_prep->requestStop()) {
-        appendLog(LogLevel::Info, QStringLiteral("Кнопка СТОП на корпусе · предподготовка"));
+        appendLog(LogLevel::Info, tx("Кнопка СТОП на корпусе · предподготовка"));
         sendPlcControl(3);
         return;
     }
-    appendLog(LogLevel::Warn, QStringLiteral("Кнопка СТОП на корпусе: сейчас недоступна"));
+    appendLog(LogLevel::Warn, tx("Кнопка СТОП на корпусе: сейчас недоступна"));
 }
 
 void MainWindow::panelStartPressed()
 {
     QString why;
     if (!canStartNow(&why)) {
-        appendLog(LogLevel::Warn, QStringLiteral("Кнопка СТАРТ на корпусе: недоступно · %1").arg(why));
+        appendLog(LogLevel::Warn, tx("Кнопка СТАРТ на корпусе: недоступно · %1").arg(why));
         return;
     }
-    appendLog(LogLevel::Info, QStringLiteral("Кнопка СТАРТ на корпусе"));
+    appendLog(LogLevel::Info, tx("Кнопка СТАРТ на корпусе"));
     on_btnStart_clicked();
 }
 
@@ -883,11 +884,11 @@ void MainWindow::syncPowerOffLatch()
     if (!ui->statusPowerOff)
         return;
     if (allow) {
-        ui->statusPowerOff->setText(QStringLiteral("Можно выключать питание · ДА"));
+        ui->statusPowerOff->setText(tx("Можно выключать питание · ДА"));
         ui->statusPowerOff->setStyleSheet(QString::fromUtf8(kPillOk) +
                                           QStringLiteral(" font-size:14px; font-weight:700;"));
     } else {
-        ui->statusPowerOff->setText(QStringLiteral("Можно выключать питание · НЕТ"));
+        ui->statusPowerOff->setText(tx("Можно выключать питание · НЕТ"));
         ui->statusPowerOff->setStyleSheet(QString::fromUtf8(kPillErr) +
                                           QStringLiteral(" font-size:14px; font-weight:700;"));
     }
@@ -945,14 +946,14 @@ void MainWindow::updateLeftPanel()
 
 void MainWindow::updateSuspicionWarnings()
 {
-    ui->labelChecklistTitle->setText(QStringLiteral("Замечания"));
+    ui->labelChecklistTitle->setText(tx("Замечания"));
 
     QStringList tasks;
     if (m_plc && m_plc->isOk()) {
         for (int i = PlcClient::kSuspicionFirstIntIndex; i <= PlcClient::kSuspicionLastIntIndex; ++i) {
             if (m_plc->statusInt16(i) != PlcClient::kSuspicionActiveValue)
                 continue;
-            tasks << QStringLiteral("1|Ячейка %1").arg(i);
+            tasks << tx("1|Ячейка %1").arg(i);
         }
     }
 
@@ -994,12 +995,12 @@ void MainWindow::updateStartupChecklist()
     const auto add = [&](bool done, const QString &label) {
         tasks << (done ? QStringLiteral("1|") : QStringLiteral("0|")) + label;
     };
-    add(natsOk, QStringLiteral("Подключение к NATS"));
-    add(ctrlOk, QStringLiteral("Готовность CTRL"));
-    add(behaviourOk, QStringLiteral("Готовность Behaviour"));
-    add(vision1Ok, QStringLiteral("Готовность Vision 1"));
-    add(vision2Ok, QStringLiteral("Готовность Vision 2"));
-    add(plcOk, QStringLiteral("Готовность ПЛК"));
+    add(natsOk, tx("Подключение к NATS"));
+    add(ctrlOk, tx("Готовность CTRL"));
+    add(behaviourOk, tx("Готовность Behaviour"));
+    add(vision1Ok, tx("Готовность Vision 1"));
+    add(vision2Ok, tx("Готовность Vision 2"));
+    add(plcOk, tx("Готовность ПЛК"));
 
     bool stationsOk = true;
     {
@@ -1010,17 +1011,17 @@ void MainWindow::updateStartupChecklist()
         const bool smallGeeseOk = intOk(PlcClient::kGooseStateOffset, PlcClient::kGooseStateReady);
         const bool bigGeeseOk = intOk(PlcClient::kBigGooseStateOffset, PlcClient::kBigGooseStateReady);
         const bool weldOk = m_plc && m_plc->weldingReady();
-        add(lamellaeOk, QStringLiteral("Готовность станции ламелей"));
-        add(bigGeeseOk, QStringLiteral("Готовность станции б.гусей"));
-        add(smallGeeseOk, QStringLiteral("Готовность станции м.гусей"));
-        add(weldOk, QStringLiteral("Готовность сварочного модуля"));
+        add(lamellaeOk, tx("Готовность станции ламелей"));
+        add(bigGeeseOk, tx("Готовность станции больших держателей ламелей"));
+        add(smallGeeseOk, tx("Готовность станции малых держателей ламелей"));
+        add(weldOk, tx("Готовность сварочного модуля"));
         stationsOk = lamellaeOk && smallGeeseOk && bigGeeseOk && weldOk;
     }
 
     const bool allDone = natsOk && ctrlOk && behaviourOk && vision1Ok && vision2Ok && plcOk
         && stationsOk;
-    ui->labelChecklistTitle->setText(allDone ? QStringLiteral("Перед запуском")
-                                             : QStringLiteral("Инициализация"));
+    ui->labelChecklistTitle->setText(allDone ? tx("Перед запуском")
+                                             : tx("Инициализация"));
 
     if (tasks == m_lastChecklistTasks && m_leftPanelKind == LeftPanelKind::Startup)
         return;
@@ -1094,7 +1095,7 @@ void MainWindow::updateCycleTime()
 
     const double sec = m_lastCycleMs / 1000.0;
     ui->kpiCycleValue->setText(
-        QStringLiteral("%1 с").arg(sec, 0, 'f', sec < 10.0 ? 1 : 0));
+        tx("%1 с").arg(sec, 0, 'f', sec < 10.0 ? 1 : 0));
 }
 
 void MainWindow::startCycleTimer()
@@ -1127,7 +1128,7 @@ void MainWindow::finishCycle()
     registerGood();
 
     appendLog(LogLevel::Ok,
-              QStringLiteral("Цикл завершён · %1 с")
+              tx("Цикл завершён · %1 с")
                   .arg(ms / 1000.0, 0, 'f', ms < 10000 ? 1 : 0));
 }
 
@@ -1167,14 +1168,14 @@ void MainWindow::registerGood()
 {
     ++m_goodCount;
     updateOutputCounters();
-    appendLog(LogLevel::Ok, QStringLiteral("Годна · всего %1").arg(m_goodCount));
+    appendLog(LogLevel::Ok, tx("Годна · всего %1").arg(m_goodCount));
 }
 
 void MainWindow::registerScrap()
 {
     ++m_scrapCount;
     updateOutputCounters();
-    appendLog(LogLevel::Warn, QStringLiteral("Брак · всего %1").arg(m_scrapCount));
+    appendLog(LogLevel::Warn, tx("Брак · всего %1").arg(m_scrapCount));
 }
 
 void MainWindow::onScriptStatus(bool running, bool completed, int /*line*/,
@@ -1212,14 +1213,14 @@ void MainWindow::onScriptStatus(bool running, bool completed, int /*line*/,
         m_stopAfterCycle = false;
         m_mode = Mode::Ready;
         resetUptime();
-        appendLog(LogLevel::Info, QStringLiteral("Стоп · цикл завершён, новый не запущен"));
+        appendLog(LogLevel::Info, tx("Стоп · цикл завершён, новый не запущен"));
         m_lastChecklistTasks.clear();
         refreshUi();
         updateLeftPanel();
         return;
     }
 
-    appendLog(LogLevel::Info, QStringLiteral("Перезапуск программы"));
+    appendLog(LogLevel::Info, tx("Перезапуск программы"));
     startSelectedProgramScript(/*fromLine=*/1, /*freshSession=*/false);
 }
 
@@ -1231,18 +1232,18 @@ void MainWindow::applyProgramVisuals()
     ui->btnProg2->setStyleSheet(QString::fromUtf8(d2 ? kProgSelected : kProgIdle));
 
     ui->btnProg1->setText(d1
-                              ? QStringLiteral("Деталь 1\nВыбрано\nпоток Б1+Б2")
-                              : QStringLiteral("Деталь 1\nДоступно\nпоток Б1+Б2"));
+                              ? tx("Деталь 1\nВыбрано\nпоток Б1+Б2")
+                              : tx("Деталь 1\nДоступно\nпоток Б1+Б2"));
     ui->btnProg2->setText(d2
-                              ? QStringLiteral("Деталь 2\nВыбрано\nпоток Б1+Б3")
-                              : QStringLiteral("Деталь 2\nДоступно\nпоток Б1+Б3"));
+                              ? tx("Деталь 2\nВыбрано\nпоток Б1+Б3")
+                              : tx("Деталь 2\nДоступно\nпоток Б1+Б3"));
 
-    ui->labelFlow->setText(d1   ? QStringLiteral("Поток: Бункер 1 + 2")
-                           : d2 ? QStringLiteral("Поток: Бункер 1 + 3")
-                                : QStringLiteral("Поток: программа не выбрана"));
-    ui->labelFeed->setText(d1   ? QStringLiteral("подача · Б1+Б2")
-                           : d2 ? QStringLiteral("подача · Б1+Б3")
-                                : QStringLiteral("подача · —"));
+    ui->labelFlow->setText(d1   ? tx("Поток: Бункер 1 + 2")
+                           : d2 ? tx("Поток: Бункер 1 + 3")
+                                : tx("Поток: программа не выбрана"));
+    ui->labelFeed->setText(d1   ? tx("подача · Б1+Б2")
+                           : d2 ? tx("подача · Б1+Б3")
+                                : tx("подача · —"));
 
     // Active bunkers by program
     const char *active =
@@ -1253,7 +1254,7 @@ void MainWindow::applyProgramVisuals()
     const char *lineIdle = "background:#C5C9D0; border:none;";
 
     ui->bunker1->setStyleSheet(QString::fromUtf8(active));
-    ui->bunker1Led->setText(QStringLiteral("● Готов"));
+    ui->bunker1Led->setText(tx("● Готов"));
     ui->bunker1Led->setStyleSheet(QStringLiteral("color:#2E8C47; font-size:11px;"));
 
     // B1 всегда в потоке — вертикаль всегда активна.
@@ -1263,10 +1264,10 @@ void MainWindow::applyProgramVisuals()
     if (d1) {
         // Поток Б1+Б2: активны B1→B2 и спуск B2; B3 — idle.
         ui->bunker2->setStyleSheet(QString::fromUtf8(active));
-        ui->bunker2Led->setText(QStringLiteral("● Готов"));
+        ui->bunker2Led->setText(tx("● Готов"));
         ui->bunker2Led->setStyleSheet(QStringLiteral("color:#2E8C47; font-size:11px;"));
         ui->bunker3->setStyleSheet(QString::fromUtf8(idle));
-        ui->bunker3Led->setText(QStringLiteral("● Не в потоке"));
+        ui->bunker3Led->setText(tx("● Не в потоке"));
         ui->bunker3Led->setStyleSheet(QStringLiteral("color:#737880; font-size:11px;"));
 
         ui->lineB2Down->setStyleSheet(QString::fromUtf8(lineActive));
@@ -1282,7 +1283,7 @@ void MainWindow::applyProgramVisuals()
         for (QWidget *bunker : {ui->bunker2, ui->bunker3})
             bunker->setStyleSheet(QString::fromUtf8(idle));
         for (QLabel *led : {ui->bunker2Led, ui->bunker3Led}) {
-            led->setText(QStringLiteral("● Не выбрано"));
+            led->setText(tx("● Не выбрано"));
             led->setStyleSheet(QStringLiteral("color:#737880; font-size:11px;"));
         }
         ui->lineB2Down->setStyleSheet(QString::fromUtf8(lineIdle));
@@ -1296,10 +1297,10 @@ void MainWindow::applyProgramVisuals()
     } else {
         // Поток Б1+Б3: активны B1→B3 через всю рейку; спуск B2 — idle.
         ui->bunker3->setStyleSheet(QString::fromUtf8(active));
-        ui->bunker3Led->setText(QStringLiteral("● Готов"));
+        ui->bunker3Led->setText(tx("● Готов"));
         ui->bunker3Led->setStyleSheet(QStringLiteral("color:#2E8C47; font-size:11px;"));
         ui->bunker2->setStyleSheet(QString::fromUtf8(idle));
-        ui->bunker2Led->setText(QStringLiteral("● Не в потоке"));
+        ui->bunker2Led->setText(tx("● Не в потоке"));
         ui->bunker2Led->setStyleSheet(QStringLiteral("color:#737880; font-size:11px;"));
 
         ui->lineB2Down->setStyleSheet(QString::fromUtf8(lineIdle));
@@ -1327,47 +1328,47 @@ void MainWindow::applyModeVisuals()
     switch (m_mode) {
     case Mode::Ready:
         if (canStart) {
-            ui->statusReady->setText(QStringLiteral("●  Готовность · OK"));
+            ui->statusReady->setText(tx("●  Готовность · OK"));
             ui->statusReady->setStyleSheet(QString::fromUtf8(kPillOk));
         } else {
-            ui->statusReady->setText(QStringLiteral("●  Готовность · INIT"));
+            ui->statusReady->setText(tx("●  Готовность · INIT"));
             ui->statusReady->setStyleSheet(QString::fromUtf8(kPillInit));
         }
         ui->btnStart->setEnabled(canStartNow());
         ui->btnProg1->setEnabled(!m_prepArming && !m_prep && !m_recovery);
         ui->btnProg2->setEnabled(!m_prepArming && !m_prep && !m_recovery);
         ui->btnStop->setEnabled(false);
-        ui->btnStop->setText(QStringLiteral("СТОП"));
+        ui->btnStop->setText(tx("СТОП"));
         ui->btnEmergencyStop->setEnabled(true);
-        ui->nodeRobotState->setText(canStart ? QStringLiteral("Готов")
-                                             : QStringLiteral("Не готов"));
+        ui->nodeRobotState->setText(canStart ? tx("Готов")
+                                             : tx("Не готов"));
         break;
     case Mode::Run:
         if (m_stopAfterCycle) {
-            ui->statusReady->setText(QStringLiteral("●  Готовность · СТОП"));
+            ui->statusReady->setText(tx("●  Готовность · СТОП"));
             ui->statusReady->setStyleSheet(QString::fromUtf8(kPillInit));
-            ui->nodeRobotState->setText(QStringLiteral("Дожим цикла"));
+            ui->nodeRobotState->setText(tx("Дожим цикла"));
         } else {
-            ui->statusReady->setText(QStringLiteral("●  Готовность · RUN"));
+            ui->statusReady->setText(tx("●  Готовность · RUN"));
             ui->statusReady->setStyleSheet(QString::fromUtf8(kPillRun));
-            ui->nodeRobotState->setText(QStringLiteral("Работа"));
+            ui->nodeRobotState->setText(tx("Работа"));
         }
         ui->btnStart->setEnabled(false);
         ui->btnStop->setEnabled(!m_stopAfterCycle);
-        ui->btnStop->setText(m_stopAfterCycle ? QStringLiteral("ПОСЛЕ ЦИКЛА")
-                                             : QStringLiteral("СТОП"));
+        ui->btnStop->setText(m_stopAfterCycle ? tx("ПОСЛЕ ЦИКЛА")
+                                             : tx("СТОП"));
         ui->btnEmergencyStop->setEnabled(true);
         break;
     case Mode::Recovery:
-        ui->statusReady->setText(QStringLiteral("●  Готовность · АВАРИЯ"));
+        ui->statusReady->setText(tx("●  Готовность · АВАРИЯ"));
         ui->statusReady->setStyleSheet(QString::fromUtf8(kPillErr));
         ui->btnStart->setEnabled(canStartNow());
         ui->btnProg1->setEnabled(false);
         ui->btnProg2->setEnabled(false);
         ui->btnStop->setEnabled(false);
-        ui->btnStop->setText(QStringLiteral("СТОП"));
+        ui->btnStop->setText(tx("СТОП"));
         ui->btnEmergencyStop->setEnabled(true);
-        ui->nodeRobotState->setText(QStringLiteral("Восстановление"));
+        ui->nodeRobotState->setText(tx("Восстановление"));
         break;
     }
     syncPowerOffLatch();
@@ -1377,13 +1378,13 @@ void MainWindow::on_btnStart_clicked()
 {
     QString why;
     if (!canStartNow(&why)) {
-        appendLog(LogLevel::Warn, QStringLiteral("Старт недоступен: %1").arg(why));
+        appendLog(LogLevel::Warn, tx("Старт недоступен: %1").arg(why));
         return;
     }
     if (m_program == Program::None) {
-        appendLog(LogLevel::Warn, QStringLiteral("Старт недоступен: программа не выбрана"));
-        QMessageBox::warning(this, QStringLiteral("Старт"),
-                             QStringLiteral("Выберите программу перед запуском"));
+        appendLog(LogLevel::Warn, tx("Старт недоступен: программа не выбрана"));
+        QMessageBox::warning(this, tx("Старт"),
+                             tx("Выберите программу перед запуском"));
         return;
     }
     if (m_mode == Mode::Recovery || m_recovery || m_estopPending || m_awaitEstopClear
@@ -1396,7 +1397,7 @@ void MainWindow::on_btnStart_clicked()
     if (ConnectionSettings::load().ignoreLaunchLocks) {
         // Ответ ПЛК не ждём: окно открывается сразу, в нём есть «Пропустить».
         appendLog(LogLevel::Warn,
-                  QStringLiteral("Старт без блокировок · ПЛК/Vision/буфер не проверяются"));
+                  tx("Старт без блокировок · ПЛК/Vision/буфер не проверяются"));
         m_plcAcks.append(PlcAck::Start);
         m_plc->sendCommand(frame);
         openPrepOverlay();
@@ -1407,8 +1408,8 @@ void MainWindow::on_btnStart_clicked()
     ui->btnStart->setEnabled(false);
     appendLog(LogLevel::Info,
               ignoreLoadCell
-                  ? QStringLiteral("Команда старта на ПЛК · 7 1 1 0")
-                  : QStringLiteral("Команда старта на ПЛК · 7 1 1 1"));
+                  ? tx("Команда старта на ПЛК · 7 1 1 0")
+                  : tx("Команда старта на ПЛК · 7 1 1 1"));
     m_plcAcks.append(PlcAck::Start);
     m_plc->sendCommand(frame);
     syncPowerOffLatch();
@@ -1457,13 +1458,13 @@ void MainWindow::openPrepOverlay()
     });
     connect(overlay, &PrepOverlay::emergencyStopRequested, this, [this]() {
         closePrepOverlay();
-        enterRecovery(QStringLiteral("EMERGENCY STOP · предподготовка"));
+        enterRecovery(tx("EMERGENCY STOP · предподготовка"));
     });
 
     appendLog(LogLevel::Info,
-              QStringLiteral("Предподготовка · %1")
-                  .arg(m_program == Program::Detail1 ? QStringLiteral("Деталь 1")
-                                                    : QStringLiteral("Деталь 2")));
+              tx("Предподготовка · %1")
+                  .arg(m_program == Program::Detail1 ? tx("Деталь 1")
+                                                    : tx("Деталь 2")));
     overlay->show();
     overlay->raise();
     syncPowerOffLatch();
@@ -1500,11 +1501,11 @@ void MainWindow::startSelectedProgramScript(int fromLine, bool freshSession)
         QString code;
         QString err;
         if (!nats->fetchScriptCode(filename, &code, &err)) {
-            return QStringLiteral("Не удалось получить скрипт '%1' из NATS KV: %2")
+            return tx("Не удалось получить скрипт '%1' из NATS KV: %2")
                 .arg(filename, err);
         }
         if (!nats->publishExecCommand(filename, code, line, &err)) {
-            return QStringLiteral("Не удалось отправить команду запуска в NATS: %1").arg(err);
+            return tx("Не удалось отправить команду запуска в NATS: %1").arg(err);
         }
         return QString(); // пустая строка = успех
     });
@@ -1525,7 +1526,7 @@ void MainWindow::startSelectedProgramScript(int fromLine, bool freshSession)
         }
         if (!error.isEmpty()) {
             appendLog(LogLevel::Err, error);
-            QMessageBox::warning(this, QStringLiteral("Ошибка запуска"), error);
+            QMessageBox::warning(this, tx("Ошибка запуска"), error);
             refreshUi();
             return;
         }
@@ -1536,10 +1537,10 @@ void MainWindow::startSelectedProgramScript(int fromLine, bool freshSession)
             resetUptime();
             startUptime();
             appendLog(LogLevel::Ok,
-                      QStringLiteral("Старт · %1 · скрипт '%2'")
+                      tx("Старт · %1 · скрипт '%2'")
                           .arg(m_program == Program::Detail1
-                                   ? QStringLiteral("Деталь 1")
-                                   : QStringLiteral("Деталь 2"),
+                                   ? tx("Деталь 1")
+                                   : tx("Деталь 2"),
                                scriptFilenameForProgram(m_program)));
         } else {
             // Следующий цикл: uptime продолжает тикать, KPI цикла не трогаем.
@@ -1587,8 +1588,8 @@ void MainWindow::sendStopCommandAsync(const QString &reason, LogLevel logLevel,
         }
         if (!error.isEmpty()) {
             appendLog(LogLevel::Err,
-                      QStringLiteral("Не удалось отправить stop: %1").arg(error));
-            QMessageBox::warning(this, QStringLiteral("Ошибка"), error);
+                      tx("Не удалось отправить stop: %1").arg(error));
+            QMessageBox::warning(this, tx("Ошибка"), error);
             refreshUi();
             return;
         }
@@ -1637,8 +1638,8 @@ void MainWindow::sendStopThenRecover(const QString &reason)
         const QString error = m_stopWatcher->result();
         if (!error.isEmpty()) {
             appendLog(LogLevel::Err,
-                      QStringLiteral("Не удалось отправить stop: %1").arg(error));
-            QMessageBox::warning(this, QStringLiteral("Ошибка"), error);
+                      tx("Не удалось отправить stop: %1").arg(error));
+            QMessageBox::warning(this, tx("Ошибка"), error);
             refreshUi();
             return;
         }
@@ -1680,7 +1681,7 @@ void MainWindow::maybeEnterRecoveryFromPlc()
     // только новый фронт (см. handlePanelButtons).
     if (ConnectionSettings::load().ignoreLaunchLocks)
         return;
-    enterRecovery(QStringLiteral("EMERGENCY STOP · ПЛК"));
+    enterRecovery(tx("EMERGENCY STOP · ПЛК"));
 }
 
 void MainWindow::forceLeaveRecovery(const QString &logMessage)
@@ -1697,7 +1698,7 @@ void MainWindow::forceLeaveRecovery(const QString &logMessage)
     RuntimeState::setRecoveryPending(false);
     appendLog(LogLevel::Warn,
               logMessage.isEmpty()
-                  ? QStringLiteral("Игнорирование блокировок · выход из аварии без восстановления")
+                  ? tx("Игнорирование блокировок · выход из аварии без восстановления")
                   : logMessage);
     sendPlcControl(5);
     refreshUi();
@@ -1727,7 +1728,7 @@ void MainWindow::enterRecovery(const QString &reason)
     if ((m_execWatcher && m_execWatcher->isRunning())
         || (m_stopWatcher && m_stopWatcher->isRunning())) {
         appendLog(LogLevel::Err,
-                  QStringLiteral("%1 · ждём завершения текущей команды").arg(reason));
+                  tx("%1 · ждём завершения текущей команды").arg(reason));
         refreshUi();
         return;
     }
@@ -1765,10 +1766,10 @@ void MainWindow::openRecoveryOverlay()
         }
         forceLeaveRecovery();
         appendLog(LogLevel::Info,
-                  QStringLiteral("Программа не выбрана · пульт в Ready, старт не запускается"));
+                  tx("Программа не выбрана · пульт в Ready, старт не запускается"));
     });
 
-    appendLog(LogLevel::Warn, QStringLiteral("Восстановление · чек-лист"));
+    appendLog(LogLevel::Warn, tx("Восстановление · чек-лист"));
     overlay->show();
     overlay->raise();
 }
@@ -1789,7 +1790,7 @@ void MainWindow::onRecoveryFinished()
 
     RuntimeState::setRecoveryPending(false);
     sendPlcControl(5);
-    appendLog(LogLevel::Ok, QStringLiteral("Восстановление завершено — на ПЛК отправлен выход (7 5)"));
+    appendLog(LogLevel::Ok, tx("Восстановление завершено — на ПЛК отправлен выход (7 5)"));
     refreshUi();
     updateLeftPanel();
 }
@@ -1799,7 +1800,7 @@ void MainWindow::on_btnStop_clicked()
     if (m_mode != Mode::Run || m_stopAfterCycle)
         return;
     m_stopAfterCycle = true;
-    appendLog(LogLevel::Info, QStringLiteral("Стоп · после текущего цикла"));
+    appendLog(LogLevel::Info, tx("Стоп · после текущего цикла"));
     sendPlcControl(3);
     refreshUi();
 }
@@ -1819,8 +1820,8 @@ void MainWindow::selectProgram(Program program)
     const QByteArray frame = PlcClient::programSelectCommand(id);
     appendLog(LogLevel::Info,
               program == Program::Detail1
-                  ? QStringLiteral("Выбрана Деталь 1 · поток Б1+Б2 · ПЛК 7 1 1")
-                  : QStringLiteral("Выбрана Деталь 2 · поток Б1+Б3 · ПЛК 7 1 2"));
+                  ? tx("Выбрана Деталь 1 · поток Б1+Б2 · ПЛК 7 1 1")
+                  : tx("Выбрана Деталь 2 · поток Б1+Б3 · ПЛК 7 1 2"));
     m_plcAcks.append(PlcAck::Program);
     m_plc->sendCommand(frame);
     refreshUi();
@@ -1828,7 +1829,7 @@ void MainWindow::selectProgram(Program program)
 
 void MainWindow::sendPlcControl(int code)
 {
-    appendLog(LogLevel::Info, QStringLiteral("ПЛК · 7 %1").arg(code));
+    appendLog(LogLevel::Info, tx("ПЛК · 7 %1").arg(code));
     m_plcAcks.append(PlcAck::Control);
     m_plc->sendCommand(PlcClient::controlCommand(code));
 }
@@ -1848,10 +1849,10 @@ void MainWindow::on_btnService_clicked()
 #ifdef Q_OS_ANDROID
     return;
 #else
-    appendLog(LogLevel::Info, QStringLiteral("Сервис: панель открыта"));
+    appendLog(LogLevel::Info, tx("Сервис: панель открыта"));
     ServicePanel panel(m_plc, this);
     panel.exec();
-    appendLog(LogLevel::Info, QStringLiteral("Сервис: панель закрыта"));
+    appendLog(LogLevel::Info, tx("Сервис: панель закрыта"));
     refreshUi();
 #endif
 }
@@ -1861,17 +1862,17 @@ void MainWindow::on_btnAdmin_clicked()
 #ifdef Q_OS_ANDROID
     return;
 #else
-    appendLog(LogLevel::Info, QStringLiteral("Админ: попытка входа"));
+    appendLog(LogLevel::Info, tx("Админ: попытка входа"));
     const auto auth = AdminPanel::authenticate(this);
     switch (auth) {
     case AdminPanel::AuthResult::Cancelled:
-        appendLog(LogLevel::Info, QStringLiteral("Админ: вход отменён"));
+        appendLog(LogLevel::Info, tx("Админ: вход отменён"));
         return;
     case AdminPanel::AuthResult::Denied:
-        appendLog(LogLevel::Warn, QStringLiteral("Админ: неверный пароль"));
+        appendLog(LogLevel::Warn, tx("Админ: неверный пароль"));
         return;
     case AdminPanel::AuthResult::Ok:
-        appendLog(LogLevel::Ok, QStringLiteral("Админ: вход выполнен"));
+        appendLog(LogLevel::Ok, tx("Админ: вход выполнен"));
         break;
     }
 
@@ -1879,21 +1880,21 @@ void MainWindow::on_btnAdmin_clicked()
     connect(&panel, &AdminPanel::applyRequested, this, [this](const ConnectionSettings &cfg) {
         cfg.save();
         appendLog(LogLevel::Info,
-                  QStringLiteral("Настройки применены: NATS %1, ПЛК %2")
+                  tx("Настройки применены: NATS %1, ПЛК %2")
                       .arg(cfg.natsUrl(), cfg.plcEndpoint()));
         applyConnectionSettings(true);
     });
     connect(&panel, &AdminPanel::estopResetRequested, this, [this]() {
         if (m_mode == Mode::Recovery || m_recovery || m_estopPending || m_awaitEstopClear) {
-            forceLeaveRecovery(QStringLiteral("Админ · сброс e-stop: выход из аварии без восстановления"));
+            forceLeaveRecovery(tx("Админ · сброс e-stop: выход из аварии без восстановления"));
             return;
         }
         RuntimeState::setRecoveryPending(false);
-        appendLog(LogLevel::Warn, QStringLiteral("Админ · сброс e-stop: защёлка пульта снята"));
+        appendLog(LogLevel::Warn, tx("Админ · сброс e-stop: защёлка пульта снята"));
         refreshUi();
     });
     panel.exec();
-    appendLog(LogLevel::Info, QStringLiteral("Админ: панель закрыта"));
+    appendLog(LogLevel::Info, tx("Админ: панель закрыта"));
     refreshUi();
 #endif
 }
@@ -1905,7 +1906,7 @@ void MainWindow::on_btnExportLog_clicked()
             .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss")));
     const QString path = QFileDialog::getSaveFileName(
         this,
-        QStringLiteral("Выгрузить журнал событий"),
+        tx("Выгрузить журнал событий"),
         QDir::homePath() + QLatin1Char('/') + defaultName,
         QStringLiteral("Log files (*.log);;All files (*)"));
     if (path.isEmpty())
@@ -1913,15 +1914,15 @@ void MainWindow::on_btnExportLog_clicked()
 
     QString err;
     if (!exportLogsToFile(path, &err)) {
-        appendLog(LogLevel::Err, QStringLiteral("Не удалось выгрузить журнал: %1").arg(err));
-        QMessageBox::warning(this, QStringLiteral("Журнал"),
-                             QStringLiteral("Не удалось сохранить файл:\n%1").arg(err));
+        appendLog(LogLevel::Err, tx("Не удалось выгрузить журнал: %1").arg(err));
+        QMessageBox::warning(this, tx("Журнал"),
+                             tx("Не удалось сохранить файл:\n%1").arg(err));
         return;
     }
 
-    appendLog(LogLevel::Ok, QStringLiteral("Журнал выгружен: %1").arg(path));
-    QMessageBox::information(this, QStringLiteral("Журнал"),
-                             QStringLiteral("Сохранено %1 записей в:\n%2")
+    appendLog(LogLevel::Ok, tx("Журнал выгружен: %1").arg(path));
+    QMessageBox::information(this, tx("Журнал"),
+                             tx("Сохранено %1 записей в:\n%2")
                                  .arg(m_logEntries.size())
                                  .arg(path));
 }

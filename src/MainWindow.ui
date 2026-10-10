@@ -905,7 +905,7 @@ Vision 2</string>
     </property>
     <property name="text">
      <string>●
-Гуси</string>
+М. держатели</string>
     </property>
     <property name="styleSheet">
      <string notr="true">color:#2E8C47; font-size:11px;</string>
@@ -925,7 +925,7 @@ Vision 2</string>
     </property>
     <property name="text">
      <string>●
-Б. гуси</string>
+Б. держатели</string>
     </property>
     <property name="styleSheet">
      <string notr="true">color:#2E8C47; font-size:11px;</string>

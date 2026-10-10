@@ -1,4 +1,5 @@
 #include "ServicePanel.h"
+#include "Texts.h"
 #include "PlcClient.h"
 
 #include <QAbstractItemView>
@@ -72,6 +73,10 @@ constexpr int kBufRowH = 26;
 constexpr int kDoBtnW = 112;
 constexpr int kDoBtnH = 52;
 constexpr int kDoSpacing = 6;
+// Внутренний отступ панели и её рамка из kPanelStyle: оба съедают ширину содержимого.
+constexpr int kPanelPadding = 10;
+constexpr int kPanelBorder = 1;
+constexpr int kPanelChromeW = 2 * (kPanelPadding + kPanelBorder);
 
 void paintBufferCell(QLabel *lab, int n, bool hasValue, qint16 value)
 {
@@ -113,7 +118,7 @@ const char *kPanelStyle =
 
 void setToggleCaption(QPushButton *button, const QString &title, bool on)
 {
-    button->setText(title + (on ? QStringLiteral(":  ВКЛ") : QStringLiteral(":  ВЫКЛ")));
+    button->setText(title + (on ? tx(":  ВКЛ") : tx(":  ВЫКЛ")));
     button->setStyleSheet(QLatin1String(on ? kToggleOnBtn : kToggleOffBtn));
 }
 
@@ -143,7 +148,7 @@ ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
     : QDialog(parent)
     , m_plc(plc)
 {
-    setWindowTitle(QStringLiteral("Сервисная панель"));
+    setWindowTitle(tx("Сервисная панель"));
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
     setWindowModality(Qt::ApplicationModal);
     m_layoutW = kWidth;
@@ -170,12 +175,12 @@ ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
         "  border-bottom:1px solid #DBDEE3;"
         "}"));
 
-    auto *btnBack = new QPushButton(QStringLiteral("Назад"), header);
+    auto *btnBack = new QPushButton(tx("Назад"), header);
     btnBack->setStyleSheet(QLatin1String(kSecondaryBtn));
     btnBack->setCursor(Qt::PointingHandCursor);
     btnBack->setFocusPolicy(Qt::NoFocus);
 
-    auto *title = new QLabel(QStringLiteral("Сервисная панель"), header);
+    auto *title = new QLabel(tx("Сервисная панель"), header);
     title->setStyleSheet(QStringLiteral(
         "QLabel {"
         "  font-family:\"Inter\",\"Segoe UI\",sans-serif;"
@@ -195,15 +200,15 @@ ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
     const int gap = 12;
     const int bufTableW = kBufCols * kBufColW;
     const int bufTableH = kBufRows * kBufRowH;
-    const int bufferW = bufTableW + 20;
+    const int bufferW = bufTableW + kPanelChromeW;
     const int bufferH = 28 + 18 + bufTableH + 16;
-    const int doW = kDoCols * kDoBtnW + (kDoCols - 1) * kDoSpacing + 20;
+    const int doGridW = kDoCols * kDoBtnW + (kDoCols - 1) * kDoSpacing;
 
     auto *bufferPanel = makePanel(QStringLiteral("bufferPanel"), this);
     bufferPanel->setGeometry(bodyX, bodyY, bufferW, bufferH);
 
     auto *bufferTitle =
-        makeTitle(QStringLiteral("Буфер ПЛК (%1 int16)").arg(kBufCellCount), bufferPanel);
+        makeTitle(tx("Буфер ПЛК (%1 int16)").arg(kBufCellCount), bufferPanel);
     m_bufferStatus = new QLabel(bufferPanel);
     m_bufferStatus->setStyleSheet(QStringLiteral(
         "QLabel {"
@@ -246,7 +251,7 @@ ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
     }
 
     auto *bufferLay = new QVBoxLayout(bufferPanel);
-    bufferLay->setContentsMargins(10, 8, 10, 8);
+    bufferLay->setContentsMargins(kPanelPadding, 8, kPanelPadding, 8);
     bufferLay->setSpacing(4);
     bufferLay->addWidget(bufferTitle);
     bufferLay->addWidget(m_bufferStatus);
@@ -282,11 +287,13 @@ ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
         doLay->setColumnStretch(c, 1);
 
     auto *doPanelLay = new QVBoxLayout(doPanel);
-    doPanelLay->setContentsMargins(10, 8, 10, 8);
+    doPanelLay->setContentsMargins(kPanelPadding, 8, kPanelPadding, 8);
     doPanelLay->setSpacing(4);
     doPanelLay->addWidget(doTitle);
     doPanelLay->addWidget(doGrid, 1);
     doPanelLay->activate();
+
+    const int doW = qMax(doGridW + kPanelChromeW, doPanel->minimumSizeHint().width());
 
     const int tablesH = qMax(qMax(bufferH, bufferPanel->sizeHint().height()),
                              doPanel->sizeHint().height());
@@ -302,7 +309,7 @@ ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
         "  border-radius:8px;"
         "}"));
 
-    auto *togglesTitle = new QLabel(QStringLiteral("Переключатели"), togglesPanel);
+    auto *togglesTitle = new QLabel(tx("Переключатели"), togglesPanel);
     togglesTitle->setStyleSheet(QStringLiteral(
         "QLabel {"
         "  font-family:\"Inter\",\"Segoe UI\",sans-serif;"
@@ -316,7 +323,7 @@ ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
     m_btnServiceMode->setFocusPolicy(Qt::NoFocus);
     m_btnServiceMode->setMinimumHeight(44);
     m_btnServiceMode->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    setToggleCaption(m_btnServiceMode, QStringLiteral("Перевести ПЛК в сервисный режим"), false);
+    setToggleCaption(m_btnServiceMode, tx("Перевести ПЛК в сервисный режим"), false);
 
     auto *togglesLay = new QVBoxLayout(togglesPanel);
     togglesLay->setContentsMargins(12, 10, 12, 12);
@@ -367,7 +374,7 @@ void ServicePanel::leaveServiceIfNeeded()
     if (m_btnServiceMode) {
         const QSignalBlocker blocker(m_btnServiceMode);
         m_btnServiceMode->setChecked(false);
-        setToggleCaption(m_btnServiceMode, QStringLiteral("Перевести ПЛК в сервисный режим"),
+        setToggleCaption(m_btnServiceMode, tx("Перевести ПЛК в сервисный режим"),
                          false);
     }
 }
@@ -383,7 +390,7 @@ void ServicePanel::refreshBufferTable()
         return;
 
     if (!m_plc) {
-        m_bufferStatus->setText(QStringLiteral("ПЛК-клиент не подключён"));
+        m_bufferStatus->setText(tx("ПЛК-клиент не подключён"));
         for (int n = 0; n < kBufCellCount; ++n) {
             auto *lab =
                 qobject_cast<QLabel *>(m_bufferTable->cellWidget(n / kBufCols, n % kBufCols));
@@ -393,13 +400,13 @@ void ServicePanel::refreshBufferTable()
     }
 
     if (!m_plc->isOk()) {
-        m_bufferStatus->setText(QStringLiteral("Нет свежего кадра от ПЛК"));
+        m_bufferStatus->setText(tx("Нет свежего кадра от ПЛК"));
         return;
     }
 
     // Ячейки за пределами кадра ПЛК (status_bytes) показываем прочерком, а не нулём.
     const int received = m_plc->statusIntCount();
-    m_bufferStatus->setText(QStringLiteral("Кадр ок, %1 int16").arg(received));
+    m_bufferStatus->setText(tx("Кадр ок, %1 int16").arg(received));
     for (int n = 0; n < kBufCellCount; ++n) {
         const int row = n / kBufCols;
         const int col = n % kBufCols;
@@ -410,7 +417,7 @@ void ServicePanel::refreshBufferTable()
 
 void ServicePanel::onServiceModeToggled(bool on)
 {
-    setToggleCaption(m_btnServiceMode, QStringLiteral("Перевести ПЛК в сервисный режим"), on);
+    setToggleCaption(m_btnServiceMode, tx("Перевести ПЛК в сервисный режим"), on);
     m_serviceRequested = on;
     sendServiceMode(on);
 }

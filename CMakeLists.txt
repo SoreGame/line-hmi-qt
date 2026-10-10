@@ -35,8 +35,24 @@ qt_add_executable(line-hmi-qt MANUAL_FINALIZATION
     src/AdminPanel.h
     src/ServicePanel.cpp
     src/ServicePanel.h
+    src/Texts.cpp
+    src/Texts.h
     resources.qrc
 )
+
+# Тексты пульта: каждая сборка дописывает новые тексты в раздел "texts"
+# config.json (правки не трогает) и кладёт config.json рядом с программой.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+file(GLOB HMI_TEXT_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.ui")
+add_custom_target(hmi_texts ALL
+    COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/scripts/update_texts_config.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/config.json" ${HMI_TEXT_SOURCES}
+    COMMENT "Update texts in config.json"
+    VERBATIM
+)
+add_dependencies(line-hmi-qt hmi_texts)
 
 target_link_libraries(line-hmi-qt PRIVATE Qt6::Widgets Qt6::Concurrent Qt6::Network)
 if (NOT ANDROID)
@@ -68,6 +84,7 @@ if (ANDROID)
     )
     add_custom_target(copy_android_config
         DEPENDS "${ANDROID_ASSETS_DIR}/config.json")
+    add_dependencies(copy_android_config hmi_texts)
     add_dependencies(line-hmi-qt copy_android_config)
 endif()
 
@@ -132,12 +149,15 @@ if (ANDROID)
 endif()
 
 if (NOT ANDROID)
-    add_custom_command(TARGET line-hmi-qt POST_BUILD
+    # Отдельной целью, а не POST_BUILD: правка текстов без пересборки программы
+    # тоже должна попасть рядом с ней.
+    add_custom_target(copy_config ALL
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CMAKE_CURRENT_SOURCE_DIR}/config.json"
             "$<TARGET_FILE_DIR:line-hmi-qt>/config.json"
         COMMENT "Copy config.json next to line-hmi-qt"
     )
+    add_dependencies(copy_config hmi_texts line-hmi-qt)
     install(TARGETS line-hmi-qt RUNTIME DESTINATION bin)
     install(FILES config.json DESTINATION bin)
 endif()

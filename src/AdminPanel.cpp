@@ -1,4 +1,5 @@
 #include "AdminPanel.h"
+#include "Texts.h"
 #include "ArduinoLink.h"
 #include "PlcClient.h"
 
@@ -108,7 +109,7 @@ const char *kPowerOnBtn =
 
 void setToggleCaption(QPushButton *button, const QString &title, bool on)
 {
-    button->setText(title + (on ? QStringLiteral(":  ВКЛ") : QStringLiteral(":  ВЫКЛ")));
+    button->setText(title + (on ? tx(":  ВКЛ") : tx(":  ВЫКЛ")));
     button->setStyleSheet(QLatin1String(on ? kPowerOffBtn : kSecondaryBtn));
 }
 
@@ -205,8 +206,8 @@ AdminPanel::AuthResult AdminPanel::authenticate(QWidget *parent)
     bool ok = false;
     const QString password = QInputDialog::getText(
         parent,
-        QStringLiteral("Админ-панель"),
-        QStringLiteral("Пароль:"),
+        tx("Админ-панель"),
+        tx("Пароль:"),
         QLineEdit::Password,
         QString(),
         &ok);
@@ -215,8 +216,8 @@ AdminPanel::AuthResult AdminPanel::authenticate(QWidget *parent)
 
     if (password != QLatin1String(kPassword)) {
         QMessageBox::warning(parent,
-                             QStringLiteral("Админ-панель"),
-                             QStringLiteral("Неверный пароль"));
+                             tx("Админ-панель"),
+                             tx("Неверный пароль"));
         return AuthResult::Denied;
     }
     return AuthResult::Ok;
@@ -228,7 +229,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     , m_nats(nats)
     , m_plc(plc)
 {
-    setWindowTitle(QStringLiteral("Админ-панель"));
+    setWindowTitle(tx("Админ-панель"));
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
     setWindowModality(Qt::ApplicationModal);
     m_layoutW = kWidth;
@@ -256,12 +257,12 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
         "  border-bottom:1px solid #DBDEE3;"
         "}"));
 
-    auto *btnBack = new QPushButton(QStringLiteral("Назад"), header);
+    auto *btnBack = new QPushButton(tx("Назад"), header);
     btnBack->setStyleSheet(QLatin1String(kSecondaryBtn));
     btnBack->setCursor(Qt::PointingHandCursor);
     btnBack->setFocusPolicy(Qt::NoFocus);
 
-    auto *title = new QLabel(QStringLiteral("Админ-панель"), header);
+    auto *title = new QLabel(tx("Админ-панель"), header);
     title->setStyleSheet(QStringLiteral(
         "QLabel {"
         "  font-family:\"Inter\",\"Segoe UI\",sans-serif;"
@@ -269,7 +270,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
         "  background:transparent; border:none;"
         "}"));
 
-    auto *btnApply = new QPushButton(QStringLiteral("Применить"), header);
+    auto *btnApply = new QPushButton(tx("Применить"), header);
     btnApply->setStyleSheet(QLatin1String(kPrimaryBtn));
     btnApply->setCursor(Qt::PointingHandCursor);
     btnApply->setDefault(true);
@@ -293,7 +294,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
         "  border-radius:8px;"
         "}"));
 
-    auto *sectionTitle = new QLabel(QStringLiteral("Сеть"), networkPanel);
+    auto *sectionTitle = new QLabel(tx("Сеть"), networkPanel);
     sectionTitle->setStyleSheet(QStringLiteral(
         "QLabel {"
         "  font-family:\"Inter\",\"Segoe UI\",sans-serif;"
@@ -317,7 +318,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     m_plcStatusBytes->setRange(PlcClient::kMinStatusSize, PlcClient::kStatusSize);
     m_plcStatusBytes->setSingleStep(2);
     m_plcStatusBytes->setValue(initial.plcStatusBytes > 0 ? initial.plcStatusBytes : 120);
-    m_plcStatusBytes->setSuffix(QStringLiteral(" байт"));
+    m_plcStatusBytes->setSuffix(tx(" байт"));
     m_plcStatusBytes->setFixedWidth(120);
 
     for (QWidget *w : {static_cast<QWidget *>(m_natsHost),
@@ -332,22 +333,22 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     auto *rowNatsLay = new QHBoxLayout(rowNats);
     rowNatsLay->setContentsMargins(0, 0, 0, 0);
     rowNatsLay->setSpacing(8);
-    rowNatsLay->addWidget(makeLabeledField(QStringLiteral("NATS хост"), m_natsHost, rowNats), 1);
-    rowNatsLay->addWidget(makeLabeledField(QStringLiteral("Порт"), m_natsPort, rowNats), 0);
+    rowNatsLay->addWidget(makeLabeledField(tx("NATS хост"), m_natsHost, rowNats), 1);
+    rowNatsLay->addWidget(makeLabeledField(tx("Порт"), m_natsPort, rowNats), 0);
 
     auto *rowPlc = new QWidget(networkPanel);
     auto *rowPlcLay = new QHBoxLayout(rowPlc);
     rowPlcLay->setContentsMargins(0, 0, 0, 0);
     rowPlcLay->setSpacing(8);
-    rowPlcLay->addWidget(makeLabeledField(QStringLiteral("ПЛК хост"), m_plcHost, rowPlc), 1);
-    rowPlcLay->addWidget(makeLabeledField(QStringLiteral("Порт"), m_plcPort, rowPlc), 0);
+    rowPlcLay->addWidget(makeLabeledField(tx("ПЛК хост"), m_plcHost, rowPlc), 1);
+    rowPlcLay->addWidget(makeLabeledField(tx("Порт"), m_plcPort, rowPlc), 0);
 
     auto *rowFrame = new QWidget(networkPanel);
     auto *rowFrameLay = new QHBoxLayout(rowFrame);
     rowFrameLay->setContentsMargins(0, 0, 0, 0);
     rowFrameLay->setSpacing(8);
     rowFrameLay->addWidget(makeLabeledField(
-        QStringLiteral("Ожидаемый размер кадра"), m_plcStatusBytes, rowFrame), 1);
+        tx("Ожидаемый размер кадра"), m_plcStatusBytes, rowFrame), 1);
 
     auto *panelLay = new QVBoxLayout(networkPanel);
     panelLay->setContentsMargins(12, 10, 12, 10);
@@ -368,7 +369,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
         "  border-radius:8px;"
         "}"));
 
-    auto *jogTitle = new QLabel(QStringLiteral("Управление"), m_jogPanel);
+    auto *jogTitle = new QLabel(tx("Управление"), m_jogPanel);
     jogTitle->setStyleSheet(QStringLiteral(
         "QLabel {"
         "  font-family:\"Inter\",\"Segoe UI\",sans-serif;"
@@ -440,7 +441,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     auto *stepColLay = new QVBoxLayout(stepCol);
     stepColLay->setContentsMargins(0, 0, 0, 0);
     stepColLay->setSpacing(2);
-    auto *stepTitle = new QLabel(QStringLiteral("Шаг"), stepCol);
+    auto *stepTitle = new QLabel(tx("Шаг"), stepCol);
     stepTitle->setAlignment(Qt::AlignCenter);
     stepTitle->setStyleSheet(QStringLiteral(
         "QLabel { font-size:11px; font-weight:600; color:#3A3F4A; background:transparent; }"));
@@ -547,7 +548,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
         "}"));
     {
         const int bytes = initial.plcStatusBytes > 0 ? initial.plcStatusBytes : 120;
-        m_plcLogTitle->setText(QStringLiteral("Буфер ПЛК (%1 int16, %2 байт)")
+        m_plcLogTitle->setText(tx("Буфер ПЛК (%1 int16, %2 байт)")
                                    .arg(bytes / 2)
                                    .arg(bytes));
     }
@@ -624,7 +625,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
         "  background:transparent; border:none;"
         "}"));
 
-    m_btnRefresh = new QPushButton(QStringLiteral("Обновить"), m_tablePanel);
+    m_btnRefresh = new QPushButton(tx("Обновить"), m_tablePanel);
     m_btnRefresh->setStyleSheet(QLatin1String(kCompactBtn));
     m_btnRefresh->setCursor(Qt::PointingHandCursor);
     m_btnRefresh->setFocusPolicy(Qt::NoFocus);
@@ -641,7 +642,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     m_table = new QTableWidget(kPageSize, 6, m_tablePanel);
     m_table->setStyleSheet(QLatin1String(kTableStyle));
     m_table->setHorizontalHeaderLabels({
-        QStringLiteral("Имя"),
+        tx("Имя"),
         QStringLiteral("X"),
         QStringLiteral("Y"),
         QStringLiteral("Z"),
@@ -726,7 +727,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
         "  border-radius:8px;"
         "}"));
 
-    auto *togglesTitle = new QLabel(QStringLiteral("Переключатели"), m_togglesPanel);
+    auto *togglesTitle = new QLabel(tx("Переключатели"), m_togglesPanel);
     togglesTitle->setStyleSheet(QStringLiteral(
         "QLabel {"
         "  font-family:\"Inter\",\"Segoe UI\",sans-serif;"
@@ -748,38 +749,38 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     makeToggle(m_btnHmiAutostart);
     m_btnHmiAutostart->setChecked(hmiOn);
     setToggleCaption(m_btnHmiAutostart,
-                     QStringLiteral("Автозапуск пульта на этом компьютере"),
+                     tx("Автозапуск пульта на этом компьютере"),
                      hmiOn);
 
     m_btnRemoteAutostart = new QPushButton(m_togglesPanel);
     makeToggle(m_btnRemoteAutostart);
     m_btnRemoteAutostart->setChecked(initial.autostart);
     setToggleCaption(m_btnRemoteAutostart,
-                     QStringLiteral("Автозапуск системы на NATS-хосте"),
+                     tx("Автозапуск системы на NATS-хосте"),
                      initial.autostart);
 
     m_btnShowCursor = new QPushButton(m_togglesPanel);
     makeToggle(m_btnShowCursor);
     m_btnShowCursor->setChecked(initial.showCursor);
     setToggleCaption(m_btnShowCursor,
-                     QStringLiteral("Курсор мыши"),
+                     tx("Курсор мыши"),
                      initial.showCursor);
 
     m_btnIgnoreLoadCell = new QPushButton(m_togglesPanel);
     makeToggle(m_btnIgnoreLoadCell);
     m_btnIgnoreLoadCell->setChecked(initial.ignoreLoadCell);
     setToggleCaption(m_btnIgnoreLoadCell,
-                     QStringLiteral("Игнорирование тензодатчика"),
+                     tx("Игнорирование тензодатчика"),
                      initial.ignoreLoadCell);
 
     m_btnIgnoreLaunchLocks = new QPushButton(m_togglesPanel);
     makeToggle(m_btnIgnoreLaunchLocks);
     m_btnIgnoreLaunchLocks->setChecked(initial.ignoreLaunchLocks);
     setToggleCaption(m_btnIgnoreLaunchLocks,
-                     QStringLiteral("Игнорировать блокировки запуска"),
+                     tx("Игнорировать блокировки запуска"),
                      initial.ignoreLaunchLocks);
 
-    m_btnResetEstop = new QPushButton(QStringLiteral("Сбросить e-stop на пульте"), m_togglesPanel);
+    m_btnResetEstop = new QPushButton(tx("Сбросить e-stop на пульте"), m_togglesPanel);
     m_btnResetEstop->setStyleSheet(QLatin1String(kSecondaryBtn));
     m_btnResetEstop->setCursor(Qt::PointingHandCursor);
     m_btnResetEstop->setFocusPolicy(Qt::NoFocus);
@@ -787,7 +788,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     m_btnResetEstop->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
     auto *targetHint = new QLabel(
-        QStringLiteral("Пульт включается на этой панели. Автозапуск системы — на компьютере с NATS-хостом. "
+        tx("Пульт включается на этой панели. Автозапуск системы — на компьютере с NATS-хостом. "
                        "Игнорирование тензодатчика: вкл — старт 7 1 1 0, выкл — 7 1 1 1. "
                        "Игнорировать блокировки запуска: можно стартовать цикл без ПЛК, Vision, CTRL и буфера. "
                        "Сбросить e-stop: выход из аварии без восстановления (7 5 на ПЛК) и сброс защёлки, "
@@ -820,7 +821,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
         "}"));
 
     auto *programsTitle = new QLabel(
-        QStringLiteral("Программы · имена .chai в KV, как сохранены редактором"), m_programsPanel);
+        tx("Программы · имена .chai в KV, как сохранены редактором"), m_programsPanel);
     programsTitle->setStyleSheet(togglesTitle->styleSheet());
 
     m_initScript1 = new QLineEdit(initial.initScriptDetail1, m_programsPanel);
@@ -831,7 +832,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     m_startCountdown = new QSpinBox(m_programsPanel);
     m_startCountdown->setRange(0, 60);
     m_startCountdown->setValue(initial.startCountdownSec);
-    m_startCountdown->setSuffix(QStringLiteral(" с"));
+    m_startCountdown->setSuffix(tx(" с"));
     m_startCountdown->setFixedWidth(120);
     for (QWidget *w : {static_cast<QWidget *>(m_initScript1),
                        static_cast<QWidget *>(m_initScript2),
@@ -852,14 +853,14 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
         return row;
     };
     auto *rowInit = makeProgramsRow(
-        makeLabeledField(QStringLiteral("Инициализация · Деталь 1"), m_initScript1, m_programsPanel),
-        makeLabeledField(QStringLiteral("Инициализация · Деталь 2"), m_initScript2, m_programsPanel));
+        makeLabeledField(tx("Инициализация · Деталь 1"), m_initScript1, m_programsPanel),
+        makeLabeledField(tx("Инициализация · Деталь 2"), m_initScript2, m_programsPanel));
     auto *rowMain = makeProgramsRow(
-        makeLabeledField(QStringLiteral("Основная · Деталь 1"), m_mainScript1, m_programsPanel),
-        makeLabeledField(QStringLiteral("Основная · Деталь 2"), m_mainScript2, m_programsPanel));
+        makeLabeledField(tx("Основная · Деталь 1"), m_mainScript1, m_programsPanel),
+        makeLabeledField(tx("Основная · Деталь 2"), m_mainScript2, m_programsPanel));
     auto *rowEstop = makeProgramsRow(
-        makeLabeledField(QStringLiteral("Выход из E-stop"), m_estopScript, m_programsPanel),
-        makeLabeledField(QStringLiteral("Отсчёт до автозапуска основной"), m_startCountdown,
+        makeLabeledField(tx("Выход из E-stop"), m_estopScript, m_programsPanel),
+        makeLabeledField(tx("Отсчёт до автозапуска основной"), m_startCountdown,
                          m_programsPanel));
 
     auto *programsLay = new QVBoxLayout(m_programsPanel);
@@ -880,7 +881,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
         "  border-radius:8px;"
         "}"));
 
-    auto *arduinoTitle = new QLabel(QStringLiteral("Тензодатчик"), m_arduinoPanel);
+    auto *arduinoTitle = new QLabel(tx("Тензодатчик"), m_arduinoPanel);
     arduinoTitle->setStyleSheet(QStringLiteral(
         "QLabel {"
         "  font-family:\"Inter\",\"Segoe UI\",sans-serif;"
@@ -899,7 +900,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
         "  background:transparent; border:none;"
         "}"));
 
-    m_arduinoKg = new QLabel(QStringLiteral("— кг"), m_arduinoPanel);
+    m_arduinoKg = new QLabel(tx("— кг"), m_arduinoPanel);
     m_arduinoKg->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_arduinoKg->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_arduinoKg->setMinimumHeight(30);
@@ -910,11 +911,11 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
         "  background:transparent; border:none;"
         "}"));
 
-    auto *valueCaption = new QLabel(QStringLiteral("Сырое / кг"), m_arduinoPanel);
+    auto *valueCaption = new QLabel(tx("Сырое / кг"), m_arduinoPanel);
     valueCaption->setStyleSheet(QStringLiteral(
         "QLabel { font-size:11px; color:#737880; background:transparent; border:none; }"));
 
-    m_arduinoStatus = new QLabel(QStringLiteral("Тензодатчик не подключен"), m_arduinoPanel);
+    m_arduinoStatus = new QLabel(tx("Тензодатчик не подключен"), m_arduinoPanel);
     m_arduinoStatus->setWordWrap(true);
     m_arduinoStatus->setStyleSheet(QStringLiteral(
         "QLabel { font-size:12px; font-weight:600; color:#B42318; background:transparent; border:none; }"));
@@ -933,7 +934,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     m_arduinoPort->setStyleSheet(QLatin1String(kFieldStyle));
     m_arduinoPort->setMinimumHeight(28);
 
-    m_btnArduinoReconnect = new QPushButton(QStringLiteral("Открыть"), m_arduinoPanel);
+    m_btnArduinoReconnect = new QPushButton(tx("Открыть"), m_arduinoPanel);
     m_btnArduinoReconnect->setStyleSheet(QLatin1String(kCompactBtn));
     m_btnArduinoReconnect->setCursor(Qt::PointingHandCursor);
     m_btnArduinoReconnect->setFocusPolicy(Qt::NoFocus);
@@ -951,7 +952,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     m_arduinoThreshold->setValue(ArduinoLink::clampValue(initial.arduinoThreshold));
     m_arduinoThreshold->setStyleSheet(QLatin1String(kFieldStyle));
 
-    m_btnArduinoSend = new QPushButton(QStringLiteral("Отправить"), m_arduinoPanel);
+    m_btnArduinoSend = new QPushButton(tx("Отправить"), m_arduinoPanel);
     m_btnArduinoSend->setStyleSheet(QLatin1String(kPrimaryBtn));
     m_btnArduinoSend->setCursor(Qt::PointingHandCursor);
     m_btnArduinoSend->setFocusPolicy(Qt::NoFocus);
@@ -981,18 +982,18 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     m_arduinoKnownKg->setRange(0.01, 1e6);
     m_arduinoKnownKg->setSingleStep(0.5);
     m_arduinoKnownKg->setValue(10.0);
-    m_arduinoKnownKg->setSuffix(QStringLiteral(" кг"));
+    m_arduinoKnownKg->setSuffix(tx(" кг"));
     m_arduinoKnownKg->setStyleSheet(QLatin1String(kFieldStyle));
     m_arduinoKnownKg->setMinimumWidth(180);
     m_arduinoKnownKg->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
-    m_btnArduinoCalibrate = new QPushButton(QStringLiteral("Калибровать"), m_arduinoPanel);
+    m_btnArduinoCalibrate = new QPushButton(tx("Калибровать"), m_arduinoPanel);
     m_btnArduinoCalibrate->setStyleSheet(QLatin1String(kPrimaryBtn));
     m_btnArduinoCalibrate->setCursor(Qt::PointingHandCursor);
     m_btnArduinoCalibrate->setFocusPolicy(Qt::NoFocus);
     m_btnArduinoCalibrate->setMinimumHeight(32);
 
-    m_btnArduinoResetCalib = new QPushButton(QStringLiteral("Сброс калибровки"), m_arduinoPanel);
+    m_btnArduinoResetCalib = new QPushButton(tx("Сброс калибровки"), m_arduinoPanel);
     m_btnArduinoResetCalib->setStyleSheet(QLatin1String(kSecondaryBtn));
     m_btnArduinoResetCalib->setCursor(Qt::PointingHandCursor);
     m_btnArduinoResetCalib->setFocusPolicy(Qt::NoFocus);
@@ -1022,8 +1023,8 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     leftLay->setSpacing(6);
     leftLay->addWidget(valueCaption);
     leftLay->addWidget(valueRow);
-    leftLay->addWidget(makeLabeledField(QStringLiteral("Порт"), portRow, leftCol));
-    leftLay->addWidget(makeLabeledField(QStringLiteral("Порог (сырое)"), thresholdRow, leftCol));
+    leftLay->addWidget(makeLabeledField(tx("Порт"), portRow, leftCol));
+    leftLay->addWidget(makeLabeledField(tx("Порог (сырое)"), thresholdRow, leftCol));
     leftLay->addStretch(1);
     {
         QSizePolicy pol(QSizePolicy::Ignored, QSizePolicy::Preferred);
@@ -1036,9 +1037,9 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     rightLay->setContentsMargins(0, 0, 0, 0);
     rightLay->setSpacing(6);
     rightLay->addWidget(makeLabeledField(
-        QStringLiteral("Калибровка: укажите вес на датчике"), calibRow, rightCol));
+        tx("Калибровка: укажите вес на датчике"), calibRow, rightCol));
     rightLay->addWidget(m_arduinoCalibHint);
-    rightLay->addWidget(makeLabeledField(QStringLiteral("Отсчётов на кг"), m_arduinoUnitsPerKg, rightCol));
+    rightLay->addWidget(makeLabeledField(tx("Отсчётов на кг"), m_arduinoUnitsPerKg, rightCol));
     rightLay->addStretch(1);
     {
         QSizePolicy pol(QSizePolicy::Ignored, QSizePolicy::Preferred);
@@ -1084,8 +1085,8 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     connect(m_btnIgnoreLaunchLocks, &QPushButton::toggled, this, &AdminPanel::onIgnoreLaunchLocksToggled);
     connect(m_btnResetEstop, &QPushButton::clicked, this, [this]() {
         const auto answer = QMessageBox::question(
-            this, QStringLiteral("Сбросить e-stop"),
-            QStringLiteral("Выйти из аварии без восстановления и сбросить защёлку e-stop на пульте?"),
+            this, tx("Сбросить e-stop"),
+            tx("Выйти из аварии без восстановления и сбросить защёлку e-stop на пульте?"),
             QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (answer == QMessageBox::Yes)
             emit estopResetRequested();
@@ -1182,13 +1183,13 @@ bool ensureRemoteNatsHost(const QString &host, QString *error)
         || normalized == QLatin1String("127.0.0.1")
         || normalized == QLatin1String("::1")
         || normalized == QLatin1String("0.0.0.0")) {
-        *error = QStringLiteral(
+        *error = tx(
             "NATS-хост указывает на эту панель. Укажите адрес компьютера, где работает NATS.");
         return false;
     }
     for (const QHostAddress &address : QNetworkInterface::allAddresses()) {
         if (address.toString().compare(host.trimmed(), Qt::CaseInsensitive) == 0) {
-            *error = QStringLiteral(
+            *error = tx(
                 "NATS-хост %1 — это эта панель. Укажите адрес компьютера, где работает NATS.")
                          .arg(host.trimmed());
             return false;
@@ -1209,18 +1210,18 @@ bool sshOnNatsHost(const QString &host, const QString &remoteCommand, int timeou
                 QStringLiteral("root@%1").arg(host),
                 remoteCommand});
     if (!proc.waitForStarted(3000)) {
-        *error = QStringLiteral("Не удалось запустить ssh");
+        *error = tx("Не удалось запустить ssh");
         return false;
     }
     if (!proc.waitForFinished(timeoutMs)) {
         proc.kill();
-        *error = QStringLiteral("Нет ответа от %1").arg(host);
+        *error = tx("Нет ответа от %1").arg(host);
         return false;
     }
     if (proc.exitStatus() != QProcess::NormalExit || proc.exitCode() != 0) {
         *error = QString::fromUtf8(proc.readAllStandardError()).trimmed();
         if (error->isEmpty())
-            *error = QStringLiteral("Команда на %1 завершилась с кодом %2").arg(host).arg(proc.exitCode());
+            *error = tx("Команда на %1 завершилась с кодом %2").arg(host).arg(proc.exitCode());
         return false;
     }
     return true;
@@ -1235,7 +1236,7 @@ void AdminPanel::onHmiAutostartToggled(bool enabled)
         m_btnHmiAutostart->setChecked(!enabled);
         m_btnHmiAutostart->blockSignals(false);
         setToggleCaption(m_btnHmiAutostart,
-                         QStringLiteral("Автозапуск пульта на этом компьютере"),
+                         tx("Автозапуск пульта на этом компьютере"),
                          !enabled);
     };
 
@@ -1247,14 +1248,14 @@ void AdminPanel::onHmiAutostartToggled(bool enabled)
     if (!proc.waitForStarted(3000) || !proc.waitForFinished(20000) || proc.exitCode() != 0) {
         revert();
         const QString err = QString::fromUtf8(proc.readAllStandardError()).trimmed();
-        QMessageBox::warning(this, QStringLiteral("Автозапуск пульта"),
-                             err.isEmpty() ? QStringLiteral("Не удалось изменить автозапуск на этой панели")
+        QMessageBox::warning(this, tx("Автозапуск пульта"),
+                             err.isEmpty() ? tx("Не удалось изменить автозапуск на этой панели")
                                            : err);
         return;
     }
 
     setToggleCaption(m_btnHmiAutostart,
-                     QStringLiteral("Автозапуск пульта на этом компьютере"),
+                     tx("Автозапуск пульта на этом компьютере"),
                      enabled);
     ConnectionSettings cfg = networkSettings();
     cfg.save();
@@ -1268,13 +1269,13 @@ void AdminPanel::onRemoteAutostartToggled(bool enabled)
         m_btnRemoteAutostart->setChecked(!enabled);
         m_btnRemoteAutostart->blockSignals(false);
         setToggleCaption(m_btnRemoteAutostart,
-                         QStringLiteral("Автозапуск системы на NATS-хосте"),
+                         tx("Автозапуск системы на NATS-хосте"),
                          !enabled);
     };
     if (host.isEmpty()) {
         revert();
-        QMessageBox::warning(this, QStringLiteral("Автозапуск"),
-                             QStringLiteral("Укажите NATS-хост"));
+        QMessageBox::warning(this, tx("Автозапуск"),
+                             tx("Укажите NATS-хост"));
         return;
     }
 
@@ -1285,14 +1286,14 @@ void AdminPanel::onRemoteAutostartToggled(bool enabled)
                        20000,
                        &error)) {
         revert();
-        QMessageBox::warning(this, QStringLiteral("Автозапуск"),
-                             QStringLiteral("Не удалось изменить автозапуск на %1:\n%2")
+        QMessageBox::warning(this, tx("Автозапуск"),
+                             tx("Не удалось изменить автозапуск на %1:\n%2")
                                  .arg(host, error));
         return;
     }
 
     setToggleCaption(m_btnRemoteAutostart,
-                     QStringLiteral("Автозапуск системы на NATS-хосте"),
+                     tx("Автозапуск системы на NATS-хосте"),
                      enabled);
     ConnectionSettings cfg = networkSettings();
     cfg.save();
@@ -1301,7 +1302,7 @@ void AdminPanel::onRemoteAutostartToggled(bool enabled)
 void AdminPanel::onShowCursorToggled(bool enabled)
 {
     ConnectionSettings::applyShowCursor(enabled);
-    setToggleCaption(m_btnShowCursor, QStringLiteral("Курсор мыши"), enabled);
+    setToggleCaption(m_btnShowCursor, tx("Курсор мыши"), enabled);
     ConnectionSettings cfg = networkSettings();
     cfg.save();
 }
@@ -1309,7 +1310,7 @@ void AdminPanel::onShowCursorToggled(bool enabled)
 void AdminPanel::onIgnoreLoadCellToggled(bool enabled)
 {
     setToggleCaption(m_btnIgnoreLoadCell,
-                     QStringLiteral("Игнорирование тензодатчика"),
+                     tx("Игнорирование тензодатчика"),
                      enabled);
     ConnectionSettings cfg = networkSettings();
     cfg.save();
@@ -1318,7 +1319,7 @@ void AdminPanel::onIgnoreLoadCellToggled(bool enabled)
 void AdminPanel::onIgnoreLaunchLocksToggled(bool enabled)
 {
     setToggleCaption(m_btnIgnoreLaunchLocks,
-                     QStringLiteral("Игнорировать блокировки запуска"),
+                     tx("Игнорировать блокировки запуска"),
                      enabled);
     ConnectionSettings cfg = networkSettings();
     cfg.save();
@@ -1329,14 +1330,14 @@ void AdminPanel::onApplyClicked()
     const ConnectionSettings cfg = networkSettings();
     if (cfg.natsHost.isEmpty() || cfg.plcHost.isEmpty()) {
         QMessageBox::warning(this,
-                             QStringLiteral("Сеть"),
-                             QStringLiteral("Укажите хост NATS и ПЛК"));
+                             tx("Сеть"),
+                             tx("Укажите хост NATS и ПЛК"));
         return;
     }
     if (m_arduino)
         m_arduino->sendThreshold(cfg.arduinoThreshold);
     if (m_plcLogTitle) {
-        m_plcLogTitle->setText(QStringLiteral("Буфер ПЛК (%1 int16, %2 байт)")
+        m_plcLogTitle->setText(tx("Буфер ПЛК (%1 int16, %2 байт)")
                                    .arg(cfg.plcStatusBytes / 2)
                                    .arg(cfg.plcStatusBytes));
     }
@@ -1362,7 +1363,7 @@ void AdminPanel::onRefreshClicked()
     if (!m_nats || !m_nats->isConnected()) {
         m_points.clear();
         fillTable();
-        m_tableStatus->setText(QStringLiteral("Нет соединения с NATS"));
+        m_tableStatus->setText(tx("Нет соединения с NATS"));
         m_tableStatus->setStyleSheet(QStringLiteral(
             "QLabel { font-family:\"Inter\",\"Segoe UI\",sans-serif;"
             " font-size:11px; color:#C43B3B; background:transparent; border:none; }"));
@@ -1370,7 +1371,7 @@ void AdminPanel::onRefreshClicked()
     }
 
     setBusy(true);
-    m_tableStatus->setText(QStringLiteral("Загрузка…"));
+    m_tableStatus->setText(tx("Загрузка…"));
     m_tableStatus->setStyleSheet(QStringLiteral(
         "QLabel { font-family:\"Inter\",\"Segoe UI\",sans-serif;"
         " font-size:11px; color:#3A3F4A; background:transparent; border:none; }"));
@@ -1410,8 +1411,8 @@ void AdminPanel::onPointsLoaded()
     clampPage();
     fillTable();
     m_tableStatus->setText(m_points.isEmpty()
-                               ? QStringLiteral("Нет точек в robot_points")
-                               : QStringLiteral("Точек: %1").arg(m_points.size()));
+                               ? tx("Нет точек в robot_points")
+                               : tx("Точек: %1").arg(m_points.size()));
     m_tableStatus->setStyleSheet(QStringLiteral(
         "QLabel { font-family:\"Inter\",\"Segoe UI\",sans-serif;"
         " font-size:11px; color:#3A3F4A; background:transparent; border:none; }"));
@@ -1442,7 +1443,7 @@ void AdminPanel::fillTable()
         m_table->setItem(i, 3, makeItem(formatCoord(p.z), Qt::AlignVCenter | Qt::AlignRight));
         m_table->setItem(i, 4, makeItem(formatCoord(p.r), Qt::AlignVCenter | Qt::AlignRight));
 
-        auto *btn = new QPushButton(QStringLiteral("Редактировать"));
+        auto *btn = new QPushButton(tx("Редактировать"));
         btn->setStyleSheet(QLatin1String(kCompactBtn));
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFocusPolicy(Qt::NoFocus);
@@ -1487,7 +1488,7 @@ void AdminPanel::updatePager()
 {
     const bool multi = m_points.size() > kPageSize;
     m_pager->setVisible(multi);
-    m_pageLabel->setText(QStringLiteral("Лист %1 / %2").arg(m_page + 1).arg(pageCount()));
+    m_pageLabel->setText(tx("Лист %1 / %2").arg(m_page + 1).arg(pageCount()));
     m_btnPrevPage->setEnabled(multi && m_page > 0);
     m_btnNextPage->setEnabled(multi && m_page < pageCount() - 1);
 }
@@ -1635,7 +1636,7 @@ void AdminPanel::reconnectArduino()
     m_arduinoValue->setText(QStringLiteral("—"));
     m_arduinoHasValue = false;
     if (m_arduinoKg)
-        m_arduinoKg->setText(QStringLiteral("— кг"));
+        m_arduinoKg->setText(tx("— кг"));
     m_arduino->open(port);
     if (m_arduinoThreshold)
         m_arduino->sendThreshold(m_arduinoThreshold->value());
@@ -1646,16 +1647,16 @@ void AdminPanel::updateArduinoKgDisplay()
     if (!m_arduinoKg)
         return;
     if (!m_arduinoHasValue) {
-        m_arduinoKg->setText(QStringLiteral("— кг"));
+        m_arduinoKg->setText(tx("— кг"));
         return;
     }
     const double scale = m_arduinoUnitsPerKg ? m_arduinoUnitsPerKg->value() : 0.0;
     if (scale <= 0.0) {
-        m_arduinoKg->setText(QStringLiteral("— кг"));
+        m_arduinoKg->setText(tx("— кг"));
         return;
     }
     const double kg = static_cast<double>(m_arduinoLastRaw) / scale;
-    m_arduinoKg->setText(QStringLiteral("%1 кг").arg(kg, 0, 'f', 2));
+    m_arduinoKg->setText(tx("%1 кг").arg(kg, 0, 'f', 2));
 }
 
 void AdminPanel::updateArduinoCalibHint()
@@ -1664,12 +1665,12 @@ void AdminPanel::updateArduinoCalibHint()
         return;
     if (m_arduinoCalibPoints <= 0) {
         m_arduinoCalibHint->setText(
-            QStringLiteral("Укажите известный вес, нагрузите датчик и нажмите «Калибровать». "
+            tx("Укажите известный вес, нагрузите датчик и нажмите «Калибровать». "
                            "Повторите с другим весом для уточнения."));
         return;
     }
     m_arduinoCalibHint->setText(
-        QStringLiteral("Точек калибровки: %1 · среднее «отсчётов на кг» подставляется выше. "
+        tx("Точек калибровки: %1 · среднее «отсчётов на кг» подставляется выше. "
                        "«Сброс» вернёт значение до калибровки в этой сессии.")
             .arg(m_arduinoCalibPoints));
 }
@@ -1681,29 +1682,29 @@ void AdminPanel::onArduinoCalibrate()
     }
     if (!m_arduinoHasValue) {
         QMessageBox::warning(this,
-                             QStringLiteral("Калибровка"),
-                             QStringLiteral("Нет текущего значения с тензодатчика."));
+                             tx("Калибровка"),
+                             tx("Нет текущего значения с тензодатчика."));
         return;
     }
     const double knownKg = m_arduinoKnownKg->value();
     if (knownKg <= 0.0) {
         QMessageBox::warning(this,
-                             QStringLiteral("Калибровка"),
-                             QStringLiteral("Укажите вес больше нуля."));
+                             tx("Калибровка"),
+                             tx("Укажите вес больше нуля."));
         return;
     }
     if (m_arduinoLastRaw == 0) {
         QMessageBox::warning(this,
-                             QStringLiteral("Калибровка"),
-                             QStringLiteral("Сырое значение равно 0 — нагрузите датчик."));
+                             tx("Калибровка"),
+                             tx("Сырое значение равно 0 — нагрузите датчик."));
         return;
     }
 
     const double sample = static_cast<double>(m_arduinoLastRaw) / knownKg;
     if (!(sample > 0.0) || !qIsFinite(sample)) {
         QMessageBox::warning(this,
-                             QStringLiteral("Калибровка"),
-                             QStringLiteral("Не удалось вычислить масштаб по этой точке."));
+                             tx("Калибровка"),
+                             tx("Не удалось вычислить масштаб по этой точке."));
         return;
     }
 
@@ -1753,7 +1754,7 @@ void AdminPanel::onArduinoLinkChanged(bool linked, const QString &message)
         if (m_arduinoValue)
             m_arduinoValue->setText(QStringLiteral("—"));
         if (m_arduinoKg)
-            m_arduinoKg->setText(QStringLiteral("— кг"));
+            m_arduinoKg->setText(tx("— кг"));
     }
 }
 
@@ -1787,7 +1788,7 @@ void AdminPanel::fitPlcLogPanel()
 void AdminPanel::editPoint(const NatsClient::RobotPoint &point)
 {
     QDialog dlg(this);
-    dlg.setWindowTitle(QStringLiteral("Редактировать: %1").arg(point.name));
+    dlg.setWindowTitle(tx("Редактировать: %1").arg(point.name));
     dlg.setModal(true);
     dlg.setMinimumWidth(480);
     dlg.setStyleSheet(QStringLiteral("QDialog { background:#FFFFFF; }"));
@@ -1806,13 +1807,13 @@ void AdminPanel::editPoint(const NatsClient::RobotPoint &point)
     form->addRow(QStringLiteral("Z"), zSpin);
     form->addRow(QStringLiteral("R"), rSpin);
 
-    auto *btnUseCurrent = new QPushButton(QStringLiteral("Заменить на текущую позицию"), &dlg);
+    auto *btnUseCurrent = new QPushButton(tx("Заменить на текущую позицию"), &dlg);
     btnUseCurrent->setStyleSheet(QLatin1String(kSecondaryBtn));
     btnUseCurrent->setCursor(Qt::PointingHandCursor);
     btnUseCurrent->setFocusPolicy(Qt::NoFocus);
     btnUseCurrent->setEnabled(m_poseKnown);
 
-    auto *btnSave = new QPushButton(QStringLiteral("Сохранить"), &dlg);
+    auto *btnSave = new QPushButton(tx("Сохранить"), &dlg);
     btnSave->setStyleSheet(QLatin1String(kPrimaryBtn));
     btnSave->setCursor(Qt::PointingHandCursor);
     btnSave->setDefault(true);
@@ -1833,17 +1834,17 @@ void AdminPanel::editPoint(const NatsClient::RobotPoint &point)
 
     connect(btnUseCurrent, &QPushButton::clicked, &dlg, [this, xSpin, ySpin, zSpin, rSpin]() {
         if (!m_poseKnown) {
-            QMessageBox::warning(this, QStringLiteral("Текущая позиция"),
-                                 QStringLiteral("Нет данных о текущей позиции робота"));
+            QMessageBox::warning(this, tx("Текущая позиция"),
+                                 tx("Нет данных о текущей позиции робота"));
             return;
         }
 
         QMessageBox confirm(this);
         confirm.setIcon(QMessageBox::Question);
-        confirm.setWindowTitle(QStringLiteral("Текущая позиция"));
-        confirm.setText(QStringLiteral("Уверены?"));
+        confirm.setWindowTitle(tx("Текущая позиция"));
+        confirm.setText(tx("Уверены?"));
         confirm.setInformativeText(
-            QStringLiteral("Заменить координаты точки на текущую позицию?\n\n"
+            tx("Заменить координаты точки на текущую позицию?\n\n"
                            "X = %1\nY = %2\nZ = %3\nR = %4")
                 .arg(m_poseX, 0, 'f', 3)
                 .arg(m_poseY, 0, 'f', 3)
@@ -1851,8 +1852,8 @@ void AdminPanel::editPoint(const NatsClient::RobotPoint &point)
                 .arg(m_poseR, 0, 'f', 3));
         confirm.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
         confirm.setDefaultButton(QMessageBox::No);
-        confirm.setButtonText(QMessageBox::Yes, QStringLiteral("Да"));
-        confirm.setButtonText(QMessageBox::No, QStringLiteral("Нет"));
+        confirm.setButtonText(QMessageBox::Yes, tx("Да"));
+        confirm.setButtonText(QMessageBox::No, tx("Нет"));
         confirm.setStyleSheet(QStringLiteral(
             "QMessageBox, QDialog {"
             "  background:#FFFFFF;"
@@ -1897,12 +1898,12 @@ void AdminPanel::savePoint(const QString &kvKey, double x, double y, double z, d
     if (!m_nats || !m_nats->isConnected()) {
         QMessageBox::warning(this,
                              QStringLiteral("Robot Data Table"),
-                             QStringLiteral("Нет соединения с NATS"));
+                             tx("Нет соединения с NATS"));
         return;
     }
 
     setBusy(true);
-    m_tableStatus->setText(QStringLiteral("Сохранение…"));
+    m_tableStatus->setText(tx("Сохранение…"));
 
     NatsClient *nats = m_nats;
     m_saveWatcher->setFuture(QtConcurrent::run([nats, kvKey, x, y, z, r]() -> QString {
@@ -1925,7 +1926,7 @@ void AdminPanel::onPointSaved()
             "QLabel { font-family:\"Inter\",\"Segoe UI\",sans-serif;"
             " font-size:11px; color:#C43B3B; background:transparent; border:none; }"));
         QMessageBox::warning(this, QStringLiteral("Robot Data Table"),
-                             QStringLiteral("Не удалось сохранить точку:\n%1").arg(err));
+                             tx("Не удалось сохранить точку:\n%1").arg(err));
         return;
     }
 
@@ -1966,12 +1967,12 @@ void AdminPanel::refreshPlcBufferLog()
         return;
 
     if (!m_plc) {
-        m_plcBufferStatus->setText(QStringLiteral("ПЛК-клиент не подключён"));
+        m_plcBufferStatus->setText(tx("ПЛК-клиент не подключён"));
         return;
     }
 
     if (!m_plc->isOk()) {
-        m_plcBufferStatus->setText(QStringLiteral("Нет свежего кадра от ПЛК"));
+        m_plcBufferStatus->setText(tx("Нет свежего кадра от ПЛК"));
         return;
     }
 
@@ -1997,10 +1998,10 @@ void AdminPanel::updateMotionPowerButton()
     if (!m_btnMotionPower)
         return;
     if (m_motionRunning) {
-        m_btnMotionPower->setText(QStringLiteral("Стоп"));
+        m_btnMotionPower->setText(tx("Стоп"));
         m_btnMotionPower->setStyleSheet(QLatin1String(kPowerOnBtn));
     } else {
-        m_btnMotionPower->setText(QStringLiteral("Старт"));
+        m_btnMotionPower->setText(tx("Старт"));
         m_btnMotionPower->setStyleSheet(QLatin1String(kPowerOffBtn));
     }
     for (QPushButton *btn : m_jogButtons)
@@ -2027,8 +2028,8 @@ void AdminPanel::onMotionPose(double x, double y, double z, double r, bool runni
 void AdminPanel::onMotionPowerClicked()
 {
     if (!m_nats || !m_nats->isConnected()) {
-        QMessageBox::warning(this, QStringLiteral("Управление"),
-                             QStringLiteral("Нет соединения с NATS"));
+        QMessageBox::warning(this, tx("Управление"),
+                             tx("Нет соединения с NATS"));
         return;
     }
 
@@ -2050,8 +2051,8 @@ void AdminPanel::sendMoveOffset(double x, double y, double z, double r)
     if (!m_motionRunning)
         return;
     if (!m_nats || !m_nats->isConnected()) {
-        QMessageBox::warning(this, QStringLiteral("Управление"),
-                             QStringLiteral("Нет соединения с NATS"));
+        QMessageBox::warning(this, tx("Управление"),
+                             tx("Нет соединения с NATS"));
         return;
     }
 

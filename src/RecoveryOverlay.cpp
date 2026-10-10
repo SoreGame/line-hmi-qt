@@ -1,4 +1,5 @@
 #include "RecoveryOverlay.h"
+#include "Texts.h"
 
 #include "NatsClient.h"
 
@@ -66,19 +67,19 @@ RecoveryOverlay::RecoveryOverlay(NatsClient *nats, const QString &exitScript, bo
     cardLayout->setContentsMargins(36, 32, 36, 32);
     cardLayout->setSpacing(16);
 
-    auto *title = new QLabel(QStringLiteral("Восстановление"), card);
+    auto *title = new QLabel(tx("Восстановление"), card);
     title->setStyleSheet(QStringLiteral(
         "color:#1F2126; font-family:\"Inter\",\"Segoe UI\",sans-serif;"
         " font-size:28px; font-weight:700; background:transparent;"));
     cardLayout->addWidget(title);
 
-    auto *subtitle = new QLabel(QStringLiteral("После аварийного стопа"), card);
+    auto *subtitle = new QLabel(tx("После аварийного стопа"), card);
     subtitle->setStyleSheet(QStringLiteral(
         "color:#737880; font-family:\"Inter\",\"Segoe UI\",sans-serif;"
         " font-size:15px; font-weight:600; background:transparent;"));
     cardLayout->addWidget(subtitle);
 
-    m_status = new QLabel(QStringLiteral("Выполните пункты и нажмите «Выход из e-stop»"), card);
+    m_status = new QLabel(tx("Выполните пункты и нажмите «Выход из e-stop»"), card);
     m_status->setWordWrap(true);
     m_status->setStyleSheet(QStringLiteral(
         "color:#1F2126; font-family:\"Inter\",\"Segoe UI\",sans-serif;"
@@ -91,7 +92,7 @@ RecoveryOverlay::RecoveryOverlay(NatsClient *nats, const QString &exitScript, bo
     auto *tasks = new QVBoxLayout();
     tasks->setSpacing(12);
     for (const char *text : kChecklistItems) {
-        auto *rowLabel = new QLabel(QString::fromUtf8(text), card);
+        auto *rowLabel = new QLabel(tx(text), card);
         rowLabel->setWordWrap(true);
         rowLabel->setMinimumHeight(64);
         rowLabel->setStyleSheet(QString::fromUtf8(kItemStyle));
@@ -103,14 +104,14 @@ RecoveryOverlay::RecoveryOverlay(NatsClient *nats, const QString &exitScript, bo
     auto *actions = new QVBoxLayout();
     actions->setSpacing(12);
 
-    m_btnNext = new QPushButton(QStringLiteral("Выход из e-stop"), card);
+    m_btnNext = new QPushButton(tx("Выход из e-stop"), card);
     m_btnNext->setCursor(Qt::PointingHandCursor);
     m_btnNext->setFocusPolicy(Qt::NoFocus);
     m_btnNext->setFixedSize(300, 68);
     m_btnNext->setStyleSheet(QString::fromUtf8(kBtnNext));
     actions->addWidget(m_btnNext);
 
-    m_btnStart = new QPushButton(QStringLiteral("Старт без восстановления"), card);
+    m_btnStart = new QPushButton(tx("Старт без восстановления"), card);
     m_btnStart->setCursor(Qt::PointingHandCursor);
     m_btnStart->setFocusPolicy(Qt::NoFocus);
     m_btnStart->setFixedSize(300, 68);
@@ -156,10 +157,10 @@ void RecoveryOverlay::onNextClicked()
         return;
 
     if (m_estopHeld && m_estopHeld()) {
-        m_status->setText(QStringLiteral("Физически отожмите кнопку e-stop"));
-        emit note(Note::Warn, QStringLiteral("Выход из e-stop: грибок зажат · физически отожмите кнопку"));
+        m_status->setText(tx("Физически отожмите кнопку e-stop"));
+        emit note(Note::Warn, tx("Выход из e-stop: грибок зажат · физически отожмите кнопку"));
         QMessageBox::warning(this, QStringLiteral("E-stop"),
-                             QStringLiteral("Физически отожмите кнопку"));
+                             tx("Физически отожмите кнопку"));
         return;
     }
 
@@ -168,22 +169,22 @@ void RecoveryOverlay::onNextClicked()
 
     const auto answer = QMessageBox::question(
         this,
-        QStringLiteral("Подтверждение"),
-        QStringLiteral("Если вы все выполнили, отойдите от робота, дальше он "
+        tx("Подтверждение"),
+        tx("Если вы все выполнили, отойдите от робота, дальше он "
                        "начнет движение — выход в стартовое положение"),
         QMessageBox::Yes | QMessageBox::No,
         QMessageBox::No);
 
     if (answer != QMessageBox::Yes) {
         m_phase = Phase::Checklist;
-        m_status->setText(QStringLiteral("Выполните пункты и нажмите «Выход из e-stop»"));
+        m_status->setText(tx("Выполните пункты и нажмите «Выход из e-stop»"));
         refreshButtons();
         return;
     }
     if (m_estopHeld && m_estopHeld()) {
         m_phase = Phase::Checklist;
-        m_status->setText(QStringLiteral("Физически отожмите кнопку e-stop"));
-        emit note(Note::Warn, QStringLiteral("Выход из e-stop: грибок зажат · физически отожмите кнопку"));
+        m_status->setText(tx("Физически отожмите кнопку e-stop"));
+        emit note(Note::Warn, tx("Выход из e-stop: грибок зажат · физически отожмите кнопку"));
         refreshButtons();
         return;
     }
@@ -196,9 +197,9 @@ void RecoveryOverlay::startExitScript()
     m_phase = Phase::Running;
     m_waitFilename = m_exitScript;
     m_sawScriptRunning = false;
-    m_status->setText(QStringLiteral("Запуск выхода в стартовое положение…"));
+    m_status->setText(tx("Запуск выхода в стартовое положение…"));
     refreshButtons();
-    emit note(Note::Info, QStringLiteral("Восстановление · запуск '%1'")
+    emit note(Note::Info, tx("Восстановление · запуск '%1'")
                               .arg(m_waitFilename));
 
     auto gate = m_gate;
@@ -213,15 +214,15 @@ void RecoveryOverlay::startExitScript()
         if (epoch->load(std::memory_order_relaxed) != op)
             return QStringLiteral("cancelled");
         if (!nats)
-            return QStringLiteral("Нет соединения с NATS");
+            return tx("Нет соединения с NATS");
         QString code;
         QString err;
         if (!nats->fetchScriptCode(filename, &code, &err)) {
-            return QStringLiteral("Не удалось получить скрипт '%1' из NATS KV: %2")
+            return tx("Не удалось получить скрипт '%1' из NATS KV: %2")
                 .arg(filename, err);
         }
         if (!nats->publishExecCommand(filename, code, 1, &err)) {
-            return QStringLiteral("Не удалось отправить команду запуска: %1").arg(err);
+            return tx("Не удалось отправить команду запуска: %1").arg(err);
         }
         return QString();
     });
@@ -243,7 +244,7 @@ void RecoveryOverlay::startExitScript()
             refreshButtons();
             return;
         }
-        m_status->setText(QStringLiteral("Робот выходит в стартовое положение…"));
+        m_status->setText(tx("Робот выходит в стартовое положение…"));
     });
     m_scriptWatcher->setFuture(future);
 }
@@ -266,9 +267,9 @@ void RecoveryOverlay::onScriptStatus(bool running, bool completed, const QString
     if (completed) {
         m_phase = Phase::Done;
         m_waitFilename.clear();
-        m_status->setText(QStringLiteral("Выход завершён"));
+        m_status->setText(tx("Выход завершён"));
         refreshButtons();
-        emit note(Note::Ok, QStringLiteral("Восстановление · '%1' завершён")
+        emit note(Note::Ok, tx("Восстановление · '%1' завершён")
                                 .arg(m_exitScript));
         emit finished();
         return;
@@ -276,8 +277,8 @@ void RecoveryOverlay::onScriptStatus(bool running, bool completed, const QString
 
     m_phase = Phase::Checklist;
     m_waitFilename.clear();
-    m_status->setText(QStringLiteral("Выход прерван. Выполните пункты и нажмите «Выход из e-stop»"));
-    emit note(Note::Err, QStringLiteral("Восстановление · '%1' не завершился")
+    m_status->setText(tx("Выход прерван. Выполните пункты и нажмите «Выход из e-stop»"));
+    emit note(Note::Err, tx("Восстановление · '%1' не завершился")
                              .arg(m_exitScript));
     refreshButtons();
 }
@@ -286,7 +287,7 @@ void RecoveryOverlay::abortExitToChecklist()
 {
     if (m_phase == Phase::Checklist || m_phase == Phase::Done)
         return;
-    publishStopAndReset(QStringLiteral("Повторный аварийный стоп · чек-лист снова"));
+    publishStopAndReset(tx("Повторный аварийный стоп · чек-лист снова"));
 }
 
 void RecoveryOverlay::publishStopAndReset(const QString &message)
@@ -298,7 +299,7 @@ void RecoveryOverlay::publishStopAndReset(const QString &message)
     m_waitFilename.clear();
     m_sawScriptRunning = false;
     m_phase = Phase::Checklist;
-    m_status->setText(QStringLiteral("Выполните пункты и нажмите «Выход из e-stop»"));
+    m_status->setText(tx("Выполните пункты и нажмите «Выход из e-stop»"));
     refreshButtons();
 
     auto gate = m_gate;
@@ -308,7 +309,7 @@ void RecoveryOverlay::publishStopAndReset(const QString &message)
         std::lock_guard<std::mutex> lock(*gate);
         epoch->fetch_add(1, std::memory_order_relaxed);
         if (!nats)
-            return QStringLiteral("Нет соединения с NATS");
+            return tx("Нет соединения с NATS");
         QString err;
         if (!nats->publishStopCommand(&err))
             return err;
@@ -323,7 +324,7 @@ void RecoveryOverlay::publishStopAndReset(const QString &message)
     connect(m_stopWatcher, &QFutureWatcher<QString>::finished, this, [this, message]() {
         const QString error = m_stopWatcher->result();
         if (!error.isEmpty()) {
-            emit note(Note::Err, QStringLiteral("Стоп при восстановлении: %1").arg(error));
+            emit note(Note::Err, tx("Стоп при восстановлении: %1").arg(error));
             return;
         }
         emit note(Note::Warn, message);

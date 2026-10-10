@@ -1,4 +1,5 @@
 #include "NatsClient.h"
+#include "Texts.h"
 
 #include <QDateTime>
 #include <QJsonDocument>
@@ -88,7 +89,7 @@ bool parseKvJson(kvEntry *entry, QJsonObject *objOut, QString *errorOut)
     const QJsonDocument doc = QJsonDocument::fromJson(json, &parseErr);
     if (parseErr.error != QJsonParseError::NoError || !doc.isObject()) {
         if (errorOut)
-            *errorOut = QStringLiteral("Некорректный JSON точки: ") + parseErr.errorString();
+            *errorOut = tx("Некорректный JSON точки: ") + parseErr.errorString();
         return false;
     }
     *objOut = doc.object();
@@ -164,7 +165,7 @@ bool NatsClient::openKvBucket(const QString &bucketName, QString *errorOut)
 {
     if (!m_conn) {
         if (errorOut)
-            *errorOut = QStringLiteral("Нет соединения с NATS");
+            *errorOut = tx("Нет соединения с NATS");
         return false;
     }
 
@@ -197,7 +198,7 @@ bool NatsClient::fetchScriptCode(const QString &filename, QString *codeOut, QStr
 {
     if (!m_kv) {
         if (errorOut)
-            *errorOut = QStringLiteral("KV bucket не открыт");
+            *errorOut = tx("KV bucket не открыт");
         return false;
     }
 
@@ -218,14 +219,14 @@ bool NatsClient::fetchScriptCode(const QString &filename, QString *codeOut, QStr
     const QJsonDocument doc = QJsonDocument::fromJson(json, &parseErr);
     if (parseErr.error != QJsonParseError::NoError || !doc.isObject()) {
         if (errorOut)
-            *errorOut = QStringLiteral("Некорректный JSON записи скрипта: ") + parseErr.errorString();
+            *errorOut = tx("Некорректный JSON записи скрипта: ") + parseErr.errorString();
         return false;
     }
 
     const QJsonObject obj = doc.object();
     if (!obj.contains(QStringLiteral("code")) || !obj.value(QStringLiteral("code")).isString()) {
         if (errorOut)
-            *errorOut = QStringLiteral("В записи скрипта нет строкового поля 'code'");
+            *errorOut = tx("В записи скрипта нет строкового поля 'code'");
         return false;
     }
 
@@ -237,7 +238,7 @@ bool NatsClient::publishJson(const char *subject, const QJsonObject &obj, QStrin
 {
     if (!m_conn) {
         if (errorOut)
-            *errorOut = QStringLiteral("Нет соединения с NATS");
+            *errorOut = tx("Нет соединения с NATS");
         return false;
     }
 
@@ -332,7 +333,7 @@ bool NatsClient::fetchScriptProgressLine(int *lineOut, QString *errorOut) const
 {
     if (!m_kv) {
         if (errorOut)
-            *errorOut = QStringLiteral("KV bucket не открыт");
+            *errorOut = tx("KV bucket не открыт");
         return false;
     }
     if (!lineOut)
@@ -353,7 +354,7 @@ bool NatsClient::fetchScriptProgressLine(int *lineOut, QString *errorOut) const
     const QJsonDocument doc = QJsonDocument::fromJson(json, &parseErr);
     if (parseErr.error != QJsonParseError::NoError || !doc.isObject()) {
         if (errorOut)
-            *errorOut = QStringLiteral("Некорректный JSON script.progress: ") + parseErr.errorString();
+            *errorOut = tx("Некорректный JSON script.progress: ") + parseErr.errorString();
         return false;
     }
 
@@ -361,7 +362,7 @@ bool NatsClient::fetchScriptProgressLine(int *lineOut, QString *errorOut) const
     const int line = lineVal.toInt(0);
     if (line < 1) {
         if (errorOut)
-            *errorOut = QStringLiteral("В script.progress нет валидной строки");
+            *errorOut = tx("В script.progress нет валидной строки");
         return false;
     }
 
@@ -373,7 +374,7 @@ bool NatsClient::openRobotPointsKv(QString *errorOut)
 {
     if (!m_conn) {
         if (errorOut)
-            *errorOut = QStringLiteral("Нет соединения с NATS");
+            *errorOut = tx("Нет соединения с NATS");
         return false;
     }
     if (m_robotPointsKv)
@@ -407,7 +408,7 @@ bool NatsClient::fetchRobotPoints(QVector<RobotPoint> *out, QString *errorOut) c
 
     if (!m_robotPointsKv) {
         if (errorOut)
-            *errorOut = QStringLiteral("KV bucket robot_points не открыт");
+            *errorOut = tx("KV bucket robot_points не открыт");
         return false;
     }
 
@@ -455,12 +456,12 @@ bool NatsClient::saveRobotPointPose(const QString &kvKey, double x, double y, do
 {
     if (!m_robotPointsKv) {
         if (errorOut)
-            *errorOut = QStringLiteral("KV bucket robot_points не открыт");
+            *errorOut = tx("KV bucket robot_points не открыт");
         return false;
     }
     if (kvKey.isEmpty()) {
         if (errorOut)
-            *errorOut = QStringLiteral("Пустой ключ точки");
+            *errorOut = tx("Пустой ключ точки");
         return false;
     }
 
@@ -499,7 +500,7 @@ bool NatsClient::startModuleWatch(QString *errorOut)
 
     if (!m_conn) {
         if (errorOut)
-            *errorOut = QStringLiteral("Нет соединения с NATS");
+            *errorOut = tx("Нет соединения с NATS");
         return false;
     }
 

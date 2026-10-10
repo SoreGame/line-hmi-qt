@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "ConnectionSettings.h"
+#include "Texts.h"
 
 #include <QApplication>
 
@@ -10,6 +11,7 @@ int main(int argc, char *argv[])
     QApplication::setOrganizationName(QStringLiteral("SCARA"));
 
     const ConnectionSettings cfg = ConnectionSettings::load();
+    Texts::load(ConnectionSettings::configFilePath());
     ConnectionSettings::applyShowCursor(cfg.showCursor);
 
     MainWindow window;

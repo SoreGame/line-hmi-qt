@@ -1,4 +1,5 @@
 #include "ArduinoLink.h"
+#include "Texts.h"
 
 #include <QElapsedTimer>
 #include <QTimer>
@@ -42,13 +43,13 @@ bool ArduinoLink::open(const QString &portName)
 
     const QString name = portName.trimmed();
     if (name.isEmpty()) {
-        setLinked(false, QStringLiteral("Тензодатчик не подключен"));
+        setLinked(false, tx("Тензодатчик не подключен"));
         return false;
     }
 
 #if !defined(LINE_HMI_HAS_SERIALPORT)
     Q_UNUSED(name);
-    setLinked(false, QStringLiteral("Тензодатчик не подключен"));
+    setLinked(false, tx("Тензодатчик не подключен"));
     return false;
 #else
     m_port->setPortName(name);
@@ -59,14 +60,14 @@ bool ArduinoLink::open(const QString &portName)
     m_port->setFlowControl(QSerialPort::NoFlowControl);
 
     if (!m_port->open(QIODevice::ReadWrite)) {
-        setLinked(false, QStringLiteral("Тензодатчик не подключен"));
+        setLinked(false, tx("Тензодатчик не подключен"));
         return false;
     }
 
     m_rx.clear();
     m_activity.invalidate();
     m_watchdog->start();
-    setLinked(false, QStringLiteral("Ожидание данных…"));
+    setLinked(false, tx("Ожидание данных…"));
 
     if (m_hasThreshold)
         sendThreshold(m_lastThreshold);
@@ -87,7 +88,7 @@ void ArduinoLink::close()
 
     m_rx.clear();
     m_activity.invalidate();
-    setLinked(false, QStringLiteral("Тензодатчик не подключен"));
+    setLinked(false, tx("Тензодатчик не подключен"));
 }
 
 bool ArduinoLink::isOpen() const
@@ -178,14 +179,14 @@ void ArduinoLink::processLine(const QByteArray &line)
         const qint32 value = clampValue(static_cast<qint32>(
             qBound(static_cast<qint64>(kMinValue), raw, static_cast<qint64>(kMaxValue))));
         m_activity.restart();
-        setLinked(true, QStringLiteral("Подключено"));
+        setLinked(true, tx("Подключено"));
         emit valueChanged(value);
         return;
     }
 
     if (trimmed.startsWith("OK ")) {
         m_activity.restart();
-        setLinked(true, QStringLiteral("Подключено"));
+        setLinked(true, tx("Подключено"));
     }
 }
 
@@ -193,7 +194,7 @@ void ArduinoLink::onWatchdog()
 {
 #if defined(LINE_HMI_HAS_SERIALPORT)
     if (!m_port || !m_port->isOpen()) {
-        setLinked(false, QStringLiteral("Тензодатчик не подключен"));
+        setLinked(false, tx("Тензодатчик не подключен"));
         return;
     }
 
@@ -201,9 +202,9 @@ void ArduinoLink::onWatchdog()
         return;
 
     if (m_activity.elapsed() > kStaleMs)
-        setLinked(false, QStringLiteral("Тензодатчик не подключен"));
+        setLinked(false, tx("Тензодатчик не подключен"));
 #else
-    setLinked(false, QStringLiteral("Тензодатчик не подключен"));
+    setLinked(false, tx("Тензодатчик не подключен"));
 #endif
 }
 
@@ -218,7 +219,7 @@ void ArduinoLink::onErrorOccurred()
     m_watchdog->stop();
     m_rx.clear();
     m_activity.invalidate();
-    setLinked(false, QStringLiteral("Тензодатчик не подключен"));
+    setLinked(false, tx("Тензодатчик не подключен"));
 }
 
 void ArduinoLink::setLinked(bool linked, const QString &message)

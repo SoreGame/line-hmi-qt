@@ -1,4 +1,5 @@
 #include "PrepOverlay.h"
+#include "Texts.h"
 
 #include "NatsClient.h"
 #include "PlcClient.h"
@@ -18,7 +19,7 @@ namespace {
 
 const char *kTaskNames[] = {
     "Заполняем ламели",
-    "Заполняем гуси",
+    "Заполняем держатели ламелей",
     "Робот готов",
     "Сварка готова",
 };
@@ -96,15 +97,15 @@ PrepOverlay::PrepOverlay(Program program, const QString &initFilename, int count
     cardLayout->setContentsMargins(36, 32, 36, 32);
     cardLayout->setSpacing(16);
 
-    auto *title = new QLabel(QStringLiteral("Список задач"), card);
+    auto *title = new QLabel(tx("Список задач"), card);
     title->setStyleSheet(QStringLiteral(
         "color:#1F2126; font-family:\"Inter\",\"Segoe UI\",sans-serif;"
         " font-size:28px; font-weight:700; background:transparent;"));
     cardLayout->addWidget(title);
 
     const QString programName = QStringLiteral("%1 · %2")
-                                    .arg(program == Program::Detail1 ? QStringLiteral("Деталь 1")
-                                                                     : QStringLiteral("Деталь 2"),
+                                    .arg(program == Program::Detail1 ? tx("Деталь 1")
+                                                                     : tx("Деталь 2"),
                                          m_initFilename);
     auto *subtitle = new QLabel(programName, card);
     subtitle->setStyleSheet(QStringLiteral(
@@ -112,7 +113,7 @@ PrepOverlay::PrepOverlay(Program program, const QString &initFilename, int count
         " font-size:15px; font-weight:600; background:transparent;"));
     cardLayout->addWidget(subtitle);
 
-    m_status = new QLabel(QStringLiteral("Предподготовка запущена"), card);
+    m_status = new QLabel(tx("Предподготовка запущена"), card);
     m_status->setWordWrap(true);
     m_status->setStyleSheet(QStringLiteral(
         "color:#1F2126; font-family:\"Inter\",\"Segoe UI\",sans-serif;"
@@ -143,10 +144,10 @@ PrepOverlay::PrepOverlay(Program program, const QString &initFilename, int count
     m_countdownLabel->setStyleSheet(QString::fromUtf8(kCountdownStyle));
     m_countdownLabel->hide();
 
-    m_btnSkip = new QPushButton(QStringLiteral("Пропустить"), card);
+    m_btnSkip = new QPushButton(tx("Пропустить"), card);
     m_btnSkip->setVisible(allowSkip);
-    m_btnStop = new QPushButton(QStringLiteral("Стоп"), card);
-    m_btnEmergency = new QPushButton(QStringLiteral("Экстренная остановка"), card);
+    m_btnStop = new QPushButton(tx("Стоп"), card);
+    m_btnEmergency = new QPushButton(tx("Экстренная остановка"), card);
     for (QPushButton *button : {m_btnSkip, m_btnStop, m_btnEmergency}) {
         button->setCursor(Qt::PointingHandCursor);
         button->setFocusPolicy(Qt::NoFocus);
@@ -204,7 +205,7 @@ void PrepOverlay::setTask(int index, TaskState state)
     if (!m_rows[index])
         return;
 
-    const QString label = QString::fromUtf8(kTaskNames[index]);
+    const QString label = tx(kTaskNames[index]);
     const char *style = kStylePending;
     QString mark = QStringLiteral("●  ");
     switch (state) {
@@ -245,7 +246,7 @@ void PrepOverlay::beginCountdown()
 {
     m_phase = Phase::Countdown;
     m_countdownLeft = m_countdownSec;
-    emit note(Note::Info, QStringLiteral("Инициализация завершена · запуск основной программы через %1 с")
+    emit note(Note::Info, tx("Инициализация завершена · запуск основной программы через %1 с")
                               .arg(m_countdownSec));
     refreshButtons();
     if (m_countdownLeft <= 0) {
@@ -267,9 +268,9 @@ void PrepOverlay::onCountdownTick()
         finishCountdown();
         return;
     }
-    m_status->setText(QStringLiteral("Все задачи выполнены — запуск основной программы через %1 с")
+    m_status->setText(tx("Все задачи выполнены — запуск основной программы через %1 с")
                           .arg(m_countdownLeft));
-    m_countdownLabel->setText(QStringLiteral("Старт через %1").arg(m_countdownLeft));
+    m_countdownLabel->setText(tx("Старт через %1").arg(m_countdownLeft));
     --m_countdownLeft;
 }
 
@@ -279,7 +280,7 @@ void PrepOverlay::finishCountdown()
     if (m_phase != Phase::Countdown)
         return;
     m_phase = Phase::Exit;
-    m_status->setText(QStringLiteral("Запуск основной программы"));
+    m_status->setText(tx("Запуск основной программы"));
     refreshButtons();
     emit startMainRequested();
 }
@@ -319,7 +320,7 @@ void PrepOverlay::skipPreparation()
     }
     // Запущенный init-скрипт behaviour прервёт сам при exec основной программы.
     m_waitFilename.clear();
-    emit note(Note::Warn, QStringLiteral("Инициализация пропущена оператором"));
+    emit note(Note::Warn, tx("Инициализация пропущена оператором"));
     beginCountdown();
 }
 
@@ -335,7 +336,7 @@ void PrepOverlay::onPlcState()
     if (m_tasks[0] != TaskState::Done && m_tasks[0] != TaskState::Error) {
         if (lamellae) {
             setTask(0, TaskState::Done);
-            emit note(Note::Ok, QStringLiteral("Ламели заполнены"));
+            emit note(Note::Ok, tx("Ламели заполнены"));
         } else {
             setTask(0, TaskState::Active);
         }
@@ -343,7 +344,7 @@ void PrepOverlay::onPlcState()
     if (m_tasks[1] != TaskState::Done && m_tasks[1] != TaskState::Error) {
         if (geese) {
             setTask(1, TaskState::Done);
-            emit note(Note::Ok, QStringLiteral("Гуси заполнены"));
+            emit note(Note::Ok, tx("Держатели ламелей заполнены"));
         } else {
             setTask(1, TaskState::Active);
         }
@@ -351,7 +352,7 @@ void PrepOverlay::onPlcState()
     if (m_tasks[3] != TaskState::Done && m_tasks[3] != TaskState::Error) {
         if (weld) {
             setTask(3, TaskState::Done);
-            emit note(Note::Ok, QStringLiteral("Сварка готова"));
+            emit note(Note::Ok, tx("Сварка готова"));
         } else {
             setTask(3, TaskState::Active);
         }
@@ -372,9 +373,9 @@ void PrepOverlay::considerLaunchPreprog()
     setTask(2, TaskState::Active);
     m_waitFilename = m_initFilename;
     m_sawScriptRunning = false;
-    m_status->setText(QStringLiteral("Запуск подпрограммы %1").arg(m_waitFilename));
+    m_status->setText(tx("Запуск подпрограммы %1").arg(m_waitFilename));
     emit note(Note::Info,
-              QStringLiteral("Ламели и гуси готовы · запуск '%1'").arg(m_waitFilename));
+              tx("Ламели и держатели ламелей готовы · запуск '%1'").arg(m_waitFilename));
     publishScript(m_waitFilename, QString(), /*fromKv=*/true);
 }
 
@@ -392,20 +393,20 @@ void PrepOverlay::publishScript(const QString &filename, const QString &inlineCo
             if (epoch->load(std::memory_order_relaxed) != op)
                 return QStringLiteral("cancelled");
             if (!nats) {
-                return QStringLiteral("Нет соединения с NATS");
+                return tx("Нет соединения с NATS");
             }
             QString script = code;
             QString err;
             if (fromKv) {
                 if (!nats->fetchScriptCode(filename, &script, &err)) {
-                    return QStringLiteral("Не удалось получить скрипт '%1' из NATS KV: %2")
+                    return tx("Не удалось получить скрипт '%1' из NATS KV: %2")
                         .arg(filename, err);
                 }
             }
             if (epoch->load(std::memory_order_relaxed) != op)
                 return QStringLiteral("cancelled");
             if (!nats->publishExecCommand(filename, script, 1, &err))
-                return QStringLiteral("Не удалось отправить команду запуска: %1").arg(err);
+                return tx("Не удалось отправить команду запуска: %1").arg(err);
             return QString();
         });
 
@@ -423,7 +424,7 @@ void PrepOverlay::publishScript(const QString &filename, const QString &inlineCo
 
         if (m_phase == Phase::Stopping) {
             emit note(Note::Err, error);
-            powerOffRobot(QStringLiteral("Стоп · '%1' не запущена, приводы выключены").arg(filename),
+            powerOffRobot(tx("Стоп · '%1' не запущена, приводы выключены").arg(filename),
                           Note::Warn);
             return;
         }
@@ -447,7 +448,7 @@ void PrepOverlay::onScriptStatus(bool running, bool completed, const QString &fi
     if (running) {
         m_sawScriptRunning = true;
         if (m_status && m_phase == Phase::Running)
-            m_status->setText(QStringLiteral("Подпрограмма выполняется"));
+            m_status->setText(tx("Подпрограмма выполняется"));
     }
     if (running || (!completed && !m_sawScriptRunning))
         return;
@@ -456,12 +457,12 @@ void PrepOverlay::onScriptStatus(bool running, bool completed, const QString &fi
 
     if (m_phase == Phase::Stopping) {
         if (completed) {
-            powerOffRobot(QStringLiteral("Стоп · '%1' завершён, робот в последней точке, "
+            powerOffRobot(tx("Стоп · '%1' завершён, робот в последней точке, "
                                          "приводы выключены. ПЛК работает")
                               .arg(filename),
                           Note::Ok);
         } else {
-            powerOffRobot(QStringLiteral("Стоп · '%1' прервана, приводы выключены").arg(filename),
+            powerOffRobot(tx("Стоп · '%1' прервана, приводы выключены").arg(filename),
                           Note::Warn);
         }
         return;
@@ -469,15 +470,15 @@ void PrepOverlay::onScriptStatus(bool running, bool completed, const QString &fi
 
     if (completed) {
         setTask(2, TaskState::Done);
-        m_status->setText(QStringLiteral("Подпрограмма завершена, робот в точке"));
-        emit note(Note::Ok, QStringLiteral("Робот готов · '%1' завершён").arg(filename));
+        m_status->setText(tx("Подпрограмма завершена, робот в точке"));
+        emit note(Note::Ok, tx("Робот готов · '%1' завершён").arg(filename));
         refreshButtons();
         return;
     }
 
     setTask(2, TaskState::Error);
-    m_status->setText(QStringLiteral("Подпрограмма остановилась с ошибкой"));
-    emit note(Note::Err, QStringLiteral("Подпрограмма '%1' не завершилась").arg(filename));
+    m_status->setText(tx("Подпрограмма остановилась с ошибкой"));
+    emit note(Note::Err, tx("Подпрограмма '%1' не завершилась").arg(filename));
     refreshButtons();
 }
 
@@ -492,18 +493,18 @@ void PrepOverlay::beginSmoothStop()
             std::lock_guard<std::mutex> lock(*m_gate);
             m_epoch->fetch_add(1, std::memory_order_relaxed);
         }
-        m_status->setText(QStringLiteral("Стоп: выключение приводов, ПЛК не выключается"));
-        powerOffRobot(QStringLiteral("Стоп · предподготовка прервана, приводы выключены. ПЛК работает"),
+        m_status->setText(tx("Стоп: выключение приводов, ПЛК не выключается"));
+        powerOffRobot(tx("Стоп · предподготовка прервана, приводы выключены. ПЛК работает"),
                       Note::Warn);
         return;
     }
 
     // Подпрограмму доигрываем: робот остаётся в её последней точке.
     m_phase = Phase::Stopping;
-    m_status->setText(QStringLiteral("Стоп: дожидаемся завершения '%1', робот останется в последней точке")
+    m_status->setText(tx("Стоп: дожидаемся завершения '%1', робот останется в последней точке")
                           .arg(m_waitFilename));
     refreshButtons();
-    emit note(Note::Info, QStringLiteral("Стоп · дожидаемся завершения '%1', ПЛК остаётся включён")
+    emit note(Note::Info, tx("Стоп · дожидаемся завершения '%1', ПЛК остаётся включён")
                               .arg(m_waitFilename));
 }
 
@@ -515,7 +516,7 @@ void PrepOverlay::beginEmergencyStop()
     stopCountdown();
     m_phase = Phase::Exit;
     m_waitFilename.clear();
-    m_status->setText(QStringLiteral("Экстренная остановка"));
+    m_status->setText(tx("Экстренная остановка"));
     refreshButtons();
 
     auto gate = m_gate;
@@ -525,7 +526,7 @@ void PrepOverlay::beginEmergencyStop()
         std::lock_guard<std::mutex> lock(*gate);
         epoch->fetch_add(1, std::memory_order_relaxed);
         if (!nats)
-            return QStringLiteral("Нет соединения с NATS");
+            return tx("Нет соединения с NATS");
         QString err;
         if (!nats->publishStopCommand(&err))
             return err;
@@ -540,10 +541,10 @@ void PrepOverlay::beginEmergencyStop()
     connect(m_stopWatcher, &QFutureWatcher<QString>::finished, this, [this]() {
         const QString error = m_stopWatcher->result();
         if (!error.isEmpty()) {
-            failStop(QStringLiteral("Экстренная остановка не отправлена: %1").arg(error));
+            failStop(tx("Экстренная остановка не отправлена: %1").arg(error));
             return;
         }
-        emit note(Note::Err, QStringLiteral("Экстренная остановка"));
+        emit note(Note::Err, tx("Экстренная остановка"));
         emit emergencyStopRequested();
     });
     m_stopWatcher->setFuture(future);
@@ -564,7 +565,7 @@ void PrepOverlay::powerOffRobot(const QString &doneMessage, Note level)
         if (epoch->load(std::memory_order_relaxed) != op)
             return QStringLiteral("cancelled");
         if (!nats)
-            return QStringLiteral("Нет соединения с NATS");
+            return tx("Нет соединения с NATS");
         QString err;
         if (!nats->publishMotionStop(&err))
             return err;
@@ -582,7 +583,7 @@ void PrepOverlay::powerOffRobot(const QString &doneMessage, Note level)
         if (error == QLatin1String("cancelled"))
             return;
         if (!error.isEmpty()) {
-            failStop(QStringLiteral("Не удалось выключить робота: %1").arg(error));
+            failStop(tx("Не удалось выключить робота: %1").arg(error));
             return;
         }
         emit note(level, doneMessage);

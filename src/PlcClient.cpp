@@ -1,4 +1,5 @@
 #include "PlcClient.h"
+#include "Texts.h"
 
 #include <QDateTime>
 #include <QElapsedTimer>
@@ -84,7 +85,7 @@ protected:
         while (!isInterruptionRequested()) {
             if (sock.state() != QAbstractSocket::ConnectedState) {
                 sock.abort();
-                failQueued(QStringLiteral("Нет связи с ПЛК"));
+                failQueued(tx("Нет связи с ПЛК"));
                 sock.connectToHost(m_host, m_port);
                 if (!sock.waitForConnected(kConnectTimeoutMs)) {
                     sock.abort();
@@ -113,7 +114,7 @@ protected:
             if (!command.isEmpty()) {
                 if (!writeFrame(sock, command)) {
                     emit m_owner->commandFinished(
-                        false, QStringLiteral("Не удалось отправить кадр на ПЛК"));
+                        false, tx("Не удалось отправить кадр на ПЛК"));
                     sock.abort();
                     continue;
                 }
@@ -365,7 +366,7 @@ void PlcClient::start(const QString &host, quint16 port,
 void PlcClient::sendCommand(const QByteArray &frame)
 {
     if (!m_worker) {
-        emit commandFinished(false, QStringLiteral("ПЛК не подключён"));
+        emit commandFinished(false, tx("ПЛК не подключён"));
         return;
     }
     {
