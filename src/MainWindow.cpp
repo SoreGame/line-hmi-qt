@@ -15,7 +15,6 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
-#include <QFileDialog>
 #include <QFileInfo>
 #include <QGraphicsProxyWidget>
 #include <QGraphicsScene>
@@ -522,7 +521,41 @@ void MainWindow::onPlcFrame()
         m_requestTimer->stop();
     }
     logModeChange();
+    logBufferChanges();
     refreshUi();
+}
+
+void MainWindow::logBufferChanges()
+{
+    if (!plcLinked()) {
+        if (!m_loggedBuffer.isEmpty())
+            appendLogFileOnly(LogLevel::Warn, tx("ПЛК буфер · нет свежего кадра"));
+        m_loggedBuffer.clear();
+        return;
+    }
+    const int count = m_plc->statusIntCount();
+    QVector<qint16> frame(count);
+    for (int i = 0; i < count; ++i)
+        frame[i] = m_plc->statusInt16(i);
+
+    QStringList parts;
+    if (m_loggedBuffer.size() != count) {
+        for (int i = 0; i < count; ++i) {
+            if (frame[i] != 0)
+                parts << QStringLiteral("[%1]=%2").arg(i).arg(frame[i]);
+        }
+        appendLogFileOnly(LogLevel::Info, tx("ПЛК буфер · снимок %1 int16, не 0: %2")
+                                              .arg(count)
+                                              .arg(parts.isEmpty() ? tx("нет") : parts.join(QLatin1Char(' '))));
+    } else {
+        for (int i = 0; i < count; ++i) {
+            if (frame[i] != m_loggedBuffer[i])
+                parts << QStringLiteral("[%1] %2→%3").arg(i).arg(m_loggedBuffer[i]).arg(frame[i]);
+        }
+        if (!parts.isEmpty())
+            appendLogFileOnly(LogLevel::Info, tx("ПЛК буфер · %1").arg(parts.join(QStringLiteral(", "))));
+    }
+    m_loggedBuffer = frame;
 }
 
 void MainWindow::logModeChange()
@@ -799,15 +832,45 @@ void MainWindow::setupChecklistPanel()
     m_checklistLayout->setAlignment(Qt::AlignTop);
 }
 
-void MainWindow::updateChecklist()
+QList<MainWindow::ReadinessItem> MainWindow::readinessItems() const
 {
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const bool linked = plcLinked();
+    QList<ReadinessItem> items;
+    items.append({m_nats->isConnected(), tx("Подключение к NATS")});
+    items.append({fresh(m_nats->lastCtrlMs(), now), tx("Готовность CTRL")});
+    items.append({fresh(m_nats->lastBehaviourMs(), now), tx("Готовность Behaviour")});
+    items.append({m_plc->vision1Ok(), tx("Готовность Vision 1")});
+    items.append({m_plc->vision2Ok(), tx("Готовность Vision 2")});
+    items.append({linked, tx("Связь с ПЛК")});
+    if (linked && lineRunning() && !m_plc->weldValvesSafe())
+        items.append({true, tx("Сварка в работе")});
+    else
+        items.append({m_plc->weldValvesSafe(), tx("Клапаны сварки в безопасном положении")});
+    const int zone = m_line->zone();
+    items.append({zone > 0, zone > 0 ? tx("Робот в стартовой зоне %1").arg(zone) : tx("Робот в стартовой зоне")});
+    items.append({linked && m_plc->statusInt16(PlcClient::kProgramIndex) > 0, tx("Деталь выбрана")});
+    return items;
+}
+
+QStringList MainWindow::startBlockers() const
+{
+    QStringList missing;
+    for (const ReadinessItem &item : readinessItems()) {
+        if (!item.done)
+            missing << item.label;
+    }
+    return missing;
+}
+
+void MainWindow::updateChecklist()
+{
     const bool linked = plcLinked();
 
     // "1|" — выполнено, "0|" — не выполнено, "!|" — замечание ПЛК.
     QStringList tasks;
-    const auto add = [&](bool done, const QString &label) {
-        tasks << (done ? QStringLiteral("1|") : QStringLiteral("0|")) + label;
+    const auto add = [&](const ReadinessItem &item) {
+        tasks << (item.done ? QStringLiteral("1|") : QStringLiteral("0|")) + item.label;
     };
     if (linked && plcMode() == PlcClient::Mode::Estop) {
         const QStringList causes = m_line->alarmCauses();
@@ -819,19 +882,8 @@ void MainWindow::updateChecklist()
     if (linked && plcMode() == PlcClient::Mode::Ready && m_plc->statusInt16(PlcClient::kProgramIndex) == 0)
         tasks << QStringLiteral("!|") + tx("Выберите деталь");
 
-    add(m_nats->isConnected(), tx("Подключение к NATS"));
-    add(fresh(m_nats->lastCtrlMs(), now), tx("Готовность CTRL"));
-    add(fresh(m_nats->lastBehaviourMs(), now), tx("Готовность Behaviour"));
-    add(m_plc->vision1Ok(), tx("Готовность Vision 1"));
-    add(m_plc->vision2Ok(), tx("Готовность Vision 2"));
-    add(linked, tx("Связь с ПЛК"));
-    if (linked && lineRunning() && !m_plc->weldValvesSafe())
-        add(true, tx("Сварка в работе"));
-    else
-        add(m_plc->weldValvesSafe(), tx("Клапаны сварки в безопасном положении"));
-    const int zone = m_line->zone();
-    add(zone > 0, zone > 0 ? tx("Робот в стартовой зоне %1").arg(zone) : tx("Робот в стартовой зоне"));
-    add(linked && m_plc->statusInt16(PlcClient::kProgramIndex) > 0, tx("Деталь выбрана"));
+    for (const ReadinessItem &item : readinessItems())
+        add(item);
 
     ui->labelChecklistTitle->setText(linked ? PlcClient::modeText(plcMode()) : tx("Нет связи с ПЛК"));
 
@@ -1049,10 +1101,12 @@ void MainWindow::applyModeVisuals()
                 pill(tx("●  Готовность · СТОП"), kPillInit);
             else if (needsPlacement())
                 pill(tx("●  Готовность · УСТАНОВКА"), kPillInit);
-            else if (m_plc->statusInt16(PlcClient::kProgramIndex) > 0)
-                pill(tx("●  Готовность · OK"), kPillOk);
-            else
+            else if (m_plc->statusInt16(PlcClient::kProgramIndex) == 0)
                 pill(tx("●  Готовность · НЕТ ДЕТАЛИ"), kPillInit);
+            else if (!startBlockers().isEmpty())
+                pill(tx("●  Готовность · НЕ ГОТОВО"), kPillInit);
+            else
+                pill(tx("●  Готовность · OK"), kPillOk);
         break;
         case PlcClient::Mode::Stopping:
             pill(tx("●  Готовность · СТОП"), kPillInit);
@@ -1072,8 +1126,8 @@ void MainWindow::applyModeVisuals()
     }
     }
 
-    ui->btnStart->setEnabled(linked && mode == PlcClient::Mode::Ready && m_line->zone() > 0 && !busy
-                             && !robotBusy);
+    ui->btnStart->setEnabled(linked && mode == PlcClient::Mode::Ready && !busy && !robotBusy
+                             && startBlockers().isEmpty());
     ui->btnStop->setEnabled(linked && mode == PlcClient::Mode::Run);
     ui->btnStop->setText(stopping ? tx("ОСТАНОВКА…") : tx("СТОП"));
     const bool canSelect = linked && !busy && !robotBusy
@@ -1095,8 +1149,46 @@ void MainWindow::on_btnStart_clicked()
         showNotice(tx("Старт"), tx("Сначала выберите деталь, затем нажмите «Старт»"));
         return;
     }
+    const QStringList missing = startBlockers();
+    if (!missing.isEmpty()) {
+        appendLog(LogLevel::Warn, tx("Старт: не готово · %1").arg(missing.join(QStringLiteral(", "))));
+        showNotice(tx("Старт"), tx("Не всё готово к старту:\n• %1").arg(missing.join(QStringLiteral("\n• "))));
+        return;
+    }
     sendRequest(PlcClient::controlCommand(PlcClient::CmdStart), tx("Старт"),
-                [this] { return plcMode() != PlcClient::Mode::Ready; });
+                [this] { return plcMode() != PlcClient::Mode::Ready; },
+                [this] { return startRejectDetails(); });
+}
+
+QString MainWindow::startRejectDetails() const
+{
+    const auto cell = [this](int index) {
+        return QStringLiteral("[%1]=%2").arg(index).arg(m_plc->statusInt16(index));
+    };
+    QStringList valves;
+    for (int index : PlcClient::kWeldValveInts)
+        valves << QString::number(m_plc->statusInt16(index));
+    const PlcClient::RobotReport &report = m_line->report();
+    const qint64 ageMs = QDateTime::currentMSecsSinceEpoch() - m_plc->lastOkMs();
+
+    QStringList parts;
+    parts << tx("режим %1 «%2»").arg(cell(PlcClient::kModeIndex), PlcClient::modeText(plcMode()))
+          << tx("деталь %1").arg(cell(PlcClient::kProgramIndex))
+          << tx("тензодатчик %1").arg(cell(PlcClient::kLoadCellIndex))
+          << tx("предподготовка %1").arg(cell(PlcClient::kPrepDoneIndex))
+          << tx("грибок %1").arg(cell(PlcClient::kMushroomIndex))
+          << tx("клапаны сварки [10..14,16]=%1").arg(valves.join(QLatin1Char(' ')))
+          << tx("держатели %1 %2").arg(cell(PlcClient::kBigHoldersSensorIndex), cell(PlcClient::kSmallHoldersSensorIndex))
+          << tx("причины аварии %1 %2").arg(cell(PlcClient::kNoLamellaeIndex), cell(PlcClient::kNoHoldersIndex))
+          << cell(PlcClient::kInitPermitIndex)
+          << tx("опрос пульта: NATS %1, CTRL %2, Behaviour %3, скрипт %4, Z %5")
+                 .arg(int(report.natsConnected))
+                 .arg(int(report.ctrlAlive))
+                 .arg(int(report.behaviourAlive))
+                 .arg(int(report.scriptRunning))
+                 .arg(report.zone)
+          << tx("кадр %1 мс назад").arg(ageMs);
+    return tx("ПЛК остался в режиме «Готов». В кадре: %1").arg(parts.join(QStringLiteral("; ")));
 }
 
 void MainWindow::on_btnStop_clicked()
@@ -1180,18 +1272,19 @@ void MainWindow::on_btnAdmin_clicked()
 
 void MainWindow::on_btnExportLog_clicked()
 {
-    const QString defaultName =
-        QStringLiteral("line-hmi-%1.log")
-            .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss")));
-    const QString path = QFileDialog::getSaveFileName(
-        this,
-        tx("Выгрузить журнал событий"),
-        QDir::homePath() + QLatin1Char('/') + defaultName,
-        QStringLiteral("Log files (*.log);;All files (*)"));
-    if (path.isEmpty())
-        return;
+    const QString dir = QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
+                            .filePath(QStringLiteral("logs"));
+    const QString path = QDir(dir).filePath(
+        QStringLiteral("line-hmi-export-%1.log")
+            .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss"))));
 
     QString err;
+    if (!QDir().mkpath(dir)) {
+        err = tx("не удалось создать папку %1").arg(dir);
+        appendLog(LogLevel::Err, tx("Не удалось выгрузить журнал: %1").arg(err));
+        QMessageBox::warning(this, tx("Журнал"), tx("Не удалось сохранить файл:\n%1").arg(err));
+        return;
+    }
     if (!exportLogsToFile(path, &err)) {
         appendLog(LogLevel::Err, tx("Не удалось выгрузить журнал: %1").arg(err));
         QMessageBox::warning(this, tx("Журнал"),
@@ -1200,10 +1293,7 @@ void MainWindow::on_btnExportLog_clicked()
     }
 
     appendLog(LogLevel::Ok, tx("Журнал выгружен: %1").arg(path));
-    QMessageBox::information(this, tx("Журнал"),
-                             tx("Сохранено %1 записей в:\n%2")
-                                 .arg(m_logEntries.size())
-                                 .arg(path));
+    QMessageBox::information(this, tx("Журнал"), tx("Журнал сохранён в:\n%1").arg(path));
 }
 
 QString MainWindow::logLevelTag(LogLevel level) const
@@ -1251,6 +1341,15 @@ void MainWindow::appendLog(LogLevel level, const QString &message)
     // В UI держим разумный хвост; полный журнал остаётся в m_logEntries / файле сессии.
     while (ui->logList->count() > 500)
         delete ui->logList->takeItem(ui->logList->count() - 1);
+}
+
+void MainWindow::appendLogFileOnly(LogLevel level, const QString &message)
+{
+    LogEntry entry;
+    entry.time = QDateTime::currentDateTime();
+    entry.level = level;
+    entry.message = message;
+    appendLogToSessionFile(entry);
 }
 
 void MainWindow::appendLogToSessionFile(const LogEntry &entry)
@@ -1320,13 +1419,19 @@ bool MainWindow::exportLogsToFile(const QString &path, QString *errorOut) const
     out << QStringLiteral("# line-hmi-qt event log\n");
     out << QStringLiteral("# exported ")
         << QDateTime::currentDateTime().toString(Qt::ISODate) << '\n';
-    out << QStringLiteral("# session file: ") << m_sessionLogPath << '\n';
-    out << QStringLiteral("# entries: ") << m_logEntries.size() << "\n\n";
+    out << QStringLiteral("# session file: ") << m_sessionLogPath << "\n\n";
 
-    for (const LogEntry &entry : m_logEntries) {
-        out << entry.time.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz"))
-            << " [" << logLevelTag(entry.level) << "] "
-            << entry.message << '\n';
+    // Файл сессии полнее экранного журнала: в нём и изменения буфера ПЛК.
+    QFile session(m_sessionLogPath);
+    if (session.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        out.flush();
+        file.write(session.readAll());
+    } else {
+        for (const LogEntry &entry : m_logEntries) {
+            out << entry.time.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz"))
+                << " [" << logLevelTag(entry.level) << "] "
+                << entry.message << '\n';
+        }
     }
     out.flush();
     file.flush();

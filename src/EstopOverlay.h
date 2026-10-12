@@ -5,6 +5,7 @@
 
 #include <QStringList>
 
+class ManualCheck;
 class QLabel;
 class QPushButton;
 
@@ -24,11 +25,10 @@ signals:
 private:
     void updateItems();
 
-    static constexpr int kItemCount = 2;
+    static constexpr int kItemCount = 3;
     QLabel *m_causes = nullptr;
     QLabel *m_zone = nullptr;
-    QPushButton *m_items[kItemCount] = {};
-    bool m_done[kItemCount] = {};
+    ManualCheck *m_items[kItemCount] = {};
     bool m_mushroomReleased = false;
     QPushButton *m_btnExit = nullptr;
 };

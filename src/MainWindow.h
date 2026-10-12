@@ -94,6 +94,18 @@ private:
     void setModuleIndicator(QLabel *label, bool alive);
     void setupChecklistPanel();
     void updateChecklist();
+    struct ReadinessItem {
+        bool done;
+        QString label;
+    };
+    // Пункты готовности из панели слева; «Старт» доступен, только когда все выполнены.
+    QList<ReadinessItem> readinessItems() const;
+    QStringList startBlockers() const;
+    // Что ПЛК видел в кадре, когда не принял «Старт»: ячейки условий старта и опрос пульта.
+    QString startRejectDetails() const;
+    // Изменения ячеек кадра ПЛК — только в файл сессии, не на экран.
+    void logBufferChanges();
+    void appendLogFileOnly(LogLevel level, const QString &message);
     void updateOutputCounters();
     void updatePowerOff();
     void updateLamellaType();
@@ -170,6 +182,8 @@ private:
     int m_loggedMode = -1;
     int m_loggedProgram = -1;
     int m_loggedPrepDone = -1;
+    // Последний залогированный кадр ПЛК; пусто — следующий кадр пишется снимком.
+    QVector<qint16> m_loggedBuffer;
 };
 
 #endif // MAINWINDOW_H

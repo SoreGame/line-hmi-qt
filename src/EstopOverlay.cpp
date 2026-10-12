@@ -1,4 +1,5 @@
 #include "EstopOverlay.h"
+#include "ManualCheck.h"
 #include "Texts.h"
 
 #include <QLabel>
@@ -10,6 +11,7 @@ namespace {
 const char *kItemNames[] = {
     "Выключите вакуум",
     "Разожмите сварку руками",
+    "Убедитесь, что всё нормально",
 };
 
 QLabel *sectionTitle(const QString &text, QWidget *parent)
@@ -32,14 +34,11 @@ EstopOverlay::EstopOverlay(QWidget *parent)
 
     m_content->addWidget(sectionTitle(tx("Перед выходом"), m_card));
     for (int i = 0; i < kItemCount; ++i) {
-        auto *item = new QPushButton(m_card);
-        item->setFocusPolicy(Qt::NoFocus);
-        item->setMinimumHeight(64);
-        item->setCursor(Qt::PointingHandCursor);
+        auto *item = new ManualCheck(tx(kItemNames[i]), 18, m_card);
         m_content->addWidget(item);
         m_items[i] = item;
-        connect(item, &QPushButton::clicked, this, [this, i]() {
-            m_done[i] = !m_done[i];
+        connect(item, &QPushButton::clicked, this, [this, item]() {
+            item->setDone(!item->isDone());
             updateItems();
         });
     }
@@ -49,7 +48,8 @@ EstopOverlay::EstopOverlay(QWidget *parent)
     m_actions->addStretch();
     connect(m_btnExit, &QPushButton::clicked, this, &EstopOverlay::exitRequested);
 
-    setStatus(tx("Отожмите грибок и/или закройте двери, выполните пункты и нажмите «Выйти из E-STOP»"));
+    setStatus(tx("Отожмите грибок и/или закройте двери, выполните пункты, нажмите на каждый из них "
+                 "и затем «Выйти из E-STOP»"));
     refresh({}, false, 0);
 }
 
@@ -80,11 +80,7 @@ void EstopOverlay::refresh(const QStringList &causes, bool mushroomReleased, int
 void EstopOverlay::updateItems()
 {
     bool all = m_mushroomReleased;
-    for (int i = 0; i < kItemCount; ++i) {
-        const ItemState state = m_done[i] ? ItemState::Done : ItemState::Active;
-        m_items[i]->setText(itemMark(state) + tx(kItemNames[i]));
-        m_items[i]->setStyleSheet(QStringLiteral("QPushButton{%1 text-align:left;}").arg(itemStyle(state)));
-        all = all && m_done[i];
-    }
+    for (ManualCheck *item : m_items)
+        all = all && item->isDone();
     m_btnExit->setEnabled(all);
 }

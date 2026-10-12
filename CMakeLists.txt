@@ -23,6 +23,8 @@ qt_add_executable(line-hmi-qt MANUAL_FINALIZATION
     src/PlcClient.h
     src/LineController.cpp
     src/LineController.h
+    src/ManualCheck.cpp
+    src/ManualCheck.h
     src/OverlayCard.cpp
     src/OverlayCard.h
     src/PrepOverlay.cpp

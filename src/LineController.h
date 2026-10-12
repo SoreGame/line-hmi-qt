@@ -36,6 +36,8 @@ public:
     // Время текущего запуска линии (от входа в «В работе»), -1 — запуска нет.
     qint64 runElapsedMs() const;
     int zone() const { return m_report.zone; }
+    // То, что пульт шлёт ПЛК в опросе 203: флаги робота и зона.
+    const PlcClient::RobotReport &report() const { return m_report; }
     // Свежая поза робота от CTRL; без неё zone() = 0 не значит «робот вне зоны».
     bool poseKnown() const { return m_poseFresh; }
     // x, y, z, r последней позы; смысл имеет только при poseKnown().
