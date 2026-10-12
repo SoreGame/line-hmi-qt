@@ -17,8 +17,11 @@ public:
     enum class ItemState { Pending, Active, Done, Error };
     enum class ButtonKind { Primary, Stop, Neutral };
 
+    // Пустой cardSize — карточка на весь родитель.
     OverlayCard(const QString &title, QSize cardSize, QWidget *parent);
 
+    // Сколько пикселей сверху родителя оставить открытыми (шапка с кнопками остаётся доступной).
+    void setTopInset(int px);
     void setSubtitle(const QString &text);
     void setStatus(const QString &text);
 
@@ -37,6 +40,7 @@ protected:
     QVBoxLayout *m_actions = nullptr;
 
 private:
+    int m_topInset = 0;
     QLabel *m_subtitle = nullptr;
     QLabel *m_status = nullptr;
 };

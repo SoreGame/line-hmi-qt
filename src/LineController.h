@@ -38,6 +38,9 @@ public:
     int zone() const { return m_report.zone; }
     // Свежая поза робота от CTRL; без неё zone() = 0 не значит «робот вне зоны».
     bool poseKnown() const { return m_poseFresh; }
+    // x, y, z, r последней позы; смысл имеет только при poseKnown().
+    std::array<double, 4> pose() const { return {m_pose[0], m_pose[1], m_pose[2], m_pose[3]}; }
+    const ConnectionSettings &settings() const { return m_cfg; }
     bool plcLinkLost() const { return m_linkLost; }
     bool scriptActive() const { return m_role != Role::None; }
     // Робот выполняет скрипт: запущенный пультом или любой другой по script.status.

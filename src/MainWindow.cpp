@@ -491,8 +491,14 @@ bool MainWindow::lineRunning() const
 
 bool MainWindow::needsPlacement() const
 {
-    // Ручную установку определяет пульт: ПЛК готов, поза робота известна, а робот вне зон.
-    return plcLinked() && plcMode() == PlcClient::Mode::Ready && m_line->poseKnown() && m_line->zone() == 0;
+    // Ручную установку определяет пульт: поза робота известна, робот вне зон, а линия не в работе.
+    // Без связи с ПЛК окно тоже нужно: робот всё равно должен стоять в зоне к старту.
+    if (!m_line->poseKnown() || m_line->zone() > 0)
+        return false;
+    if (!plcLinked())
+        return true;
+    const PlcClient::Mode mode = plcMode();
+    return mode == PlcClient::Mode::Ready || mode == PlcClient::Mode::Boot;
 }
 
 void MainWindow::onPlcFrame()
@@ -648,13 +654,16 @@ void MainWindow::syncOverlays()
     const bool wantPlace = needsPlacement();
     if (wantPlace && !m_place) {
         m_place = new PlaceOverlay(ConnectionSettings::load().placementImage, host);
+        m_place->setTopInset(ui->headerBar->geometry().bottom() + 1);
+        connect(m_nats, &NatsClient::motionPoseReceived, m_place,
+                [place = m_place](double x, double y, double z, double r, bool) { place->setPose(x, y, z, r); });
         m_place->show();
     } else if (!wantPlace && m_place) {
         m_place->deleteLater();
         m_place = nullptr;
     }
     if (m_place && wantPlace)
-        m_place->refresh(m_line->zone());
+        m_place->refresh(m_line->zone(), m_line->poseKnown(), m_line->pose(), m_line->settings().zones);
 
     const bool wantStopPopup = finishingWork();
     if (wantStopPopup && !m_stopPopup) {

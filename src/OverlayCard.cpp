@@ -40,15 +40,19 @@ OverlayCard::OverlayCard(const QString &title, QSize cardSize, QWidget *parent)
     setAttribute(Qt::WA_StyledBackground, false);
     setFocusPolicy(Qt::StrongFocus);
 
+    const bool fill = cardSize.isEmpty();
     auto *root = new QVBoxLayout(this);
-    root->setContentsMargins(0, 0, 0, 0);
-    root->addStretch();
+    root->setContentsMargins(fill ? QMargins(24, 24, 24, 24) : QMargins());
+    if (!fill)
+        root->addStretch();
     auto *row = new QHBoxLayout();
-    row->addStretch();
+    if (!fill)
+        row->addStretch();
 
     auto *card = new QFrame(this);
     card->setObjectName(QStringLiteral("overlayCard"));
-    card->setFixedSize(cardSize);
+    if (!fill)
+        card->setFixedSize(cardSize);
     card->setStyleSheet(QStringLiteral("QFrame#overlayCard { background:#FFFFFF; border-radius:16px; }"));
     m_card = card;
 
@@ -87,10 +91,19 @@ OverlayCard::OverlayCard(const QString &title, QSize cardSize, QWidget *parent)
     body->addLayout(m_actions);
     cardLayout->addLayout(body, 1);
 
-    row->addWidget(card);
-    row->addStretch();
-    root->addLayout(row);
-    root->addStretch();
+    row->addWidget(card, fill ? 1 : 0);
+    if (!fill)
+        row->addStretch();
+    root->addLayout(row, fill ? 1 : 0);
+    if (!fill)
+        root->addStretch();
+}
+
+void OverlayCard::setTopInset(int px)
+{
+    m_topInset = qMax(0, px);
+    if (isVisible() && parentWidget())
+        setGeometry(parentWidget()->rect().adjusted(0, m_topInset, 0, 0));
 }
 
 void OverlayCard::setSubtitle(const QString &text)
@@ -168,6 +181,6 @@ void OverlayCard::showEvent(QShowEvent *event)
 {
     QWidget::showEvent(event);
     if (QWidget *parent = parentWidget())
-        setGeometry(parent->rect());
+        setGeometry(parent->rect().adjusted(0, m_topInset, 0, 0));
     raise();
 }
