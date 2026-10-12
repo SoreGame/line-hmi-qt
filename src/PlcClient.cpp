@@ -319,7 +319,7 @@ bool PlcClient::weldValvesSafe() const
     if (!isOk())
         return false;
     for (int index : kWeldValveInts) {
-        if (statusInt16(index) != 0)
+        if (statusInt16(index) != kWeldValveSafe)
             return false;
     }
     return true;

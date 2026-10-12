@@ -1,10 +1,11 @@
 #ifndef SERVICEPANEL_H
 #define SERVICEPANEL_H
 
+#include "PlcClient.h"
+
 #include <QDialog>
 #include <QVector>
 
-class PlcClient;
 class QCloseEvent;
 class QFrame;
 class QLabel;
@@ -33,6 +34,9 @@ private slots:
 private:
     void leaveServiceIfNeeded();
     void refreshBufferTable();
+    // DO шлются только в режиме 5 «Service»; в остальных кнопки неактивны и сброшены.
+    void updateDoAvailability();
+    bool plcInMode(PlcClient::Mode mode) const;
     void sendServiceMode(bool on);
     void sendDo(int n, bool on);
 
@@ -49,6 +53,7 @@ private:
     QTableWidget *m_bufferTable = nullptr;
     QLabel *m_bufferStatus = nullptr;
     QPushButton *m_btnServiceMode = nullptr;
+    QLabel *m_doTitle = nullptr;
     QVector<QPushButton *> m_doButtons;
     bool m_fullScreenApplied = false;
     bool m_serviceRequested = false;

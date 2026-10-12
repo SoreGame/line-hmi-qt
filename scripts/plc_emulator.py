@@ -64,6 +64,7 @@ ROBOT_DO_HOLD = 255
 
 # Ячейки кадра (int16).
 WELD_VALVE_INTS = (10, 11, 12, 13, 14, 16)
+WELD_VALVE_SAFE = 1  # безопасное положение клапана сварки
 SMALL_HOLDERS_SENSOR_INT = 1
 BIG_HOLDERS_SENSOR_INT = 25
 PANEL_INT = 50
@@ -201,7 +202,7 @@ class Plc:
             holders = self.sensor(SMALL_HOLDERS_SENSOR_INT, int(self.holders["small"]))
         if holders != 1:
             waiting.append("держатели")
-        valves_closed = all(self.sensor(i, 0) == 0 for i in WELD_VALVE_INTS)
+        valves_closed = all(self.sensor(i, WELD_VALVE_SAFE) == WELD_VALVE_SAFE for i in WELD_VALVE_INTS)
         if not self.ready["weld"] or not valves_closed:
             waiting.append("клапаны сварки")
         if not self.init_done:
@@ -390,7 +391,7 @@ class Plc:
         else:
             valves_open = (self.mode in LINE_ACTIVE and self.prep_done) or not self.ready["weld"]
             for index in WELD_VALVE_INTS:
-                put_i16(out, index, int(valves_open))
+                put_i16(out, index, 0 if valves_open else WELD_VALVE_SAFE)
             put_i16(out, BIG_HOLDERS_SENSOR_INT, int(self.holders["big"]))
             put_i16(out, SMALL_HOLDERS_SENSOR_INT, int(self.holders["small"]))
         put_i16(out, PANEL_INT, self.panel)

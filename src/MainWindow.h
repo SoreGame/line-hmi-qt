@@ -135,6 +135,8 @@ private:
     QPointer<OverlayCard> m_stopPopup;
 
     std::optional<PendingRequest> m_pending;
+    // Деталь, выбор которой ждёт подтверждения ПЛК (54); 0 — не ждём.
+    int m_pendingProgram = 0;
     QTimer *m_requestTimer = nullptr;
     QPointer<QMessageBox> m_rejectBox;
 

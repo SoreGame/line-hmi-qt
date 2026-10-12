@@ -27,9 +27,9 @@ RunHistoryDialog::RunHistoryDialog(QWidget *parent)
     setWindowTitle(tx("История запусков"));
     resize(1500, 760);
     setStyleSheet(QStringLiteral(
-        "QDialog{background:#FFFFFF;}"
+        "QDialog{background:#FFFFFF; border:2px solid #6B7380;}"
         " QTableWidget{background:#FFFFFF; alternate-background-color:#F5F6F8; color:#1F2126;"
-        " gridline-color:#E3E5E9; border:1px solid #DBDEE3;"
+        " gridline-color:#E3E5E9; border:1px solid #A9B0B8;"
         " font-family:\"Inter\",\"Segoe UI\",sans-serif; font-size:14px;}"
         " QHeaderView::section{background:#F0F2F5; color:#4A4F57; border:none;"
         " border-right:1px solid #DBDEE3; border-bottom:1px solid #DBDEE3;"

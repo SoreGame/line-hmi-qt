@@ -22,7 +22,7 @@ SCENARIOS: list[tuple[str, str, list[tuple[float, str]]]] = [
     ("holders_back", "Держатели вернулись",
      [(0, "noholders 0"), (0, "holders big 1"), (0, "holders small 1")]),
     ("vision_blink", "Vision 1 пропал на 5 с", [(0, "ready vision1 0"), (5, "ready vision1 1")]),
-    ("weld_stuck", "Клапаны сварки не в 0 на 5 с", [(0, "ready weld 0"), (5, "ready weld 1")]),
+    ("weld_stuck", "Клапаны сварки не в 1 на 5 с", [(0, "ready weld 0"), (5, "ready weld 1")]),
     ("panel_start", "СТАРТ на корпусе", [(0, "start")]),
     ("panel_stop", "СТОП на корпусе", [(0, "stop")]),
     ("reboot", "Перезагрузка ПЛК", [(0, "reboot")]),
@@ -241,7 +241,7 @@ input{font:inherit;padding:5px;width:60%}
 let names={};
 const INPUTS=[
  ['mushroom','Грибок отжат','mushroom'],['doors','Двери закрыты','doors'],
- ['weld','Клапаны сварки в 0','ready weld'],['vision1','Vision 1','ready vision1'],['vision2','Vision 2','ready vision2'],
+ ['weld','Клапаны сварки в 1','ready weld'],['vision1','Vision 1','ready vision1'],['vision2','Vision 2','ready vision2'],
  ['holdersBig','Большие держатели','holders big'],['holdersSmall','Малые держатели','holders small'],
  ['nolamel','Долго нет ламелей (авария)','nolamel',1],['noholders','Долго нет держателей (авария)','noholders',1]];
 async function post(url,body){const r=await fetch(url,{method:'POST',body:JSON.stringify(body)});

@@ -44,8 +44,9 @@ public:
     static constexpr int kNoLamellaeIndex = 59;
     static constexpr int kNoHoldersIndex = 61;
     // Индикаторы, решений по ним пульт не принимает.
-    // Клапаны сварки: в безопасном положении все = 0.
+    // Клапаны сварки: в безопасном положении все = 1.
     static constexpr int kWeldValveInts[] = {10, 11, 12, 13, 14, 16};
+    static constexpr qint16 kWeldValveSafe = 1;
     static constexpr int kVision1Index = 57;
     static constexpr int kVision2Index = 58;
     static constexpr int kPanelButtonsIndex = 50;

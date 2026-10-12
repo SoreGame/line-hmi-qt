@@ -11,6 +11,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QScreen>
 #include <QShowEvent>
@@ -57,7 +58,15 @@ const char *kDoBtn =
     "QPushButton:checked {"
     "  background:#2E8C47; color:#FFFFFF; border:1px solid #2E8C47;"
     "}"
-    "QPushButton:checked:pressed { background:#246F38; }";
+    "QPushButton:checked:pressed { background:#246F38; }"
+    "QPushButton:disabled { background:#F0F2F5; color:#A0A4AB; border:1px solid #E4E7EC; }";
+
+const char *kNoticeStyle =
+    "QMessageBox{background:#FFFFFF;}"
+    " QLabel{color:#1F2126; background:transparent;"
+    " font-family:\"Inter\",\"Segoe UI\",sans-serif; font-size:15px;}"
+    " QPushButton{background:#FFFFFF; color:#1F2126; border:1px solid #DBDEE3; border-radius:6px;"
+    " padding:6px 14px; min-height:32px; min-width:72px; font-weight:600;}";
 
 const char *kTableStyle =
     "QTableWidget {"
@@ -263,6 +272,7 @@ ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
     auto *doPanel = makePanel(QStringLiteral("doPanel"), this);
 
     auto *doTitle = makeTitle(QStringLiteral("DO 0..%1").arg(kDoCount - 1), doPanel);
+    m_doTitle = doTitle;
     auto *doGrid = new QWidget(doPanel);
     auto *doLay = new QGridLayout(doGrid);
     doLay->setContentsMargins(0, 0, 0, 0);
@@ -343,6 +353,27 @@ ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
         connect(m_plc, &PlcClient::stateChanged, this, &ServicePanel::onPlcStateChanged);
 
     refreshBufferTable();
+    updateDoAvailability();
+}
+
+bool ServicePanel::plcInMode(PlcClient::Mode mode) const
+{
+    return m_plc && m_plc->isOk() && m_plc->mode() == mode;
+}
+
+void ServicePanel::updateDoAvailability()
+{
+    const bool inService = plcInMode(PlcClient::Mode::Service);
+    for (QPushButton *btn : std::as_const(m_doButtons)) {
+        if (!inService && btn->isChecked()) {
+            const QSignalBlocker blocker(btn);
+            btn->setChecked(false);
+        }
+        btn->setEnabled(inService);
+    }
+    if (m_doTitle)
+        m_doTitle->setText(inService ? QStringLiteral("DO 0..%1").arg(kDoCount - 1)
+                                     : tx("DO 0..%1 · только в сервисном режиме").arg(kDoCount - 1));
 }
 
 void ServicePanel::showEvent(QShowEvent *event)
@@ -383,6 +414,7 @@ void ServicePanel::leaveServiceIfNeeded()
 void ServicePanel::onPlcStateChanged()
 {
     refreshBufferTable();
+    updateDoAvailability();
 }
 
 void ServicePanel::refreshBufferTable()
@@ -418,6 +450,23 @@ void ServicePanel::refreshBufferTable()
 
 void ServicePanel::onServiceModeToggled(bool on)
 {
+    // Включать сервис можно только из «Готов» (52 = 1); выключать — всегда.
+    if (on && !plcInMode(PlcClient::Mode::Ready) && !plcInMode(PlcClient::Mode::Service)) {
+        {
+            const QSignalBlocker blocker(m_btnServiceMode);
+            m_btnServiceMode->setChecked(false);
+        }
+        const QString now = !m_plc || !m_plc->isOk() ? tx("нет связи с ПЛК")
+                                                     : tx("сейчас: %1").arg(PlcClient::modeText(m_plc->mode()));
+        QMessageBox box(QMessageBox::Warning, tx("Сервисный режим"),
+                        tx("ПЛК ещё не в стартовом положении (%1).\n"
+                           "Сервисный режим включается, только когда ПЛК в режиме «Готов».")
+                            .arg(now),
+                        QMessageBox::Ok, this);
+        box.setStyleSheet(QString::fromUtf8(kNoticeStyle));
+        box.exec();
+        return;
+    }
     setToggleCaption(m_btnServiceMode, tx("Перевести ПЛК в сервисный режим"), on);
     m_serviceRequested = on;
     sendServiceMode(on);

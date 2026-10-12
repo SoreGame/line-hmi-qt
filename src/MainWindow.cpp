@@ -90,6 +90,18 @@ const char *kProgSelected =
     "  color:#1F2126;"
     "}";
 
+const char *kProgPending =
+    "QPushButton {"
+    "  background:#FFF6E5;"
+    "  border:2px dashed #E0A030;"
+    "  border-radius:10px;"
+    "  text-align:center;"
+    "  font-family:\"Inter\",\"Segoe UI\",sans-serif;"
+    "  font-size:13px;"
+    "  font-weight:600;"
+    "  color:#8A5A00;"
+    "}";
+
 const char *kProgIdle =
     "QPushButton {"
     "  background:#F7F8FA;"
@@ -506,6 +518,7 @@ void MainWindow::onPlcFrame()
     if (m_pending && m_pending->accepted()) {
         appendLog(LogLevel::Ok, tx("ПЛК принял «%1»").arg(m_pending->name));
         m_pending.reset();
+        m_pendingProgram = 0;
         m_requestTimer->stop();
     }
     logModeChange();
@@ -564,6 +577,7 @@ void MainWindow::onRequestTimeout()
         return;
     const PendingRequest request = *m_pending;
     m_pending.reset();
+    m_pendingProgram = 0;
     refreshUi();
     if (request.accepted())
         return;
@@ -921,15 +935,19 @@ void MainWindow::applyProgramVisuals()
     const int program = m_plc->statusInt16(PlcClient::kProgramIndex);
     const bool d1 = program == 1;
     const bool d2 = program == 2;
-    ui->btnProg1->setStyleSheet(QString::fromUtf8(d1 ? kProgSelected : kProgIdle));
-    ui->btnProg2->setStyleSheet(QString::fromUtf8(d2 ? kProgSelected : kProgIdle));
+    const int pending = m_pending ? m_pendingProgram : 0;
+    const auto progStyle = [pending](int n, bool selected) {
+        return QString::fromUtf8(pending == n ? kProgPending : selected ? kProgSelected : kProgIdle);
+    };
+    ui->btnProg1->setStyleSheet(progStyle(1, d1));
+    ui->btnProg2->setStyleSheet(progStyle(2, d2));
 
-    ui->btnProg1->setText(d1
-                              ? tx("Деталь 1\nВыбрано\nбольшие держатели")
-                              : tx("Деталь 1\nДоступно\nбольшие держатели"));
-    ui->btnProg2->setText(d2
-                              ? tx("Деталь 2\nВыбрано\nмалые держатели")
-                              : tx("Деталь 2\nДоступно\nмалые держатели"));
+    ui->btnProg1->setText(pending == 1 ? tx("Деталь 1\nПереключение…\nбольшие держатели")
+                          : d1         ? tx("Деталь 1\nВыбрано\nбольшие держатели")
+                                       : tx("Деталь 1\nДоступно\nбольшие держатели"));
+    ui->btnProg2->setText(pending == 2 ? tx("Деталь 2\nПереключение…\nмалые держатели")
+                          : d2         ? tx("Деталь 2\nВыбрано\nмалые держатели")
+                                       : tx("Деталь 2\nДоступно\nмалые держатели"));
 
     ui->labelFlow->setText(d1   ? tx("Поток: ламели + большие держатели")
                            : d2 ? tx("Поток: ламели + малые держатели")
@@ -1090,6 +1108,7 @@ void MainWindow::on_btnStop_clicked()
 void MainWindow::selectProgram(int program)
 {
     const bool useLoadCell = !ConnectionSettings::load().ignoreLoadCell;
+    m_pendingProgram = program;
     sendRequest(PlcClient::selectCommand(program, useLoadCell), tx("Деталь %1").arg(program),
                 [this, program] { return m_plc->statusInt16(PlcClient::kProgramIndex) == program; });
 }
