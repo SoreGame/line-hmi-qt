@@ -1,1085 +1,716 @@
 #!/usr/bin/env python3
-"""PLC emulator over raw TCP — fixed 1024-byte frames.
+"""Эмулятор ПЛК по протоколу пульт ↔ ПЛК v2 (docs/PLC_PROTOCOL.md).
 
-Memory map (one byte = one signal, 0=off / 1=on):
+Это эталонная реализация логики ПЛК для проверки пульта без железа:
+режимы линии, проверки старта, предподготовка, счётчики, авария, сторожевой таймер.
 
-  Offset   Size   Name            Direction
-  0..11    12     VALVE K1..K12   client → PLC (command); PLC echoes actual state
-  12..23   12     SENSOR S1..S12  PLC → client only (client bytes ignored)
-  24..1023 1000   RESERVED        always 0
+Запуск сервера:
+  python3 scripts/plc_emulator.py [--host 0.0.0.0] [--port 2025] [--robot-port 2021] [--hmi-ip 127.0.0.1]
 
-Exchange: client sends 1024 bytes → PLC applies VALVE[0..11], updates sensors,
-optionally replies with 1024 bytes (valve echo + sensors + zeros).
+--robot-port: порт для robot-behaviour (plc.port в behaviourConfig.json). На нём опрос 203 —
+4 байта, а tcp_send_comand из скриптов — пакет выходов K1..K12 (1024 байта, 255 — не менять).
 
-HMI health check: client sends 4 bytes [203,0,0,0] (robot-behaviour ping) →
-PLC replies with one status frame (default 120 bytes = 60 int16, valves, sensors, zeros) without
-changing valves. HMI treats the PLC as ready only when that frame matches
-its mask. Full 1024-byte command frames still get a 1024-byte reply.
+--status-bytes: размер кадра в ответ на 203, по умолчанию 160. Ставьте как «Кадр, байт» в
+админке пульта; ячейки 0..79 заполняются всегда, остальное — нули или подмены (set).
 
-Status int16 (little-endian), same indices as PlcClient:
-  45, 46     Vision 1/2 (1 = on)
+--hmi-ip: с какого IP опрос 203 читается как 6-байтный опрос пульта. Без флага пультом
+считается любое соединение (удобно, если Behaviour к эмулятору не подключается).
 
-Service panel (no reply):
-  [99, 1]     enter service mode
-  [99, 0]     leave service mode (also clears DO 0..49)
-  [2, n, 1]   DO n on  (n = 0..49); applied only in service mode
-  [2, n, 0]   DO n off
-  In service mode the status frame int16[n] echoes DO n.
+Консоль сервера (TTY) и клиент из второго терминала понимают одни и те же действия:
+  estop                — нажали физическую кнопку e-stop (грибок зажат)
+  mushroom 0|1         — грибок: 0 = зажат, 1 = отжат
+  doors 0|1            — двери: 0 = открыты, 1 = закрыты (в одной цепи с грибком, ячейка 51)
+  nolamel 0|1          — долго нет ламелей (1 — авария)
+  noholders 0|1        — долго нет держателей ламелей (1 — авария)
+  lameltype T          — на выдаче ламель типа T (0 — пусто)
+  start | stop         — кнопки СТАРТ / СТОП на корпусе
+  set I V | unset I|all — подменить ячейку кадра int16[I] значением V / вернуть как было
+  reboot [estop]       — перезагрузка ПЛК; estop — включение после аварии
+  ready NAME 0|1       — готовность: weld (клапаны сварки в безопасном положении) vision1 vision2
+  holders big|small 0|1 — датчик наличия больших (int16[25]) / малых (int16[1]) держателей
+  status | help | quit
 
-Set alarms from the server console, or from a client:
-  [204, index, value, 0]  — set int16 index 51..59 to 0/1, index 50 to 0/10/20/30
-  [205, 0, 0, 0]          — clear panel buttons and suspicions, mushroom → 1 (отжат)
+  python3 scripts/plc_emulator.py --client --do "mushroom 1"
+  python3 scripts/plc_emulator.py --client --status
 
-Кнопки корпуса, int16[50] — защёлка, как на настоящем ПЛК:
-  10 — СТОП, снимается по [7, 3, 0, 0]
-  20 — зелёная/СТАРТ, снимается по старту [7, 1, 1, x]
-  30 — e-stop, снимается только по [7, 5, 0, 0]
-Грибок e-stop, int16[51]: 0 = зажат, 1 = отжат (по умолчанию). Физическая кнопка — команды его не меняют.
-Подозрения int16[52..59]. По умолчанию кадр 120 байт (60 int16).
-В сервисном режиме int16[0..49] показывают DO, как и раньше.
-
-HMI prep start used to be 10 zero bytes. That frame is still accepted and
-starts the same fill simulation. Старт с пульта теперь [7, 1, 1, 0] или
-[7, 1, 1, 1] — тоже запускает заполнение.
-
-HMI commands, 4 bytes, no reply. Tag 7:
-  [7, 1, 1, 0]  — старт, тензодатчик игнорируется (тот же кадр, что выбор детали 1)
-  [7, 1, 1, 1]  — старт, тензодатчик учитывается
-  [7, 1, 2, 0]  — деталь 2
-  [7, 2, 0, 0]  — запуск основной программы (после отсчёта или «Пропустить»)
-  [7, 3, 0, 0]  — стоп
-  [7, 4, 0, 0]  — аварийный стоп
-  [7, 5, 0, 0]  — выход из аварийного стопа
-
-After prep-start the emulator simulates filling (for PrepOverlay):
-  ~1s → ламели (byte 24 = 1)
-  ~2s → гуси (byte 25 = 1)
-  ~3s → сварка (bytes 26..45 = 1)
-  ~4s → снова idle: int16 сварки = 1 (чек-лист перед следующим стартом)
-
-Valve bytes other than 0/1 are ignored (client may send 0xFF to hold state on poll).
-
-Multi-client: HMI (reads replies) and Behaviour (write-only tcp_send_comand) can
-share one PLC. If a client never reads the reply, the emulator skips the reply
-instead of closing the socket (avoids Broken pipe in ChaiScript).
-
-Usage:
-  python3 plc_emulator.py [--host 0.0.0.0] [--port 1502]
-  python3 plc_emulator.py --client [--host 127.0.0.1] [--port 1502]
-  python3 plc_emulator.py --client --set 1=1,3=0
-  python3 plc_emulator.py --client --poll
-  python3 plc_emulator.py --status-bytes 120
-  python3 plc_emulator.py --client --panel start|stop|estop|0
-  python3 plc_emulator.py --client --mushroom 0|1
-  python3 plc_emulator.py --client --suspect 52=1,53=1
-  python3 plc_emulator.py --client --clear-alarms
-
-Подозрения (int16 52..59) удобнее ставить из второго терминала, без консоли сервера:
-  python3 plc_emulator.py --client --suspect 52=1 --status
-  python3 plc_emulator.py --client --suspect 52=0,53=1 --status
-  python3 plc_emulator.py --client --clear-alarms --status
-
-Server console (while listening, TTY only; status-ping не печатается каждый раз):
-  service 0|1
-  do N=0|1
-  panel stop|start|estop|0 — int16[50] (10/20/30/0)
-  mushroom 0|1  — грибок int16[51]: 0 = зажат, 1 = отжат
-  suspect 52=1,53=0  — int16[52..59]
-  clear
-  status
-  help
-  quit
+Веб-страница управления: http://127.0.0.1:8025 (--web PORT, --web 0 — выключить).
 """
 
 from __future__ import annotations
 
 import argparse
+import collections
+import shlex
 import socket
 import sys
 import threading
 import time
-from typing import Iterable
 
-FRAME_SIZE = 1024
-# --status-bytes 100..1000 (как PlcClient); кнопки/грибок/подозрения int16[50..59] нужны ≥120.
-STATUS_INT_COUNT = 60
-STATUS_INT_BYTES = 2
-STATUS_SIZE = STATUS_INT_COUNT * STATUS_INT_BYTES
-DO_COUNT = 50
+STATUS_INT_COUNT = 80
+STATUS_SIZE = STATUS_INT_COUNT * 2
+
+POLL_TAG = 203
+CMD_TAG = 7
 SERVICE_TAG = 99
 DO_TAG = 2
-PREP_COMMAND_SIZE = 10
-PING_FRAME = bytes((203, 0, 0, 0))
-PROGRAM_SELECT_TAG = 7
-SET_STATUS_TAG = 204
-CLEAR_ALARMS_TAG = 205
-# Временно: флаги камер в кадре статуса. 1 = камера работает.
-VISION1_INT_INDEX = 45
-VISION2_INT_INDEX = 46
-# Предподготовка HMI: 1 = готово. Те же индексы, что PlcClient (байты).
-LAMELLAE_OFFSET = 24
-GEESE_OFFSET = 25
-WELD_OFFSET = 26
-WELD_COUNT = 20
-# Готовность сварочного модуля для HMI: те же int16, что PlcClient::kWeldingReadyInts.
-WELDING_READY_INTS = (10, 11, 12, 13, 14, 16)
-VALVE_COUNT = 12
-SENSOR_COUNT = 12
-VALVE_OFFSET = 0
-SENSOR_OFFSET = 12
-PANEL_INT_INDEX = 50
-PANEL_VALUES = {"0": 0, "stop": 10, "start": 20, "estop": 30}
-PANEL_STOP = PANEL_VALUES["stop"]
-PANEL_START = PANEL_VALUES["start"]
-PANEL_ESTOP = PANEL_VALUES["estop"]
-ESTOP_MUSHROOM_INT_INDEX = 51
-SUSPICION_FIRST = 52
-SUSPICION_LAST = 59
-# Стейты станций перед стартом (0 = готово), как PlcClient.
-LAMEL_STATE_INT = 40
-GOOSE_STATE_INT = 41
-BIG_GOOSE_STATE_INT = 42
-WELDING_STATE_INT = 43
+DEBUG_TAG = 204
 
-VALVE_NAMES = [f"K{i}" for i in range(1, VALVE_COUNT + 1)]
-SENSOR_NAMES = [f"S{i}" for i in range(1, SENSOR_COUNT + 1)]
+HMI_POLL_SIZE = 6
+OTHER_POLL_SIZE = 4
+DO_COUNT = 50
+ROBOT_DO_PACKET_SIZE = 1024
+ROBOT_DO_COUNT = 12
+ROBOT_DO_HOLD = 255
+
+# Ячейки кадра (int16).
+WELD_VALVE_INTS = (10, 11, 12, 13, 14, 16)
+SMALL_HOLDERS_SENSOR_INT = 1
+BIG_HOLDERS_SENSOR_INT = 25
+PANEL_INT = 50
+MUSHROOM_INT = 51
+MODE_INT = 52
+PROGRAM_INT = 54
+LOAD_CELL_INT = 55
+PREP_DONE_INT = 56
+VISION1_INT = 57
+VISION2_INT = 58
+NO_LAMEL_INT = 59
+INIT_PERMIT_INT = 60
+NO_HOLDERS_INT = 61
+GOOD_INT = 62
+SCRAP_INT = 63
+SAFE_POWER_OFF_INT = 64
+LAMEL_TYPE_INT = 69
+
+MODE_BOOT, MODE_READY, MODE_STOPPING, MODE_RUN, MODE_ESTOP, MODE_SERVICE = range(6)
+MODE_NAMES = {
+    MODE_BOOT: "Boot",
+    MODE_READY: "Ready",
+    MODE_STOPPING: "Stopping",
+    MODE_RUN: "Run",
+    MODE_ESTOP: "Estop",
+    MODE_SERVICE: "Service",
+}
+LINE_ACTIVE = (MODE_RUN, MODE_STOPPING)
+
+PANEL_STOP = 10
+PANEL_START = 20
+PANEL_ESTOP = 30
+
+HMI_TIMEOUT_S = 3.0
+BOOT_DELAY_S = 1.0
+READY_NAMES = ("weld", "vision1", "vision2")
+HOLDER_NAMES = ("big", "small")
 
 DEFAULT_HOST = "0.0.0.0"
-DEFAULT_PORT = 1502
+DEFAULT_PORT = 2025
+DEFAULT_ROBOT_PORT = 2021
 DEFAULT_CLIENT_HOST = "127.0.0.1"
-HOLD_BYTE = 0xFF
-REPLY_TIMEOUT_S = 0.25
-# Задержки имитации заполнения после кадра «Старт» (10 байт).
-PREP_LAMELLAE_DELAY_S = 1.0
-PREP_GEESE_DELAY_S = 2.0
-PREP_WELD_DELAY_S = 3.0
-PREP_IDLE_RESTORE_S = 4.0
+
+
+LOG_TAIL: collections.deque[str] = collections.deque(maxlen=200)
+
+
+def log(text: str) -> None:
+    LOG_TAIL.append(f"{time.strftime('%H:%M:%S')} {text}")
+    print(f"[plc] {text}", flush=True)
 
 
 def put_i16(buf: bytearray, index: int, value: int) -> None:
-    off = index * STATUS_INT_BYTES
-    if off < 0 or off + 1 >= len(buf):
-        return
     v = int(value) & 0xFFFF
-    buf[off] = v & 0xFF
-    buf[off + 1] = (v >> 8) & 0xFF
+    buf[index * 2] = v & 0xFF
+    buf[index * 2 + 1] = (v >> 8) & 0xFF
 
 
 def get_i16(buf: bytes, index: int) -> int:
-    off = index * STATUS_INT_BYTES
-    if off < 0 or off + 1 >= len(buf):
-        return 0
-    return int.from_bytes(buf[off : off + 2], "little", signed=True)
+    return int.from_bytes(buf[index * 2 : index * 2 + 2], "little", signed=True)
 
 
-def recv_exact(conn: socket.socket, n: int) -> bytes | None:
-    buf = bytearray()
-    while len(buf) < n:
-        chunk = conn.recv(n - len(buf))
-        if not chunk:
-            return None
-        buf.extend(chunk)
-    return bytes(buf)
+class Plc:
+    """Состояние и решения ПЛК. Все методы вызываются под self.lock."""
 
+    def __init__(self, boot_estop: bool) -> None:
+        self.lock = threading.Lock()
+        self.mode = MODE_BOOT
+        self.boot_at = time.monotonic()
+        self.boot_estop = boot_estop
 
-def try_send_reply(conn: socket.socket, reply: bytes, peer: str) -> bool:
-    """Best-effort reply. Write-only clients (Behaviour) may ignore replies;
-    never tear down the connection just because the reply could not be delivered.
-    """
-    try:
-        conn.settimeout(REPLY_TIMEOUT_S)
-        conn.sendall(reply)
-        return True
-    except (BrokenPipeError, ConnectionResetError, TimeoutError, OSError) as exc:
-        print(f"[plc] {peer} reply skipped ({exc})", flush=True)
-        return False
-    finally:
-        try:
-            conn.settimeout(None)
-        except OSError:
-            pass
-
-
-def format_bits(names: Iterable[str], values: Iterable[int]) -> str:
-    return " ".join(f"{name}={int(v)}" for name, v in zip(names, values))
-
-
-def is_alarm_index(index: int) -> bool:
-    return index in (PANEL_INT_INDEX, ESTOP_MUSHROOM_INT_INDEX) or SUSPICION_FIRST <= index <= SUSPICION_LAST
-
-
-def check_alarm_value(index: int, value: int) -> None:
-    if index == PANEL_INT_INDEX:
-        if value not in PANEL_VALUES.values():
-            raise ValueError(f"int16[{PANEL_INT_INDEX}] must be 0/10/20/30: {value}")
-    elif value not in (0, 1):
-        raise ValueError(f"alarm value must be 0 or 1: {value}")
-
-
-def parse_panel(text: str) -> int:
-    text = text.strip()
-    if text in PANEL_VALUES:
-        return PANEL_VALUES[text]
-    value = int(text)
-    check_alarm_value(PANEL_INT_INDEX, value)
-    return value
-
-
-class PlcState:
-    """In-memory valve/sensor/alarm/prep state shared by all TCP clients."""
-
-    def __init__(self) -> None:
-        self.valves = [0] * VALVE_COUNT
-        self.sensors = [0] * SENSOR_COUNT
+        self.prep_done = False
+        self.program = 0
+        self.load_cell = 0
+        self.no_lamel = False
+        self.no_holders = False
+        self.lamel_type = 1
+        self.holders = {name: True for name in HOLDER_NAMES}
+        self.init_permit = 0
+        self.good = 0
+        self.scrap = 0
         self.panel = 0
         self.mushroom = 1
-        self.suspicions = [0] * (SUSPICION_LAST - SUSPICION_FIRST + 1)
-        # idle: int16 сварки = 1 для чек-листа. filling: байты предподготовки 0→1.
-        self.phase = "idle"
-        self.prep_lamellae = 0
-        self.prep_geese = 0
-        self.prep_weld = 0
-        self.service_mode = False
-        self.digital_outputs = [0] * DO_COUNT
-        self._lock = threading.Lock()
-        self._prep_epoch = 0
+        self.doors_closed = True
+        self.ready = {name: True for name in READY_NAMES}
 
-    def apply_valve_commands(self, frame: bytes) -> list[tuple[str, int, int]]:
-        """Apply bytes[0:12] as valve commands. Returns list of (name, old, new)."""
-        if len(frame) == 4 and frame[0] == 203:
-            return []
-        changes: list[tuple[str, int, int]] = []
-        with self._lock:
-            for i in range(VALVE_COUNT):
-                if VALVE_OFFSET + i >= len(frame):
-                    break
-                raw = frame[VALVE_OFFSET + i]
-                if raw not in (0, 1):
-                    continue
-                old = self.valves[i]
-                if old != raw:
-                    self.valves[i] = raw
-                    changes.append((VALVE_NAMES[i], old, raw))
-            self._update_sensors_locked()
-        return changes
+        self.init_done = False
 
-    def set_service_mode(self, on: bool) -> bool:
-        with self._lock:
-            was = self.service_mode
-            self.service_mode = bool(on)
-            if not self.service_mode:
-                self.digital_outputs = [0] * DO_COUNT
-            return was
+        self.hmi_flags = (0, 0, 0, 0)
+        self.zone = 0
+        self.hmi_last_poll = 0.0
+        self.hmi_lost = False
 
-    def service_on(self) -> bool:
-        with self._lock:
-            return self.service_mode
+        self.service_do = [0] * DO_COUNT
+        self.overrides: dict[int, int] = {}
+        self.robot_do = [0] * ROBOT_DO_COUNT
 
-    def set_do(self, index: int, value: int) -> str | None:
-        if value not in (0, 1):
-            return f"DO value must be 0 or 1: {value}"
-        if index < 0 or index >= DO_COUNT:
-            return f"DO index out of range 0..{DO_COUNT - 1}: {index}"
-        with self._lock:
-            if not self.service_mode:
-                return "ignored (not in service mode)"
-            self.digital_outputs[index] = value
-        return None
+    # --- режимы -------------------------------------------------------------
 
-    def set_alarm_int(self, index: int, value: int) -> None:
-        check_alarm_value(index, value)
-        if not is_alarm_index(index):
-            raise ValueError(
-                f"alarm index must be {PANEL_INT_INDEX}, {ESTOP_MUSHROOM_INT_INDEX} or {SUSPICION_FIRST}..{SUSPICION_LAST}: {index}"
-            )
-        with self._lock:
-            if index == PANEL_INT_INDEX:
-                self.panel = value
-            elif index == ESTOP_MUSHROOM_INT_INDEX:
-                self.mushroom = value
+    def set_mode(self, mode: int, why: str) -> None:
+        if mode == self.mode:
+            return
+        log(f"mode {MODE_NAMES[self.mode]} → {MODE_NAMES[mode]} ({why})")
+        self.mode = mode
+
+    def robot_ready(self) -> bool:
+        nats, ctrl, behaviour, _running = self.hmi_flags
+        return bool(nats and ctrl and behaviour)
+
+    def alarm_active(self) -> str:
+        """Физическая причина аварии, которая ещё не снята; пустая строка — нет."""
+        if not self.estop_circuit_ok():
+            return "грибок зажат или двери открыты"
+        if self.no_lamel:
+            return "долго нет ламелей"
+        if self.no_holders:
+            return "долго нет держателей"
+        return ""
+
+    def estop_circuit_ok(self) -> bool:
+        return bool(self.mushroom and self.doors_closed)
+
+    def sensor(self, index: int, value: int) -> int:
+        """Значение датчика так, как его видит ПЛК: ручная подмена ячейки важнее."""
+        return self.overrides.get(index, value)
+
+    def prep_waiting(self) -> list[str]:
+        """Что ещё не готово, чтобы закончить предподготовку (56 = 1)."""
+        waiting = []
+        if self.sensor(LAMEL_TYPE_INT, self.lamel_type) == 0:
+            waiting.append("ламель на выдаче")
+        if self.program == 1:
+            holders = self.sensor(BIG_HOLDERS_SENSOR_INT, int(self.holders["big"]))
+        else:
+            holders = self.sensor(SMALL_HOLDERS_SENSOR_INT, int(self.holders["small"]))
+        if holders != 1:
+            waiting.append("держатели")
+        valves_closed = all(self.sensor(i, 0) == 0 for i in WELD_VALVE_INTS)
+        if not self.ready["weld"] or not valves_closed:
+            waiting.append("клапаны сварки")
+        if not self.init_done:
+            waiting.append("init")
+        return waiting
+
+    def raise_alarm(self, why: str) -> None:
+        if self.mode not in (MODE_ESTOP, MODE_SERVICE, MODE_BOOT):
+            self.enter_estop(why)
+
+    def leave_line(self) -> None:
+        """Линия уходит из «в работе» / «остановки»: незаконченный цикл — брак."""
+        if self.mode in LINE_ACTIVE and self.prep_done:
+            self.scrap += 1
+            log(f"цикл прерван, брак = {self.scrap}")
+        self.prep_done = False
+
+    def enter_estop(self, why: str) -> None:
+        self.leave_line()
+        self.panel = PANEL_ESTOP
+        self.set_mode(MODE_ESTOP, why)
+        log("ПЛК: stop роботу в NATS (в эмуляторе не отправляется)")
+
+    def request_start(self, source: str) -> None:
+        if self.mode != MODE_READY:
+            log(f"{source}: старт отклонён, режим {MODE_NAMES[self.mode]}")
+            return
+        if self.program == 0:
+            log(f"{source}: старт отклонён, программа не выбрана")
+            return
+        if self.zone == 0:
+            log(f"{source}: старт отклонён, робот не в стартовой зоне")
+            return
+        if self.panel == PANEL_START:
+            self.panel = 0
+        self.init_done = False
+        self.prep_done = False
+        self.init_permit = (self.init_permit + 1) & 0x7FFF
+        self.set_mode(MODE_RUN, f"{source}: предподготовка, разрешение init = {self.init_permit}")
+
+    def request_stop(self, source: str) -> None:
+        if self.mode != MODE_RUN:
+            log(f"{source}: стоп проигнорирован, режим {MODE_NAMES[self.mode]}")
+            return
+        self.set_mode(MODE_STOPPING, f"{source}: ждём 7 8")
+
+    # --- команды пульта -----------------------------------------------------
+
+    def on_command(self, sub: int, a: int, b: int) -> None:
+        if sub == 1:
+            self.on_select(a, b)
+        elif sub == 2:
+            self.request_start("7 2")
+        elif sub == 3:
+            self.request_stop("7 3")
+        elif sub == 5:
+            self.on_estop_exit()
+        elif sub == 7:
+            self.on_script_report(a, b)
+        elif sub == 8:
+            self.on_stopped()
+        else:
+            log(f"неизвестная команда 7 {sub} {a} {b}")
+
+    def on_select(self, program: int, load_cell: int) -> None:
+        if program not in (1, 2) or load_cell not in (0, 1):
+            log(f"7 1 {program} {load_cell}: неверные параметры")
+            return
+        if self.mode not in (MODE_READY, MODE_BOOT):
+            log(f"7 1: выбор программы отклонён, режим {MODE_NAMES[self.mode]}")
+            return
+        if program != self.program:
+            self.good = 0
+            self.scrap = 0
+            log(f"программа {self.program} → {program}, счётчики обнулены")
+        self.program = program
+        self.load_cell = load_cell
+        log(f"7 1: программа {program}, тензодатчик {'вкл' if load_cell else 'выкл'}")
+
+    def on_estop_exit(self) -> None:
+        if self.mode != MODE_ESTOP:
+            log("7 5: не в аварии, игнор")
+            return
+        why = self.alarm_active()
+        if why:
+            log(f"7 5: выход из аварии отклонён, {why}")
+            return
+        if self.panel == PANEL_ESTOP:
+            self.panel = 0
+        self.set_mode(MODE_READY, "7 5: авария снята")
+
+    def on_script_report(self, role: int, ok: int) -> None:
+        log(f"7 7 {role} {ok}: {'init' if role == 1 else 'основной'} {'дошёл' if ok else 'упал'}")
+        if self.mode not in LINE_ACTIVE:
+            return
+        stopping = self.mode == MODE_STOPPING
+        if role == 1:
+            if self.prep_done:
+                return
+            if ok:
+                self.init_done = True
+            elif not stopping:
+                self.enter_estop("init не выполнился")
+        elif role == 2:
+            if not self.prep_done:
+                return
+            if ok:
+                self.good += 1
+                log(f"годные = {self.good}")
+            elif not stopping:
+                self.enter_estop("основной скрипт упал")
+
+    def on_stopped(self) -> None:
+        if self.mode != MODE_STOPPING:
+            log("7 8: не в остановке, игнор")
+            return
+        self.prep_done = False
+        if self.panel == PANEL_STOP:
+            self.panel = 0
+        self.set_mode(MODE_READY, "7 8: стоп отработан")
+
+    def on_service(self, on: bool) -> None:
+        if on and self.mode == MODE_READY:
+            self.set_mode(MODE_SERVICE, "99 1")
+        elif not on and self.mode == MODE_SERVICE:
+            self.service_do = [0] * DO_COUNT
+            self.set_mode(MODE_READY, "99 0")
+        else:
+            log(f"99 {int(on)}: игнор в режиме {MODE_NAMES[self.mode]}")
+
+    def on_do(self, index: int, value: int) -> None:
+        if self.mode != MODE_SERVICE or not 0 <= index < DO_COUNT or value not in (0, 1):
+            log(f"2 {index} {value}: игнор")
+            return
+        self.service_do[index] = value
+
+    def on_robot_do(self, packet: bytes) -> None:
+        changed = []
+        for i, value in enumerate(packet[:ROBOT_DO_COUNT]):
+            if value != ROBOT_DO_HOLD and value != self.robot_do[i]:
+                self.robot_do[i] = value
+                changed.append(f"K{i + 1}={value}")
+        log(f"выходы от робота: {', '.join(changed) if changed else 'без изменений'}")
+
+    def on_hmi_poll(self, flags: tuple[int, int, int, int], zone: int) -> None:
+        if self.hmi_flags != flags or self.zone != zone:
+            log(f"203: nats={flags[0]} ctrl={flags[1]} behaviour={flags[2]} script={flags[3]} zone={zone}")
+        if self.hmi_lost:
+            self.hmi_lost = False
+            log("пульт снова на связи")
+        self.hmi_flags = flags
+        self.zone = zone
+        self.hmi_last_poll = time.monotonic()
+
+    # --- время --------------------------------------------------------------
+
+    def tick(self) -> None:
+        now = time.monotonic()
+
+        if self.mode == MODE_BOOT and now - self.boot_at >= BOOT_DELAY_S and self.hmi_last_poll:
+            if self.boot_estop:
+                self.enter_estop("авария сохранена с прошлого включения")
             else:
-                self.suspicions[index - SUSPICION_FIRST] = value
+                self.set_mode(MODE_READY, "включение")
 
-    def clear_alarms(self) -> None:
-        with self._lock:
-            self.panel = 0
-            self.mushroom = 1
-            for i in range(len(self.suspicions)):
-                self.suspicions[i] = 0
+        hmi_alive = self.hmi_last_poll and now - self.hmi_last_poll < HMI_TIMEOUT_S
+        if self.hmi_last_poll and not hmi_alive and not self.hmi_lost:
+            self.hmi_lost = True
+            log("нет опроса от пульта 3 с")
+            if self.mode in LINE_ACTIVE:
+                self.leave_line()
+                self.set_mode(MODE_READY, "пульт пропал, цикл прерван")
 
-    def alarm_snapshot(self) -> tuple[int, int, list[int]]:
-        with self._lock:
-            return self.panel, self.mushroom, list(self.suspicions)
+        if self.mode == MODE_RUN and not self.prep_done and not self.prep_waiting():
+            self.prep_done = True
+            log("предподготовка закончена (56 = 1)")
 
-    def release_panel(self, value: int) -> bool:
-        """HMI ответил командой — снять защёлку, если в int16[50] именно это значение."""
-        with self._lock:
-            if self.panel != value:
-                return False
-            self.panel = 0
-            return True
-
-    def begin_prep_fill(self) -> None:
-        """HMI прислал 10-байтный Старт — имитируем набор ламелей/гусей/сварки."""
-        with self._lock:
-            self._prep_epoch += 1
-            epoch = self._prep_epoch
-            self.phase = "filling"
-            self.prep_lamellae = 0
-            self.prep_geese = 0
-            self.prep_weld = 0
-        print(
-            f"[plc] prep-fill start (lamellae@{PREP_LAMELLAE_DELAY_S:.0f}s "
-            f"geese@{PREP_GEESE_DELAY_S:.0f}s weld@{PREP_WELD_DELAY_S:.0f}s)",
-            flush=True,
-        )
-
-        def step(delay: float, fn) -> None:
-            def run() -> None:
-                time.sleep(delay)
-                with self._lock:
-                    if self._prep_epoch != epoch:
-                        return
-                    fn()
-            threading.Thread(target=run, daemon=True, name="plc-prep-fill").start()
-
-        def set_lamellae() -> None:
-            self.prep_lamellae = 1
-            print("[plc] prep-fill: ламели готовы", flush=True)
-
-        def set_geese() -> None:
-            self.prep_geese = 1
-            print("[plc] prep-fill: гуси готовы", flush=True)
-
-        def set_weld() -> None:
-            self.prep_weld = 1
-            print("[plc] prep-fill: сварка готова", flush=True)
-
-        def restore_idle() -> None:
-            self.phase = "idle"
-            self.prep_lamellae = 1
-            self.prep_geese = 1
-            self.prep_weld = 1
-            print("[plc] prep-fill: idle (сварка int16 снова 1)", flush=True)
-
-        step(PREP_LAMELLAE_DELAY_S, set_lamellae)
-        step(PREP_GEESE_DELAY_S, set_geese)
-        step(PREP_WELD_DELAY_S, set_weld)
-        step(PREP_IDLE_RESTORE_S, restore_idle)
-
-    def _update_sensors_locked(self) -> None:
-        """S_i follows K_i so valve commands are visible in the sensor reply."""
-        for i in range(SENSOR_COUNT):
-            self.sensors[i] = self.valves[i]
+    # --- кадр ---------------------------------------------------------------
 
     def build_status(self) -> bytes:
-        """100-byte status frame for the HMI ping (50 int16)."""
-        with self._lock:
-            out = bytearray(STATUS_SIZE)
-            for i, v in enumerate(self.valves):
-                if VALVE_OFFSET + i < STATUS_SIZE:
-                    out[VALVE_OFFSET + i] = v
-            for i, s in enumerate(self.sensors):
-                if SENSOR_OFFSET + i < STATUS_SIZE:
-                    out[SENSOR_OFFSET + i] = s
-            put_i16(out, VISION1_INT_INDEX, 1)
-            put_i16(out, VISION2_INT_INDEX, 1)
-
-            if self.phase == "filling":
-                # Байты предподготовки для PrepOverlay (ещё идут с 0 к 1).
-                out[LAMELLAE_OFFSET] = self.prep_lamellae
-                out[GEESE_OFFSET] = self.prep_geese
-                for i in range(WELD_COUNT):
-                    if WELD_OFFSET + i < STATUS_SIZE:
-                        out[WELD_OFFSET + i] = self.prep_weld
-            else:
-                # Idle: чек-лист HMI смотрит int16 сварки == 1.
-                for index in WELDING_READY_INTS:
-                    put_i16(out, index, 1)
-
-            # Станции: 0 = готово к старту.
-            put_i16(out, LAMEL_STATE_INT, 0)
-            put_i16(out, GOOSE_STATE_INT, 0)
-            put_i16(out, BIG_GOOSE_STATE_INT, 0)
-            put_i16(out, WELDING_STATE_INT, 0)
-            put_i16(out, PANEL_INT_INDEX, self.panel)
-            put_i16(out, ESTOP_MUSHROOM_INT_INDEX, self.mushroom)
-            for i, v in enumerate(self.suspicions):
-                put_i16(out, SUSPICION_FIRST + i, v)
-
-            if self.service_mode:
-                for i, v in enumerate(self.digital_outputs):
-                    put_i16(out, i, v)
-        return bytes(out)
-
-    def build_reply(self) -> tuple[bytes, list[int], list[int]]:
-        with self._lock:
-            out = bytearray(FRAME_SIZE)
-            for i, v in enumerate(self.valves):
-                out[VALVE_OFFSET + i] = v
-            for i, s in enumerate(self.sensors):
-                out[SENSOR_OFFSET + i] = s
-            valves = list(self.valves)
-            sensors = list(self.sensors)
-        return bytes(out), valves, sensors
-
-
-def format_alarms(panel: int, mushroom: int, suspicions: list[int]) -> str:
-    parts = [f"panel={panel}", f"mushroom={mushroom}{'(зажат)' if mushroom == 0 else ''}"]
-    for i, v in enumerate(suspicions):
-        if v:
-            parts.append(f"{SUSPICION_FIRST + i}={v}")
-    if len(parts) == 2:
-        parts.append("suspects=none")
-    return " ".join(parts)
-
-
-def handle_tag7(frame: bytes, peer: str, state: PlcState) -> None:
-    sub = frame[1]
-    is_start = frame[1] == 1 and frame[2] == 1 and frame[3] in (0, 1)
-    if is_start:
-        flag = "ignore-on" if frame[3] == 0 else "ignore-off"
-        print(f"[plc] {peer} hmi start {flag} {list(frame)}", flush=True)
-        if state.release_panel(PANEL_START):
-            print("[plc] panel: СТАРТ (20) снят", flush=True)
-        state.begin_prep_fill()
-        return
-    names = {
-        1: "program",
-        2: "main-start",
-        3: "stop",
-        4: "e-stop",
-        5: "e-stop-exit",
-    }
-    name = names.get(sub, "unknown")
-    print(f"[plc] {peer} hmi {name} {list(frame)}", flush=True)
-    if sub == 3 and state.release_panel(PANEL_STOP):
-        print("[plc] panel: СТОП (10) снят", flush=True)
-    if sub == 5 and state.release_panel(PANEL_ESTOP):
-        print("[plc] panel: e-stop (30) снят", flush=True)
-
-
-def try_consume_pending(
-    conn: socket.socket, pending: bytearray, peer: str, state: PlcState
-) -> str:
-    """'consumed' | 'need_more' | 'full_frame'."""
-    if not pending:
-        return "need_more"
-
-    if pending[0] == SERVICE_TAG:
-        if len(pending) < 2:
-            return "need_more"
-        on = pending[1] != 0
-        del pending[:2]
-        state.set_service_mode(on)
-        print(f"[plc] {peer} service {'on' if on else 'off'} [99, {int(on)}]", flush=True)
-        return "consumed"
-
-    if pending[0] == DO_TAG:
-        if len(pending) < 3:
-            return "need_more"
-        n = pending[1]
-        v = pending[2]
-        frame = [2, n, v]
-        del pending[:3]
-        err = state.set_do(n, v)
-        if err:
-            print(f"[plc] {peer} DO {list(frame)} {err}", flush=True)
+        # Ячейки 0..79 заполняются всегда; ответ обрезается или дополняется нулями до STATUS_SIZE.
+        out = bytearray(max(STATUS_SIZE, 160))
+        if self.mode == MODE_SERVICE:
+            for i, v in enumerate(self.service_do):
+                put_i16(out, i, v)
         else:
-            print(f"[plc] {peer} DO {n}={'on' if v else 'off'}", flush=True)
-        return "consumed"
+            valves_open = (self.mode in LINE_ACTIVE and self.prep_done) or not self.ready["weld"]
+            for index in WELD_VALVE_INTS:
+                put_i16(out, index, int(valves_open))
+            put_i16(out, BIG_HOLDERS_SENSOR_INT, int(self.holders["big"]))
+            put_i16(out, SMALL_HOLDERS_SENSOR_INT, int(self.holders["small"]))
+        put_i16(out, PANEL_INT, self.panel)
+        put_i16(out, MUSHROOM_INT, int(self.estop_circuit_ok()))
+        put_i16(out, MODE_INT, self.mode)
+        put_i16(out, PROGRAM_INT, self.program)
+        put_i16(out, LOAD_CELL_INT, self.load_cell)
+        put_i16(out, PREP_DONE_INT, int(self.prep_done))
+        put_i16(out, VISION1_INT, int(self.ready["vision1"]))
+        put_i16(out, VISION2_INT, int(self.ready["vision2"]))
+        put_i16(out, NO_LAMEL_INT, int(self.no_lamel))
+        put_i16(out, INIT_PERMIT_INT, self.init_permit)
+        put_i16(out, NO_HOLDERS_INT, int(self.no_holders))
+        put_i16(out, GOOD_INT, self.good)
+        put_i16(out, SCRAP_INT, self.scrap)
+        put_i16(out, SAFE_POWER_OFF_INT, int(self.mode not in LINE_ACTIVE))
+        put_i16(out, LAMEL_TYPE_INT, self.lamel_type)
+        for index, value in self.overrides.items():
+            put_i16(out, index, value)
+        return bytes(out[:STATUS_SIZE])
 
-    if (
-        len(pending) == PREP_COMMAND_SIZE
-        or (
-            len(pending) == PREP_COMMAND_SIZE + len(PING_FRAME)
-            and bytes(pending[PREP_COMMAND_SIZE:]) == PING_FRAME
+    # --- физические входы (консоль) -----------------------------------------
+
+    def action(self, line: str) -> str:
+        parts = shlex.split(line)
+        if not parts:
+            return ""
+        cmd, args = parts[0], parts[1:]
+        flag = args[0] == "1" if args and args[0] in ("0", "1") else None
+        if cmd == "estop" or (cmd == "mushroom" and flag is False):
+            self.mushroom = 0
+            self.raise_alarm("кнопка e-stop")
+            return "e-stop нажат"
+        if cmd == "mushroom" and flag:
+            self.mushroom = 1
+            return "грибок отжат"
+        if cmd == "doors" and flag is not None:
+            self.doors_closed = flag
+            if not flag:
+                self.raise_alarm("двери открыты")
+            return f"двери {'закрыты' if flag else 'открыты'}"
+        if cmd == "nolamel" and flag is not None:
+            self.no_lamel = flag
+            if flag:
+                self.raise_alarm("долго нет ламелей")
+            return f"долго нет ламелей = {int(flag)}"
+        if cmd == "noholders" and flag is not None:
+            self.no_holders = flag
+            if flag:
+                self.raise_alarm("долго нет держателей")
+            return f"долго нет держателей = {int(flag)}"
+        if cmd == "lameltype" and args and args[0].isdigit():
+            self.lamel_type = int(args[0])
+            return f"на выдаче тип {self.lamel_type}"
+        if cmd == "start":
+            self.panel = PANEL_START
+            self.request_start("кнопка СТАРТ")
+            return "кнопка СТАРТ"
+        if cmd == "stop":
+            if self.mode == MODE_RUN:
+                self.panel = PANEL_STOP
+            self.request_stop("кнопка СТОП")
+            return "кнопка СТОП"
+        if cmd == "ready" and len(args) == 2 and args[0] in READY_NAMES and args[1] in ("0", "1"):
+            self.ready[args[0]] = args[1] == "1"
+            return f"{args[0]} = {args[1]}"
+        if cmd == "holders" and len(args) == 2 and args[0] in HOLDER_NAMES and args[1] in ("0", "1"):
+            self.holders[args[0]] = args[1] == "1"
+            return f"держатели {args[0]} = {args[1]}"
+        if cmd == "set" and len(args) == 2:
+            try:
+                index, value = int(args[0]), int(args[1])
+            except ValueError:
+                return "set I V: числа"
+            if not 0 <= index < STATUS_INT_COUNT or not -32768 <= value <= 32767:
+                return "set I V: I 0..79, V int16"
+            self.overrides[index] = value
+            return f"int16[{index}] = {value} (подмена)"
+        if cmd == "unset" and args:
+            if args[0] == "all":
+                self.overrides.clear()
+                return "подмены сняты"
+            if args[0].isdigit():
+                self.overrides.pop(int(args[0]), None)
+                return f"int16[{args[0]}] без подмены"
+        if cmd == "reboot":
+            self.boot_estop = args[:1] == ["estop"]
+            self.prep_done = False
+            self.init_done = False
+            self.panel = 0
+            self.boot_at = time.monotonic()
+            self.set_mode(MODE_BOOT, "перезагрузка" + (" после аварии" if self.boot_estop else ""))
+            return "ПЛК перезагружается"
+        if cmd == "status":
+            return self.describe()
+        return "неизвестно; help"
+
+    def describe(self) -> str:
+        return (
+            f"mode={MODE_NAMES[self.mode]} prep_done={int(self.prep_done)} program={self.program} "
+            f"loadcell={self.load_cell} init={self.init_permit} "
+            f"good={self.good} scrap={self.scrap} "
+            f"prep_waiting={self.prep_waiting()} holders={self.holders} "
+            f"mushroom={self.mushroom} doors={'closed' if self.doors_closed else 'open'} "
+            f"nolamel={int(self.no_lamel)} noholders={int(self.no_holders)} "
+            f"lameltype={self.lamel_type} "
+            f"zone={self.zone} flags={self.hmi_flags} hmi_lost={int(self.hmi_lost)}"
         )
-    ):
-        frame = bytes(pending[:PREP_COMMAND_SIZE])
-        del pending[:PREP_COMMAND_SIZE]
-        print(f"[plc] {peer} prep-start {frame.hex()}", flush=True)
-        state.begin_prep_fill()
-        return "consumed"
-
-    if len(pending) >= 4 and pending[0] == PROGRAM_SELECT_TAG:
-        frame = bytes(pending[:4])
-        del pending[:4]
-        handle_tag7(frame, peer, state)
-        return "consumed"
-
-    if len(pending) >= 4 and pending[0] == 203:
-        frame = bytes(pending[:4])
-        del pending[:4]
-        state.apply_valve_commands(frame)
-        reply = state.build_status()
-        panel, mushroom, suspects = state.alarm_snapshot()
-        alarm_key = (panel, mushroom, tuple(suspects), state.service_on())
-        if getattr(state, "_last_logged_alarms", None) != alarm_key:
-            state._last_logged_alarms = alarm_key
-            print(
-                f"[plc] {peer} status {STATUS_SIZE}B  {format_alarms(panel, mushroom, suspects)}"
-                f"{' service' if state.service_on() else ''}",
-                flush=True,
-            )
-        try_send_reply(conn, reply, peer)
-        return "consumed"
-
-    if len(pending) >= 4 and pending[0] == SET_STATUS_TAG:
-        frame = bytes(pending[:4])
-        del pending[:4]
-        index = frame[1]
-        value = frame[2]
-        try:
-            state.set_alarm_int(index, value)
-            print(f"[plc] {peer} set int16[{index}]={value}", flush=True)
-        except ValueError as exc:
-            print(f"[plc] {peer} set rejected: {exc}", flush=True)
-        return "consumed"
-
-    if len(pending) >= 4 and pending[0] == CLEAR_ALARMS_TAG:
-        del pending[:4]
-        state.clear_alarms()
-        print(f"[plc] {peer} alarms cleared", flush=True)
-        return "consumed"
-
-    if len(pending) >= FRAME_SIZE:
-        return "full_frame"
-    return "need_more"
 
 
-def handle_client(conn: socket.socket, addr: tuple[str, int], state: PlcState) -> None:
+HELP = __doc__.split("Консоль сервера", 1)[1].split("python3", 1)[0]
+
+
+def handle_client(conn: socket.socket, addr: tuple[str, int], plc: Plc, hmi_ip: str | None,
+                  robot: bool = False) -> None:
     peer = f"{addr[0]}:{addr[1]}"
-    print(f"[plc] connected {peer}", flush=True)
+    is_hmi = not robot and (hmi_ip is None or addr[0] == hmi_ip)
+    log(f"подключился {peer} ({'пульт' if is_hmi else 'робот' if robot else 'другой клиент'})")
     try:
         conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     except OSError:
         pass
-
     pending = bytearray()
-
     try:
         while True:
-            action = try_consume_pending(conn, pending, peer, state)
-            if action == "consumed":
-                continue
-            if action == "full_frame":
-                frame = bytes(pending[:FRAME_SIZE])
-                del pending[:FRAME_SIZE]
-                changes = state.apply_valve_commands(frame)
-                reply, valves, sensors = state.build_reply()
-                if changes:
-                    detail = ", ".join(
-                        f"{name}:{old}->{new}" for name, old, new in changes
-                    )
-                    print(f"[plc] {peer} valves changed: {detail}", flush=True)
-                else:
-                    print(
-                        f"[plc] {peer} OK  {format_bits(VALVE_NAMES, valves)} | "
-                        f"{format_bits(SENSOR_NAMES, sensors)}",
-                        flush=True,
-                    )
-                try_send_reply(conn, reply, peer)
-                continue
-
-            chunk = conn.recv(FRAME_SIZE - len(pending) if pending else FRAME_SIZE)
+            chunk = conn.recv(4096)
             if not chunk:
-                print(f"[plc] disconnected {peer}", flush=True)
+                log(f"отключился {peer}")
                 return
             pending.extend(chunk)
-    except (ConnectionResetError, BrokenPipeError, OSError) as exc:
-        print(f"[plc] {peer} error: {exc}", flush=True)
+            while pending:
+                tag = pending[0]
+                if tag == POLL_TAG:
+                    size = HMI_POLL_SIZE if is_hmi else OTHER_POLL_SIZE
+                elif tag in (CMD_TAG, DEBUG_TAG):
+                    size = 4
+                elif tag == SERVICE_TAG:
+                    size = 2
+                elif tag == DO_TAG:
+                    size = 3
+                elif robot:
+                    tag = None
+                    size = ROBOT_DO_PACKET_SIZE
+                else:
+                    log(f"{peer}: неизвестный байт {tag}, пропущен")
+                    del pending[:1]
+                    continue
+                if len(pending) < size:
+                    break
+                frame = bytes(pending[:size])
+                del pending[:size]
+                reply = None
+                with plc.lock:
+                    if tag == POLL_TAG:
+                        if is_hmi:
+                            plc.on_hmi_poll(tuple(1 if b else 0 for b in frame[1:5]), frame[5])
+                        reply = plc.build_status()
+                    elif tag == CMD_TAG:
+                        plc.on_command(frame[1], frame[2], frame[3])
+                    elif tag == SERVICE_TAG:
+                        plc.on_service(frame[1] != 0)
+                    elif tag == DO_TAG:
+                        plc.on_do(frame[1], frame[2])
+                    elif tag is None:
+                        plc.on_robot_do(frame)
+                if tag == DEBUG_TAG:
+                    is_hmi = False
+                    length = frame[1]
+                    text = bytes(pending[:length]).decode("utf-8", "replace")
+                    del pending[:length]
+                    with plc.lock:
+                        result = plc.action(text)
+                    log(f"{peer}: {text} → {result}")
+                    conn.sendall(result.encode("utf-8") + b"\n")
+                if reply is not None:
+                    conn.sendall(reply)
+    except OSError as exc:
+        log(f"{peer}: {exc}")
     finally:
-        try:
-            conn.close()
-        except OSError:
-            pass
+        conn.close()
 
 
-def parse_alarm_spec(spec: str) -> dict[int, int]:
-    """Parse '51=1' or '52=1,53=0' → {index: value}."""
-    result: dict[int, int] = {}
-    if not spec.strip():
-        return result
-    for part in spec.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        if "=" not in part:
-            raise ValueError(f"bad alarm item (want N=0|1): {part!r}")
-        left, right = part.split("=", 1)
-        idx = int(left.strip())
-        val = int(right.strip())
-        if not is_alarm_index(idx):
-            raise ValueError(
-                f"alarm index must be {PANEL_INT_INDEX}, {ESTOP_MUSHROOM_INT_INDEX} or {SUSPICION_FIRST}..{SUSPICION_LAST}: {idx}"
-            )
-        check_alarm_value(idx, val)
-        result[idx] = val
-    return result
-
-
-def run_server_console(state: PlcState, stop: threading.Event) -> None:
+def run_console(plc: Plc, stop: threading.Event) -> None:
     if not sys.stdin.isatty():
         return
-    print(
-        "[plc] console: service 0|1 | do N=0|1 | panel stop|start|estop|0 | mushroom 0|1 | suspect 52=1 | "
-        "clear | status | help | quit",
-        flush=True,
-    )
+    log("консоль: help — список действий")
     while not stop.is_set():
         try:
             line = input().strip()
-        except EOFError:
-            return
-        except KeyboardInterrupt:
+        except (EOFError, KeyboardInterrupt):
             stop.set()
             return
-        if not line:
-            continue
         if line in ("q", "quit", "exit"):
             stop.set()
             return
         if line in ("h", "help", "?"):
-            print(
-                "  service 0|1            — сервисный режим\n"
-                "  do N=0|1               — DO 0..49 (только в сервисе)\n"
-                "  panel stop|start|estop|0 — кнопки корпуса, int16[50] = 10/20/30/0\n"
-                "  mushroom 0|1           — грибок int16[51]: 0 = зажат, 1 = отжат\n"
-                "  suspect 52=1,53=0      — подозрения int16[52..59]\n"
-                "  clear                  — сбросить кнопки, грибок и подозрения\n"
-                "  status                 — текущие аварии и сервис\n"
-                "  quit                   — остановить сервер",
-                flush=True,
-            )
+            print(HELP, flush=True)
             continue
-        if line == "status":
-            mode = "on" if state.service_on() else "off"
-            print(f"[plc] service={mode} {format_alarms(*state.alarm_snapshot())}", flush=True)
-            continue
-        if line.startswith("service "):
-            try:
-                val = int(line.split(None, 1)[1].strip())
-                state.set_service_mode(bool(val))
-                print(f"[plc] service={'on' if val else 'off'}", flush=True)
-            except (ValueError, IndexError) as exc:
-                print(f"[plc] error: {exc}", flush=True)
-            continue
-        if line.startswith("do "):
-            try:
-                spec = line.split(None, 1)[1].strip()
-                left, right = spec.split("=", 1)
-                err = state.set_do(int(left.strip()), int(right.strip()))
-                if err:
-                    print(f"[plc] error: {err}", flush=True)
-                else:
-                    print(f"[plc] {spec}", flush=True)
-            except (ValueError, IndexError) as exc:
-                print(f"[plc] error: {exc}", flush=True)
-            continue
-        if line == "clear":
-            state.clear_alarms()
-            print("[plc] alarms cleared", flush=True)
-            continue
-        if line.startswith("panel "):
-            try:
-                val = parse_panel(line.split(None, 1)[1])
-                state.set_alarm_int(PANEL_INT_INDEX, val)
-                print(f"[plc] panel={val}", flush=True)
-            except (ValueError, IndexError) as exc:
-                print(f"[plc] error: {exc}", flush=True)
-            continue
-        if line.startswith("mushroom "):
-            try:
-                val = int(line.split(None, 1)[1].strip())
-                state.set_alarm_int(ESTOP_MUSHROOM_INT_INDEX, val)
-                print(f"[plc] mushroom={val}", flush=True)
-            except (ValueError, IndexError) as exc:
-                print(f"[plc] error: {exc}", flush=True)
-            continue
-        if line.startswith("suspect "):
-            try:
-                for idx, val in parse_alarm_spec(line.split(None, 1)[1]).items():
-                    state.set_alarm_int(idx, val)
-                print(f"[plc] {format_alarms(*state.alarm_snapshot())}", flush=True)
-            except (ValueError, IndexError) as exc:
-                print(f"[plc] error: {exc}", flush=True)
-            continue
-        print("[plc] unknown; try: help", flush=True)
+        with plc.lock:
+            result = plc.action(line)
+        if result:
+            log(result)
 
 
-def run_server(host: str, port: int) -> None:
-    state = PlcState()
-    stop = threading.Event()
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as srv:
-        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        srv.bind((host, port))
-        srv.listen(16)
-        srv.settimeout(0.5)
-        print(
-            f"[plc] listening on {host}:{port} "
-            f"(frame={FRAME_SIZE}, status={STATUS_SIZE}B/{STATUS_INT_COUNT} int16, multi-client)",
-            flush=True,
-        )
-        print(
-            f"[plc] map: valves@{VALVE_OFFSET}..{VALVE_OFFSET + VALVE_COUNT - 1} "
-            f"sensors@{SENSOR_OFFSET}..{SENSOR_OFFSET + SENSOR_COUNT - 1} "
-            f"panel@int16[{PANEL_INT_INDEX}] mushroom@int16[{ESTOP_MUSHROOM_INT_INDEX}] "
-            f"suspects@int16[{SUSPICION_FIRST}..{SUSPICION_LAST}]",
-            flush=True,
-        )
-        print(
-            "[plc] write-only clients (Behaviour tcp_send_comand) supported; "
-            "unread replies are skipped, socket stays open",
-            flush=True,
-        )
-        console = threading.Thread(
-            target=run_server_console,
-            args=(state, stop),
-            daemon=True,
-            name="plc-console",
-        )
-        console.start()
-        while not stop.is_set():
-            try:
-                conn, addr = srv.accept()
-            except TimeoutError:
-                continue
-            threading.Thread(
-                target=handle_client,
-                args=(conn, addr, state),
-                daemon=True,
-                name=f"plc-{addr[0]}:{addr[1]}",
-            ).start()
-        print("[plc] stopped", flush=True)
+def run_ticker(plc: Plc, stop: threading.Event) -> None:
+    while not stop.is_set():
+        with plc.lock:
+            plc.tick()
+        time.sleep(0.1)
 
 
-def parse_set_spec(spec: str) -> dict[int, int]:
-    """Parse '1=1,3=0' → {0:1, 2:0} (1-based valve index → value)."""
-    result: dict[int, int] = {}
-    if not spec.strip():
-        return result
-    for part in spec.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        if "=" not in part:
-            raise ValueError(f"bad --set item (want N=0|1): {part!r}")
-        left, right = part.split("=", 1)
-        idx = int(left.strip())
-        val = int(right.strip())
-        if idx < 1 or idx > VALVE_COUNT:
-            raise ValueError(f"valve index out of range 1..{VALVE_COUNT}: {idx}")
-        if val not in (0, 1):
-            raise ValueError(f"valve value must be 0 or 1: {val}")
-        result[idx - 1] = val
-    return result
-
-
-def make_command_frame(valves: list[int] | None = None, *, hold: bool = False) -> bytes:
-    """Build a 1024-byte command frame.
-
-    hold=True writes 0xFF into the valve region so the PLC leaves valves unchanged
-    (only 0/1 are applied).
-    """
-    frame = bytearray(FRAME_SIZE)
-    if hold:
-        for i in range(VALVE_COUNT):
-            frame[VALVE_OFFSET + i] = HOLD_BYTE
-    elif valves is not None:
-        for i, v in enumerate(valves):
-            frame[VALVE_OFFSET + i] = v
-    return bytes(frame)
-
-
-def exchange(
-    host: str,
-    port: int,
-    valves: list[int] | None = None,
-    *,
-    hold: bool = False,
-) -> tuple[list[int], list[int]]:
-    """Send one frame, return (valves, sensors) from reply."""
-    frame = make_command_frame(valves, hold=hold)
-    with socket.create_connection((host, port), timeout=5.0) as sock:
-        sock.sendall(frame)
-        reply = recv_exact(sock, FRAME_SIZE)
-        if reply is None:
-            raise ConnectionError("PLC closed connection before full reply")
-    out_valves = [reply[VALVE_OFFSET + i] for i in range(VALVE_COUNT)]
-    out_sensors = [reply[SENSOR_OFFSET + i] for i in range(SENSOR_COUNT)]
-    return out_valves, out_sensors
-
-
-def send_control(host: str, port: int, frame: bytes) -> None:
-    with socket.create_connection((host, port), timeout=5.0) as sock:
-        sock.sendall(frame)
-
-
-def send_status_sets(host: str, port: int, pairs: dict[int, int]) -> None:
-    for index, value in pairs.items():
-        send_control(host, port, bytes((SET_STATUS_TAG, index, value, 0)))
-
-
-def send_clear_alarms(host: str, port: int) -> None:
-    send_control(host, port, bytes((CLEAR_ALARMS_TAG, 0, 0, 0)))
-
-
-def poll_status(host: str, port: int) -> bytes:
-    with socket.create_connection((host, port), timeout=5.0) as sock:
-        sock.sendall(PING_FRAME)
-        reply = recv_exact(sock, STATUS_SIZE)
-        if reply is None:
-            raise ConnectionError("PLC closed connection before status reply")
-    return reply
-
-
-def print_state(label: str, valves: list[int], sensors: list[int]) -> None:
-    print(f"[client] {label}")
-    print(f"  valves  {format_bits(VALVE_NAMES, valves)}")
-    print(f"  sensors {format_bits(SENSOR_NAMES, sensors)}")
-
-
-def print_status_frame(label: str, frame: bytes) -> None:
-    panel = get_i16(frame, PANEL_INT_INDEX)
-    mushroom = get_i16(frame, ESTOP_MUSHROOM_INT_INDEX)
-    suspects = [
-        get_i16(frame, i) for i in range(SUSPICION_FIRST, SUSPICION_LAST + 1)
-    ]
-    print(f"[client] {label} ({len(frame)}B)")
-    print(f"  {format_alarms(panel, mushroom, suspects)}")
-    print(
-        f"  vision1={get_i16(frame, VISION1_INT_INDEX)} "
-        f"vision2={get_i16(frame, VISION2_INT_INDEX)}"
-    )
-
-
-def run_client(
-    host: str,
-    port: int,
-    set_spec: str | None,
-    oneshot: bool,
-    *,
-    panel: int | None = None,
-    mushroom: int | None = None,
-    suspect_spec: str | None = None,
-    clear_alarms: bool = False,
-    status_poll: bool = False,
-) -> int:
-    desired = [0] * VALVE_COUNT
-
-    if clear_alarms:
-        send_clear_alarms(host, port)
-        print("[client] alarms cleared", flush=True)
-
-    alarm_pairs: dict[int, int] = {}
-    if panel is not None:
-        alarm_pairs[PANEL_INT_INDEX] = panel
-    if mushroom is not None:
-        alarm_pairs[ESTOP_MUSHROOM_INT_INDEX] = mushroom
-    if suspect_spec:
-        alarm_pairs.update(parse_alarm_spec(suspect_spec))
-    if alarm_pairs:
-        send_status_sets(host, port, alarm_pairs)
-        print(
-            "[client] set "
-            + " ".join(f"{i}={v}" for i, v in sorted(alarm_pairs.items())),
-            flush=True,
-        )
-
-    if status_poll or (oneshot and (clear_alarms or alarm_pairs) and not set_spec):
-        frame = poll_status(host, port)
-        print_status_frame("status", frame)
-        if oneshot and not set_spec:
-            return 0
-
-    if oneshot:
-        if set_spec:
-            current, _ = exchange(host, port, hold=True)
-            desired[:] = current
-            for i, v in parse_set_spec(set_spec).items():
-                desired[i] = v
-            valves, sensors = exchange(host, port, desired)
-        else:
-            if clear_alarms or alarm_pairs or status_poll:
-                return 0
-            valves, sensors = exchange(host, port, hold=True)
-        print_state("exchange" if set_spec else "poll", valves, sensors)
-        return 0
-
-    print(
-        "Commands: poll | status | set <N>=<0|1>[,...] | panel stop|start|estop|0 | "
-        "mushroom 0|1 | suspect 52=1[,...] | clear | quit\n"
-        f"Connected target {host}:{port}",
-        flush=True,
-    )
-    try:
-        valves, sensors = exchange(host, port, hold=True)
-        desired[:] = valves
-        print_state("sync", valves, sensors)
-    except OSError as exc:
-        print(f"[client] connect failed: {exc}", file=sys.stderr)
-        return 1
-
-    while True:
+def serve(srv: socket.socket, plc: Plc, hmi_ip: str | None, robot: bool, stop: threading.Event) -> None:
+    while not stop.is_set():
         try:
-            line = input("> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return 0
-        if not line:
+            conn, addr = srv.accept()
+        except TimeoutError:
             continue
-        if line in ("q", "quit", "exit"):
-            return 0
-        if line == "poll":
-            try:
-                valves, sensors = exchange(host, port, desired)
-                desired[:] = valves
-                print_state("poll", valves, sensors)
-            except OSError as exc:
-                print(f"[client] error: {exc}", file=sys.stderr)
-            continue
-        if line == "status":
-            try:
-                print_status_frame("status", poll_status(host, port))
-            except OSError as exc:
-                print(f"[client] error: {exc}", file=sys.stderr)
-            continue
-        if line == "clear":
-            try:
-                send_clear_alarms(host, port)
-                print_status_frame("status", poll_status(host, port))
-            except OSError as exc:
-                print(f"[client] error: {exc}", file=sys.stderr)
-            continue
-        if line.startswith("panel "):
-            try:
-                val = parse_panel(line.split(None, 1)[1])
-                send_status_sets(host, port, {PANEL_INT_INDEX: val})
-                print_status_frame("status", poll_status(host, port))
-            except (ValueError, OSError, IndexError) as exc:
-                print(f"[client] error: {exc}", file=sys.stderr)
-            continue
-        if line.startswith("mushroom "):
-            try:
-                val = int(line.split(None, 1)[1].strip())
-                check_alarm_value(ESTOP_MUSHROOM_INT_INDEX, val)
-                send_status_sets(host, port, {ESTOP_MUSHROOM_INT_INDEX: val})
-                print_status_frame("status", poll_status(host, port))
-            except (ValueError, OSError, IndexError) as exc:
-                print(f"[client] error: {exc}", file=sys.stderr)
-            continue
-        if line.startswith("suspect "):
-            try:
-                pairs = parse_alarm_spec(line.split(None, 1)[1])
-                send_status_sets(host, port, pairs)
-                print_status_frame("status", poll_status(host, port))
-            except (ValueError, OSError, IndexError) as exc:
-                print(f"[client] error: {exc}", file=sys.stderr)
-            continue
-        if line.startswith("set "):
-            try:
-                for i, v in parse_set_spec(line[4:]).items():
-                    desired[i] = v
-                valves, sensors = exchange(host, port, desired)
-                desired[:] = valves
-                print_state("set", valves, sensors)
-            except (ValueError, OSError) as exc:
-                print(f"[client] error: {exc}", file=sys.stderr)
-            continue
-        print(
-            "unknown command; try: poll | status | set 1=1 | panel stop | "
-            "mushroom 0 | suspect 52=1 | clear | quit"
-        )
+        threading.Thread(target=handle_client, args=(conn, addr, plc, hmi_ip, robot), daemon=True).start()
 
 
-def build_arg_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="PLC raw-TCP emulator (1024-byte frames)")
-    p.add_argument("--host", default=None, help="bind/connect host")
-    p.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"TCP port (default {DEFAULT_PORT})")
-    p.add_argument("--client", action="store_true", help="run as test client instead of server")
-    p.add_argument("--set", dest="set_spec", default=None, help="client: valve set e.g. 1=1,3=0")
-    p.add_argument("--poll", action="store_true", help="client: single exchange then exit")
-    p.add_argument(
-        "--panel",
-        type=parse_panel,
-        default=None,
-        help="client: int16[50] кнопки корпуса: stop|start|estop|0 (или 10/20/30)",
+def listen(host: str, port: int) -> socket.socket:
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind((host, port))
+    srv.listen(8)
+    srv.settimeout(0.5)
+    return srv
+
+
+def run_server(host: str, port: int, robot_port: int, hmi_ip: str | None, boot_estop: bool,
+               web_host: str, web_port: int) -> None:
+    plc = Plc(boot_estop)
+    stop = threading.Event()
+    if web_port:
+        import plc_web
+
+        plc_web.start(plc, sys.modules[__name__], web_host, web_port)
+        log(f"веб: http://{web_host}:{web_port}")
+    with listen(host, port) as srv:
+        log(f"слушаю {host}:{port}, кадр {STATUS_SIZE} байт, пульт: {hmi_ip or 'любое соединение'}")
+        robot_srv = None
+        if robot_port:
+            robot_srv = listen(host, robot_port)
+            log(f"слушаю {host}:{robot_port} для robot-behaviour")
+            threading.Thread(target=serve, args=(robot_srv, plc, hmi_ip, True, stop), daemon=True).start()
+        threading.Thread(target=run_console, args=(plc, stop), daemon=True).start()
+        threading.Thread(target=run_ticker, args=(plc, stop), daemon=True).start()
+        try:
+            serve(srv, plc, hmi_ip, False, stop)
+        finally:
+            if robot_srv is not None:
+                robot_srv.close()
+    log("остановлен")
+
+
+def print_status(frame: bytes) -> None:
+    print(
+        f"mode={MODE_NAMES.get(get_i16(frame, MODE_INT), '?')} "
+        f"prep_done={get_i16(frame, PREP_DONE_INT)} program={get_i16(frame, PROGRAM_INT)} "
+        f"loadcell={get_i16(frame, LOAD_CELL_INT)} "
+        f"nolamel={get_i16(frame, NO_LAMEL_INT)} noholders={get_i16(frame, NO_HOLDERS_INT)} "
+        f"lameltype={get_i16(frame, LAMEL_TYPE_INT)} "
+        f"init={get_i16(frame, INIT_PERMIT_INT)} "
+        f"good={get_i16(frame, GOOD_INT)} scrap={get_i16(frame, SCRAP_INT)} "
+        f"poweroff={get_i16(frame, SAFE_POWER_OFF_INT)} "
+        f"weld_valves={[get_i16(frame, i) for i in WELD_VALVE_INTS]} "
+        f"holders_big={get_i16(frame, BIG_HOLDERS_SENSOR_INT)} holders_small={get_i16(frame, SMALL_HOLDERS_SENSOR_INT)} "
+        f"panel={get_i16(frame, PANEL_INT)} mushroom={get_i16(frame, MUSHROOM_INT)}"
     )
-    p.add_argument(
-        "--mushroom",
-        type=int,
-        choices=(0, 1),
-        default=None,
-        help="client: int16[51] грибок: 0 = зажат, 1 = отжат",
-    )
-    p.add_argument(
-        "--status-bytes",
-        type=int,
-        default=120,
-        help="размер кадра статуса, 100..1000; кнопки/грибок/подозрения int16[50..59] нужны ≥120",
-    )
-    p.add_argument(
-        "--suspect",
-        dest="suspect_spec",
-        default=None,
-        help="client: set suspicions e.g. 52=1,53=1",
-    )
-    p.add_argument(
-        "--clear-alarms",
-        action="store_true",
-        help="client: clear panel and suspicions, mushroom → 1",
-    )
-    p.add_argument(
-        "--status",
-        action="store_true",
-        help="client: ping [203,0,0,0] and print status",
-    )
-    return p
+
+
+def run_client(host: str, port: int, action: str | None, status: bool) -> int:
+    with socket.create_connection((host, port), timeout=5.0) as sock:
+        # Отладочная команда первой: после неё эмулятор не считает соединение пультом.
+        data = (action or "status").encode("utf-8")
+        sock.sendall(bytes((DEBUG_TAG, len(data), 0, 0)) + data)
+        reader = sock.makefile("rb")
+        print(reader.readline().decode("utf-8").rstrip())
+        if status:
+            sock.sendall(bytes((POLL_TAG, 0, 0, 0)))
+            print_status(reader.read(STATUS_SIZE))
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     global STATUS_INT_COUNT, STATUS_SIZE
-    args = build_arg_parser().parse_args(argv)
-    if not (100 <= args.status_bytes <= 1000) or args.status_bytes % 2:
-        print("--status-bytes: чётное число 100..1000", file=sys.stderr)
-        return 2
-    STATUS_INT_COUNT = args.status_bytes // STATUS_INT_BYTES
+    p = argparse.ArgumentParser(description="Эмулятор ПЛК, протокол v2")
+    p.add_argument("--host", default=None)
+    p.add_argument("--port", type=int, default=DEFAULT_PORT)
+    p.add_argument("--robot-port", type=int, default=DEFAULT_ROBOT_PORT,
+                   help="порт для robot-behaviour, 0 — не слушать")
+    p.add_argument("--hmi-ip", default=None, help="IP пульта; без флага пульт — любое соединение")
+    p.add_argument("--boot-estop", action="store_true", help="авария сохранена с прошлого включения")
+    p.add_argument("--status-bytes", type=int, default=STATUS_SIZE,
+                   help="размер кадра в байтах, чётный (как «Кадр, байт» в админке пульта)")
+    p.add_argument("--web", type=int, default=8025, help="порт веб-страницы, 0 — без неё")
+    p.add_argument("--web-host", default="127.0.0.1", help="адрес веб-страницы (0.0.0.0 — для всей сети)")
+    p.add_argument("--client", action="store_true", help="клиент: отправить действие или прочитать кадр")
+    p.add_argument("--do", dest="action", default=None, help='клиент: действие, например "mushroom 1"')
+    p.add_argument("--status", action="store_true", help="клиент: прочитать кадр (как другой клиент, 4 байта)")
+    args = p.parse_args(argv)
+    if args.status_bytes < 2 or args.status_bytes % 2:
+        p.error("--status-bytes: нужно чётное число ≥ 2")
     STATUS_SIZE = args.status_bytes
+    STATUS_INT_COUNT = STATUS_SIZE // 2
+
     if args.client:
-        host = args.host or DEFAULT_CLIENT_HOST
-        oneshot = (
-            args.set_spec is not None
-            or args.poll
-            or args.panel is not None
-            or args.mushroom is not None
-            or args.suspect_spec is not None
-            or args.clear_alarms
-            or args.status
-        )
         try:
-            return run_client(
-                host,
-                args.port,
-                args.set_spec,
-                oneshot,
-                panel=args.panel,
-                mushroom=args.mushroom,
-                suspect_spec=args.suspect_spec,
-                clear_alarms=args.clear_alarms,
-                status_poll=args.status,
-            )
-        except (OSError, ValueError) as exc:
-            print(f"[client] error: {exc}", file=sys.stderr)
+            return run_client(args.host or DEFAULT_CLIENT_HOST, args.port, args.action, args.status)
+        except OSError as exc:
+            print(f"ошибка: {exc}", file=sys.stderr)
             return 1
 
-    host = args.host or DEFAULT_HOST
     try:
-        run_server(host, args.port)
+        run_server(args.host or DEFAULT_HOST, args.port, args.robot_port, args.hmi_ip, args.boot_estop,
+                   args.web_host, args.web)
     except KeyboardInterrupt:
-        print("\n[plc] stopped", flush=True)
+        log("остановлен")
     except OSError as exc:
-        print(f"[plc] failed: {exc}", file=sys.stderr)
+        print(f"ошибка: {exc}", file=sys.stderr)
         return 1
     return 0
 

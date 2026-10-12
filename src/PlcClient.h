@@ -4,127 +4,121 @@
 #include <QByteArray>
 #include <QObject>
 #include <QString>
-#include <QVector>
 
 #include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <mutex>
 
-// TCP-клиент: ПЛК — сервер, пульт к нему подключается.
-// Раз в секунду шлём [203,0,0,0] и ждём statusBytes (100..1000, little-endian int16).
-// ПЛК готов, если этот пакет пришёл. Содержимое для готовности не сравнивается.
+// TCP-клиент ПЛК по протоколу v2 (docs/PLC_PROTOCOL.md). ПЛК — сервер.
+// Раз в секунду и по запросу шлём опрос [203, f1, f2, f3, f4, Z] и ждём кадр
+// int16 little-endian; размер кадра задаётся в настройках, по умолчанию 160 байт.
+// ПЛК жив, пока кадры приходят.
 class PlcClient : public QObject
 {
     Q_OBJECT
 public:
-    static constexpr int kStatusIntCount = 500;
-    static constexpr int kMinStatusSize = 100;
-    static constexpr int kStatusIntBytes = 2; // int16, little-endian
-    static constexpr int kStatusSize = kStatusIntCount * kStatusIntBytes;
-    static constexpr int kValveCount = 12;
-    static constexpr int kSensorCount = 12;
-    static constexpr int kValveOffset = 0;
-    static constexpr int kSensorOffset = 12;
-    // Vision module 1/2: int16 в кадре. 1 = модуль включён.
-    static constexpr int kVision1IntIndex = 45;
-    static constexpr int kVision2IntIndex = 46;
-    static constexpr qint16 kVisionReadyValue = 1;
-    // Байтовые смещения тех же int16 (для маски «ПЛК готов»).
-    static constexpr int kVision1Offset = kVision1IntIndex * kStatusIntBytes; // 90..91
-    static constexpr int kVision2Offset = kVision2IntIndex * kStatusIntBytes; // 92..93
-    // Предподготовка. Пока произвольные свободные байты кадра (после датчиков
-    // 12..23, до камер 90..93). 1 = готово. В маску «ПЛК готов» не входят:
-    // во время набора они как раз меняются с 0 на 1.
-    static constexpr int kLamellaeOffset = 24;
-    static constexpr int kGeeseOffset = 25;
-    static constexpr int kWeldOffset = 26;
-    static constexpr int kWeldSensorCount = 20;
-    // Стейты станций перед стартом: int16 в кадре.
-    static constexpr int kLamelStateOffset = 40;
-    static constexpr int kGooseStateOffset = 41;
-    static constexpr int kBigGooseStateOffset = 42;
-    static constexpr int kWeldingStateOffset = 43;
-    static constexpr qint16 kLamelStateReady = 0;
-    static constexpr qint16 kGooseStateReady = 0;
-    static constexpr qint16 kBigGooseStateReady = 0;
-    static constexpr quint8 kWeldingStateReady = 0;
-    // Готовность сварочного модуля: эти int16 кадра равны 1. Индекс 15 не входит.
-    static constexpr int kWeldingReadyInts[] = {10, 11, 12, 13, 14, 16};
-    static constexpr qint16 kWeldingReadyValue = 1;
-    // Ячейки, меняющиеся в работе (индексы 50–59). В маску готовности не входят.
-    // 50: кнопки корпуса, защёлка ПЛК: 10 — СТОП (снимается по 7 3),
-    // 20 — зелёная/СТАРТ (по 7 1 1 x), 30 — e-stop (только по 7 5).
-    // 51: грибок e-stop, 0 = зажат, 1 = отжат. В кадре короче 104 байт не читается.
-    // 52–59: подозрения, 1 = показать на левой панели.
-    static constexpr int kPanelIntIndex = 50;
-    static constexpr qint16 kPanelStop = 10;
-    static constexpr qint16 kPanelStart = 20;
-    static constexpr qint16 kPanelEstop = 30;
-    static constexpr int kEstopHeldIntIndex = 51;
-    static constexpr qint16 kEstopHeldValue = 0;
-    static constexpr int kSuspicionFirstIntIndex = 52;
-    static constexpr int kSuspicionLastIntIndex = 59;
-    static constexpr qint16 kSuspicionActiveValue = 1;
+    static constexpr int kStatusIntBytes = 2;
+    static constexpr int kDefaultStatusSize = 160;
+    static constexpr int kMinStatusSize = 2;
+    static constexpr int kMaxStatusSize = 2048;
+    // Чётное число байт в пределах [kMinStatusSize, kMaxStatusSize].
+    static int normalizeStatusSize(int bytes);
 
-    // Обнуляет в маске байты, которые проверяются отдельно (камеры, предподготовка).
-    static void excludeLiveSignals(QByteArray *mask);
+    // Ячейки кадра (индексы int16).
+    static constexpr int kModeIndex = 52;
+    static constexpr int kProgramIndex = 54;
+    static constexpr int kLoadCellIndex = 55;
+    // В режиме «в работе»: 0 — идёт предподготовка, 1 — закончена, можно запускать цикл.
+    static constexpr int kPrepDoneIndex = 56;
+    static constexpr int kInitPermitIndex = 60;
+    static constexpr int kGoodIndex = 62;
+    static constexpr int kScrapIndex = 63;
+    static constexpr int kPowerOffIndex = 64;
+    // Тип ламели на выдаче, 0 — пусто. Пустая выдача не авария: авария только по 59.
+    static constexpr int kLamellaTypeIndex = 69;
+    // Датчики наличия держателей ламелей: 1 — есть.
+    static constexpr int kBigHoldersSensorIndex = 25;
+    static constexpr int kSmallHoldersSensorIndex = 1;
+    // Причины аварии от ПЛК: 1 — есть. Активны могут быть сразу несколько.
+    static constexpr int kNoLamellaeIndex = 59;
+    static constexpr int kNoHoldersIndex = 61;
+    // Индикаторы, решений по ним пульт не принимает.
+    // Клапаны сварки: в безопасном положении все = 0.
+    static constexpr int kWeldValveInts[] = {10, 11, 12, 13, 14, 16};
+    static constexpr int kVision1Index = 57;
+    static constexpr int kVision2Index = 58;
+    static constexpr int kPanelButtonsIndex = 50;
+    static constexpr int kMushroomIndex = 51;
+    static constexpr qint16 kMushroomReleased = 1;
 
-    // Короткие команды пульта, 4 байта: [7, code, 0, 0].
-    // 2 — запуск основной программы после предподготовки, 3 — стоп, 4 — аварийный стоп, 5 — выход из аварийного стопа.
-    static QByteArray controlCommand(int code);
+    // Stopping — нажали «Стоп», робот доделывает цикл; Run включает предподготовку (ячейка 56).
+    enum class Mode : qint16 { Boot = 0, Ready = 1, Stopping = 2, Run = 3, Estop = 4, Service = 5 };
 
-    // Старт: [7, 1, 1, 0] если тензодатчик игнорируется, иначе [7, 1, 1, 1].
-    static QByteArray startCommand(bool ignoreLoadCell);
+    // Что пульт сообщает о роботе в каждом опросе.
+    struct RobotReport {
+        bool natsConnected = false;
+        bool ctrlAlive = false;
+        bool behaviourAlive = false;
+        bool scriptRunning = false;
+        int zone = 0;
+    };
 
-    // Выбор программы на пульте. 4 байта, как остальные короткие команды:
-    // [7, 1, 1, 0] — деталь 1, [7, 1, 2, 0] — деталь 2.
-    static QByteArray programSelectCommand(int program);
+    enum Command : quint8 {
+        CmdStart = 2,
+        CmdStop = 3,
+        CmdEstopExit = 5,
+        CmdStopDone = 8,
+    };
+    enum ScriptRole : quint8 { RoleInit = 1, RoleMain = 2 };
 
+    // [7, code, 0, 0].
+    static QByteArray controlCommand(Command code);
+    // [7, 1, N, X]: программа N, X = 1 — учитывать тензодатчик.
+    static QByteArray selectCommand(int program, bool useLoadCell);
+    // [7, 7, R, S]: скрипт R закончился, S = 1 — дошёл до конца.
+    static QByteArray scriptReportCommand(ScriptRole role, bool completed);
     // Сервисный режим: [99, 1] вход, [99, 0] выход.
     static QByteArray serviceModeCommand(bool on);
-
     // Дискретный выход: [2, n, 1] вкл, [2, n, 0] выкл.
     static QByteArray doCommand(int n, bool on);
 
-    // No successful ping-pong for this long ⇒ PLC is down.
+    // Тексты для экрана; код без текста — «Код N».
+    static QString modeText(Mode mode);
+    // Нет кадра столько времени — ПЛК недоступен.
     static constexpr qint64 kTimeoutMs = 3000;
 
     explicit PlcClient(QObject *parent = nullptr);
     ~PlcClient() override;
 
-    // readyValue/readyMask длиной kStatusSize. Пустые — value нули, mask 0xFF.
-    // statusBytes — сколько байт ждать в ответ на ping (чётное, 100..kStatusSize).
-    void start(const QString &host, quint16 port,
-               const QByteArray &readyValue = {},
-               const QByteArray &readyMask = {},
-               int statusBytes = kStatusSize);
+    void start(const QString &host, quint16 port, int statusBytes = kDefaultStatusSize);
     void stop();
 
-    // Кадр статуса пришёл недавно — это и есть готовность ПЛК.
     bool isOk() const;
-    bool matchesMask() const;
-    // Кадр свежий и в байте камеры пришла 1.
-    bool vision1Ok() const;
-    bool vision2Ok() const;
-    // Свежий кадр и в диапазоне все байты равны 1.
-    bool bytesAreOne(int offset, int count) const;
-    int mismatchIndex() const { return m_mismatchIndex.load(std::memory_order_relaxed); }
-    quint8 mismatchActual() const { return m_mismatchActual.load(std::memory_order_relaxed); }
-    quint8 mismatchExpected() const { return m_mismatchExpected.load(std::memory_order_relaxed); }
     qint64 lastOkMs() const { return m_lastOkMs.load(std::memory_order_relaxed); }
-
-    QVector<quint8> valves() const;
-    QVector<quint8> sensors() const;
-    quint8 statusByte(int index) const;
     qint16 statusInt16(int index) const;
-    // Сколько int16 реально присылает ПЛК (statusBytes / 2).
-    int statusIntCount() const { return m_statusBytes.load(std::memory_order_relaxed) / kStatusIntBytes; }
-    bool weldingReady() const;
+    int statusSize() const { return m_statusSize.load(std::memory_order_relaxed); }
+    int statusIntCount() const { return statusSize() / kStatusIntBytes; }
+    // Сколько байт сверх кадра пришло к прошлому опросу: не 0 — ПЛК шлёт больше, чем задано.
+    int extraBytes() const { return m_extraBytes.load(std::memory_order_relaxed); }
 
-    // Пишет кадр в текущее соединение с ПЛК (тот же сокет, что и опрос статуса).
-    // Ответ не читается. commandFinished приходит в поток GUI.
+    Mode mode() const { return static_cast<Mode>(statusInt16(kModeIndex)); }
+    bool prepDone() const { return statusInt16(kPrepDoneIndex) == 1; }
+    bool vision1Ok() const { return isOk() && statusInt16(kVision1Index) == 1; }
+    bool vision2Ok() const { return isOk() && statusInt16(kVision2Index) == 1; }
+    bool weldValvesSafe() const;
+    bool lamellaIssued() const { return isOk() && statusInt16(kLamellaTypeIndex) != 0; }
+    // Держатели для программы: 1 — большие (25), 2 — малые (1). Без программы — нет.
+    bool holdersPresent(int program) const;
+
+    void setRobotReport(const RobotReport &report);
+
+    // Кадр в то же соединение, что и опрос. ПЛК на команды не отвечает.
     void sendCommand(const QByteArray &frame);
+    // Внеочередной опрос после уже поставленных в очередь команд. Вернёт номер;
+    // кадр, пришедший в ответ на этот опрос или позже, даёт pollServed() >= номер.
+    quint64 pollNow();
+    quint64 pollServed() const { return m_pollServed.load(std::memory_order_acquire); }
 
 signals:
     void stateChanged();
@@ -133,23 +127,21 @@ signals:
 private:
     class Worker;
 
+    QByteArray pollFrame() const;
+
     Worker *m_worker = nullptr;
 
     mutable std::mutex m_dataMutex;
+    QByteArray m_status;
+    std::atomic<int> m_statusSize{kDefaultStatusSize};
+    std::atomic<int> m_extraBytes{0};
+    RobotReport m_report;
     std::mutex m_cmdMutex;
     std::condition_variable m_cmdCv;
     std::deque<QByteArray> m_cmdQueue;
-    QByteArray m_status;
-    QVector<quint8> m_valves;
-    QVector<quint8> m_sensors;
     std::atomic<qint64> m_lastOkMs{0};
-    std::atomic<bool> m_maskOk{false};
-    std::atomic<int> m_mismatchIndex{-1};
-    std::atomic<quint8> m_mismatchActual{0};
-    std::atomic<quint8> m_mismatchExpected{0};
-    std::atomic<quint8> m_vision1{0};
-    std::atomic<quint8> m_vision2{0};
-    std::atomic<int> m_statusBytes{kStatusSize};
+    std::atomic<quint64> m_pollRequested{0};
+    std::atomic<quint64> m_pollServed{0};
 };
 
 #endif // PLCCLIENT_H

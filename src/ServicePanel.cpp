@@ -69,7 +69,7 @@ const char *kTableStyle =
     "QTableCornerButton::section { background:#F7F8FA; border:none; }";
 
 constexpr int kBufColW = 72;
-constexpr int kBufRowH = 26;
+constexpr int kBufRowH = 30;
 constexpr int kDoBtnW = 112;
 constexpr int kDoBtnH = 52;
 constexpr int kDoSpacing = 6;
@@ -208,7 +208,7 @@ ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
     bufferPanel->setGeometry(bodyX, bodyY, bufferW, bufferH);
 
     auto *bufferTitle =
-        makeTitle(tx("Буфер ПЛК (%1 int16)").arg(kBufCellCount), bufferPanel);
+        makeTitle(QStringLiteral("DI 0..%1").arg(kBufCellCount - 1), bufferPanel);
     m_bufferStatus = new QLabel(bufferPanel);
     m_bufferStatus->setStyleSheet(QStringLiteral(
         "QLabel {"
@@ -230,6 +230,7 @@ ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
     m_bufferTable->verticalHeader()->setVisible(false);
     m_bufferTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
     m_bufferTable->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    m_bufferTable->verticalHeader()->setMinimumSectionSize(kBufRowH);
     m_bufferTable->verticalHeader()->setDefaultSectionSize(kBufRowH);
     m_bufferTable->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_bufferTable->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -404,7 +405,7 @@ void ServicePanel::refreshBufferTable()
         return;
     }
 
-    // Ячейки за пределами кадра ПЛК (status_bytes) показываем прочерком, а не нулём.
+    // Ячейки за пределами кадра ПЛК показываем прочерком, а не нулём.
     const int received = m_plc->statusIntCount();
     m_bufferStatus->setText(tx("Кадр ок, %1 int16").arg(received));
     for (int n = 0; n < kBufCellCount; ++n) {

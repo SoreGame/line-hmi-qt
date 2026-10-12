@@ -21,14 +21,24 @@ qt_add_executable(line-hmi-qt MANUAL_FINALIZATION
     src/NatsClient.h
     src/PlcClient.cpp
     src/PlcClient.h
+    src/LineController.cpp
+    src/LineController.h
+    src/OverlayCard.cpp
+    src/OverlayCard.h
     src/PrepOverlay.cpp
     src/PrepOverlay.h
-    src/RecoveryOverlay.cpp
-    src/RecoveryOverlay.h
+    src/EstopOverlay.cpp
+    src/EstopOverlay.h
+    src/PlaceOverlay.cpp
+    src/PlaceOverlay.h
+    src/RunHistory.cpp
+    src/RunHistory.h
+    src/RunHistoryDialog.cpp
+    src/RunHistoryDialog.h
+    src/ZonesDialog.cpp
+    src/ZonesDialog.h
     src/ConnectionSettings.cpp
     src/ConnectionSettings.h
-    src/RuntimeState.cpp
-    src/RuntimeState.h
     src/ArduinoLink.cpp
     src/ArduinoLink.h
     src/AdminPanel.cpp

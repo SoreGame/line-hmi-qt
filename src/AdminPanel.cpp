@@ -2,6 +2,7 @@
 #include "Texts.h"
 #include "ArduinoLink.h"
 #include "PlcClient.h"
+#include "ZonesDialog.h"
 
 #include <QAbstractItemView>
 #include <QAbstractScrollArea>
@@ -226,6 +227,7 @@ AdminPanel::AuthResult AdminPanel::authenticate(QWidget *parent)
 AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcClient *plc,
                        QWidget *parent)
     : QDialog(parent)
+    , m_settings(initial)
     , m_nats(nats)
     , m_plc(plc)
 {
@@ -313,13 +315,11 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     m_plcPort->setRange(1, 65535);
     m_plcPort->setValue(initial.plcPort > 0 ? initial.plcPort : 2025);
     m_plcPort->setFixedWidth(88);
-
     m_plcStatusBytes = new QSpinBox(networkPanel);
-    m_plcStatusBytes->setRange(PlcClient::kMinStatusSize, PlcClient::kStatusSize);
-    m_plcStatusBytes->setSingleStep(2);
-    m_plcStatusBytes->setValue(initial.plcStatusBytes > 0 ? initial.plcStatusBytes : 120);
-    m_plcStatusBytes->setSuffix(tx(" байт"));
-    m_plcStatusBytes->setFixedWidth(120);
+    m_plcStatusBytes->setRange(PlcClient::kMinStatusSize, PlcClient::kMaxStatusSize);
+    m_plcStatusBytes->setSingleStep(PlcClient::kStatusIntBytes);
+    m_plcStatusBytes->setValue(initial.plcStatusBytes);
+    m_plcStatusBytes->setFixedWidth(88);
 
     for (QWidget *w : {static_cast<QWidget *>(m_natsHost),
                        static_cast<QWidget *>(m_natsPort),
@@ -342,13 +342,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     rowPlcLay->setSpacing(8);
     rowPlcLay->addWidget(makeLabeledField(tx("ПЛК хост"), m_plcHost, rowPlc), 1);
     rowPlcLay->addWidget(makeLabeledField(tx("Порт"), m_plcPort, rowPlc), 0);
-
-    auto *rowFrame = new QWidget(networkPanel);
-    auto *rowFrameLay = new QHBoxLayout(rowFrame);
-    rowFrameLay->setContentsMargins(0, 0, 0, 0);
-    rowFrameLay->setSpacing(8);
-    rowFrameLay->addWidget(makeLabeledField(
-        tx("Ожидаемый размер кадра"), m_plcStatusBytes, rowFrame), 1);
+    rowPlcLay->addWidget(makeLabeledField(tx("Кадр, байт"), m_plcStatusBytes, rowPlc), 0);
 
     auto *panelLay = new QVBoxLayout(networkPanel);
     panelLay->setContentsMargins(12, 10, 12, 10);
@@ -356,7 +350,6 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     panelLay->addWidget(sectionTitle);
     panelLay->addWidget(rowNats);
     panelLay->addWidget(rowPlc);
-    panelLay->addWidget(rowFrame);
     panelLay->addStretch(1);
 
     // --- Jog / motion --------------------------------------------------
@@ -546,12 +539,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
         "  font-size:13px; font-weight:600; color:#1F2126;"
         "  background:transparent; border:none;"
         "}"));
-    {
-        const int bytes = initial.plcStatusBytes > 0 ? initial.plcStatusBytes : 120;
-        m_plcLogTitle->setText(tx("Буфер ПЛК (%1 int16, %2 байт)")
-                                   .arg(bytes / 2)
-                                   .arg(bytes));
-    }
+    updatePlcLogTitle();
 
     m_plcBufferStatus = new QLabel(m_plcLogPanel);
     m_plcBufferStatus->setStyleSheet(QStringLiteral(
@@ -773,26 +761,11 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
                      tx("Игнорирование тензодатчика"),
                      initial.ignoreLoadCell);
 
-    m_btnIgnoreLaunchLocks = new QPushButton(m_togglesPanel);
-    makeToggle(m_btnIgnoreLaunchLocks);
-    m_btnIgnoreLaunchLocks->setChecked(initial.ignoreLaunchLocks);
-    setToggleCaption(m_btnIgnoreLaunchLocks,
-                     tx("Игнорировать блокировки запуска"),
-                     initial.ignoreLaunchLocks);
-
-    m_btnResetEstop = new QPushButton(tx("Сбросить e-stop на пульте"), m_togglesPanel);
-    m_btnResetEstop->setStyleSheet(QLatin1String(kSecondaryBtn));
-    m_btnResetEstop->setCursor(Qt::PointingHandCursor);
-    m_btnResetEstop->setFocusPolicy(Qt::NoFocus);
-    m_btnResetEstop->setMinimumHeight(44);
-    m_btnResetEstop->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-
     auto *targetHint = new QLabel(
         tx("Пульт включается на этой панели. Автозапуск системы — на компьютере с NATS-хостом. "
-                       "Игнорирование тензодатчика: вкл — старт 7 1 1 0, выкл — 7 1 1 1. "
-                       "Игнорировать блокировки запуска: можно стартовать цикл без ПЛК, Vision, CTRL и буфера. "
-                       "Сбросить e-stop: выход из аварии без восстановления (7 5 на ПЛК) и сброс защёлки, "
-                       "после перезапуска пульт не откроет выход из e-stop."),
+                       "Игнорирование тензодатчика сразу уходит на ПЛК: 7 1 N 0 — игнорировать, "
+                       "7 1 N 1 — учитывать, N — выбранная деталь. Пока деталь не выбрана, "
+                       "переключатель неактивен."),
         m_togglesPanel);
     targetHint->setWordWrap(true);
     targetHint->setStyleSheet(QStringLiteral(
@@ -806,8 +779,6 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     togglesLay->addWidget(m_btnRemoteAutostart);
     togglesLay->addWidget(m_btnShowCursor);
     togglesLay->addWidget(m_btnIgnoreLoadCell);
-    togglesLay->addWidget(m_btnIgnoreLaunchLocks);
-    togglesLay->addWidget(m_btnResetEstop);
     togglesLay->addWidget(targetHint);
 
     // --- Программы (.chai) под «Тензодатчиком» -------------------------
@@ -828,18 +799,10 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     m_initScript2 = new QLineEdit(initial.initScriptDetail2, m_programsPanel);
     m_mainScript1 = new QLineEdit(initial.mainScriptDetail1, m_programsPanel);
     m_mainScript2 = new QLineEdit(initial.mainScriptDetail2, m_programsPanel);
-    m_estopScript = new QLineEdit(initial.estopScript, m_programsPanel);
-    m_startCountdown = new QSpinBox(m_programsPanel);
-    m_startCountdown->setRange(0, 60);
-    m_startCountdown->setValue(initial.startCountdownSec);
-    m_startCountdown->setSuffix(tx(" с"));
-    m_startCountdown->setFixedWidth(120);
     for (QWidget *w : {static_cast<QWidget *>(m_initScript1),
                        static_cast<QWidget *>(m_initScript2),
                        static_cast<QWidget *>(m_mainScript1),
-                       static_cast<QWidget *>(m_mainScript2),
-                       static_cast<QWidget *>(m_estopScript),
-                       static_cast<QWidget *>(m_startCountdown)}) {
+                       static_cast<QWidget *>(m_mainScript2)}) {
         w->setStyleSheet(QLatin1String(kFieldStyle));
     }
 
@@ -858,10 +821,19 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     auto *rowMain = makeProgramsRow(
         makeLabeledField(tx("Основная · Деталь 1"), m_mainScript1, m_programsPanel),
         makeLabeledField(tx("Основная · Деталь 2"), m_mainScript2, m_programsPanel));
-    auto *rowEstop = makeProgramsRow(
-        makeLabeledField(tx("Выход из E-stop"), m_estopScript, m_programsPanel),
-        makeLabeledField(tx("Отсчёт до автозапуска основной"), m_startCountdown,
-                         m_programsPanel));
+    m_stopTimeout = new QSpinBox(m_programsPanel);
+    m_stopTimeout->setRange(0, 600);
+    m_stopTimeout->setValue(initial.stopTimeoutSec);
+    m_stopTimeout->setSuffix(tx(" с"));
+    m_stopTimeout->setSpecialValueText(tx("без ограничения"));
+    m_stopTimeout->setStyleSheet(QLatin1String(kFieldStyle));
+    auto *rowStop = makeLabeledField(tx("После «Стоп» ждать конца цикла, потом полный стоп роботу"),
+                                     m_stopTimeout, m_programsPanel);
+    m_btnZones = new QPushButton(tx("Стартовые зоны робота…"), m_programsPanel);
+    m_btnZones->setStyleSheet(QLatin1String(kSecondaryBtn));
+    m_btnZones->setCursor(Qt::PointingHandCursor);
+    m_btnZones->setFocusPolicy(Qt::NoFocus);
+    m_btnZones->setMinimumHeight(44);
 
     auto *programsLay = new QVBoxLayout(m_programsPanel);
     programsLay->setContentsMargins(12, 10, 12, 12);
@@ -869,7 +841,8 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     programsLay->addWidget(programsTitle);
     programsLay->addWidget(rowInit);
     programsLay->addWidget(rowMain);
-    programsLay->addWidget(rowEstop);
+    programsLay->addWidget(rowStop);
+    programsLay->addWidget(m_btnZones);
 
     // --- Arduino / тензодатчик (низ второго столбца) -------------------
     m_arduinoPanel = new QFrame(this);
@@ -1082,15 +1055,8 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     connect(m_btnRemoteAutostart, &QPushButton::toggled, this, &AdminPanel::onRemoteAutostartToggled);
     connect(m_btnShowCursor, &QPushButton::toggled, this, &AdminPanel::onShowCursorToggled);
     connect(m_btnIgnoreLoadCell, &QPushButton::toggled, this, &AdminPanel::onIgnoreLoadCellToggled);
-    connect(m_btnIgnoreLaunchLocks, &QPushButton::toggled, this, &AdminPanel::onIgnoreLaunchLocksToggled);
-    connect(m_btnResetEstop, &QPushButton::clicked, this, [this]() {
-        const auto answer = QMessageBox::question(
-            this, tx("Сбросить e-stop"),
-            tx("Выйти из аварии без восстановления и сбросить защёлку e-stop на пульте?"),
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-        if (answer == QMessageBox::Yes)
-            emit estopResetRequested();
-    });
+    connect(m_btnZones, &QPushButton::clicked, this, &AdminPanel::onZonesClicked);
+    updateLoadCellToggle();
     connect(m_btnRefresh, &QPushButton::clicked, this, &AdminPanel::onRefreshClicked);
     connect(m_btnPrevPage, &QPushButton::clicked, this, [this]() { goToPage(m_page - 1); });
     connect(m_btnNextPage, &QPushButton::clicked, this, [this]() { goToPage(m_page + 1); });
@@ -1129,25 +1095,24 @@ void AdminPanel::showEvent(QShowEvent *event)
 
 ConnectionSettings AdminPanel::networkSettings() const
 {
-    ConnectionSettings c;
+    ConnectionSettings c = m_settings;
     c.natsHost = m_natsHost->text().trimmed();
     c.natsPort = static_cast<quint16>(m_natsPort->value());
     c.plcHost = m_plcHost->text().trimmed();
     c.plcPort = static_cast<quint16>(m_plcPort->value());
-    c.plcStatusBytes = m_plcStatusBytes ? m_plcStatusBytes->value() : 120;
+    c.plcStatusBytes = PlcClient::normalizeStatusSize(m_plcStatusBytes->value());
     c.autostart = m_btnRemoteAutostart && m_btnRemoteAutostart->isChecked();
     c.hmiAutostart = m_btnHmiAutostart && m_btnHmiAutostart->isChecked();
     c.showCursor = m_btnShowCursor && m_btnShowCursor->isChecked();
     c.ignoreLoadCell = m_btnIgnoreLoadCell && m_btnIgnoreLoadCell->isChecked();
-    c.ignoreLaunchLocks = m_btnIgnoreLaunchLocks && m_btnIgnoreLaunchLocks->isChecked();
     if (m_initScript1) {
         c.initScriptDetail1 = m_initScript1->text().trimmed();
         c.initScriptDetail2 = m_initScript2->text().trimmed();
         c.mainScriptDetail1 = m_mainScript1->text().trimmed();
         c.mainScriptDetail2 = m_mainScript2->text().trimmed();
-        c.estopScript = m_estopScript->text().trimmed();
-        c.startCountdownSec = m_startCountdown->value();
     }
+    if (m_stopTimeout)
+        c.stopTimeoutSec = m_stopTimeout->value();
     if (m_arduinoPort) {
         QString port;
         const int idx = m_arduinoPort->currentIndex();
@@ -1312,17 +1277,31 @@ void AdminPanel::onIgnoreLoadCellToggled(bool enabled)
     setToggleCaption(m_btnIgnoreLoadCell,
                      tx("Игнорирование тензодатчика"),
                      enabled);
+    m_settings.ignoreLoadCell = enabled;
     ConnectionSettings cfg = networkSettings();
     cfg.save();
+    emit settingsChanged(cfg);
+    const int program = m_plc ? m_plc->statusInt16(PlcClient::kProgramIndex) : 0;
+    if (program > 0)
+        m_plc->sendCommand(PlcClient::selectCommand(program, !enabled));
 }
 
-void AdminPanel::onIgnoreLaunchLocksToggled(bool enabled)
+void AdminPanel::updateLoadCellToggle()
 {
-    setToggleCaption(m_btnIgnoreLaunchLocks,
-                     tx("Игнорировать блокировки запуска"),
-                     enabled);
+    const bool selected = m_plc && m_plc->isOk() && m_plc->statusInt16(PlcClient::kProgramIndex) > 0;
+    m_btnIgnoreLoadCell->setEnabled(selected);
+}
+
+void AdminPanel::onZonesClicked()
+{
+    ZonesDialog dialog(networkSettings(), m_nats, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+    m_settings.zones = dialog.zones();
+    m_settings.placementImage = dialog.placementImage();
     ConnectionSettings cfg = networkSettings();
     cfg.save();
+    emit settingsChanged(cfg);
 }
 
 void AdminPanel::onApplyClicked()
@@ -1336,11 +1315,6 @@ void AdminPanel::onApplyClicked()
     }
     if (m_arduino)
         m_arduino->sendThreshold(cfg.arduinoThreshold);
-    if (m_plcLogTitle) {
-        m_plcLogTitle->setText(tx("Буфер ПЛК (%1 int16, %2 байт)")
-                                   .arg(cfg.plcStatusBytes / 2)
-                                   .arg(cfg.plcStatusBytes));
-    }
     emit applyRequested(cfg);
 }
 
@@ -1959,12 +1933,24 @@ void AdminPanel::onStepChanged(int index)
 void AdminPanel::onPlcStateChanged()
 {
     refreshPlcBufferLog();
+    updateLoadCellToggle();
+}
+
+void AdminPanel::updatePlcLogTitle()
+{
+    if (!m_plcLogTitle)
+        return;
+    const int bytes = m_plc ? m_plc->statusSize() : m_settings.plcStatusBytes;
+    m_plcLogTitle->setText(tx("Буфер ПЛК (%1 int16, %2 байт)")
+                               .arg(bytes / PlcClient::kStatusIntBytes)
+                               .arg(bytes));
 }
 
 void AdminPanel::refreshPlcBufferLog()
 {
     if (!m_plcBufferLog || !m_plcBufferStatus)
         return;
+    updatePlcLogTitle();
 
     if (!m_plc) {
         m_plcBufferStatus->setText(tx("ПЛК-клиент не подключён"));
@@ -1977,11 +1963,14 @@ void AdminPanel::refreshPlcBufferLog()
     }
 
     const QString ts = QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss"));
-    m_plcBufferStatus->setText(
-        QStringLiteral("%1  ok  cam1=%2  cam2=%3")
-            .arg(ts)
-            .arg(m_plc->vision1Ok() ? QStringLiteral("1") : QStringLiteral("0"))
-            .arg(m_plc->vision2Ok() ? QStringLiteral("1") : QStringLiteral("0")));
+    QString status = QStringLiteral("%1  ok  %2  cam1=%3  cam2=%4")
+                         .arg(ts)
+                         .arg(PlcClient::modeText(m_plc->mode()))
+                         .arg(m_plc->vision1Ok() ? QStringLiteral("1") : QStringLiteral("0"))
+                         .arg(m_plc->vision2Ok() ? QStringLiteral("1") : QStringLiteral("0"));
+    if (m_plc->extraBytes() > 0)
+        status += tx("  ·  лишние %1 байт от ПЛК").arg(m_plc->extraBytes());
+    m_plcBufferStatus->setText(status);
 
     QString line = ts;
     line += QLatin1Char(' ');

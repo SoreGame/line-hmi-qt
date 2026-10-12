@@ -36,12 +36,16 @@ COMMENT = (
 GROUPS = {
     "MainWindow.ui": "MainWindow.ui — надписи главного экрана",
     "MainWindow.cpp": "MainWindow — главный экран и журнал",
+    "LineController.cpp": "LineController — скрипты робота и связь с ПЛК",
     "PrepOverlay.cpp": "PrepOverlay — окно предподготовки",
-    "RecoveryOverlay.cpp": "RecoveryOverlay — окно аварии",
+    "EstopOverlay.cpp": "EstopOverlay — окно аварии",
+    "PlaceOverlay.cpp": "PlaceOverlay — окно ручной установки робота",
+    "RunHistoryDialog.cpp": "RunHistoryDialog — история запусков",
+    "ZonesDialog.cpp": "ZonesDialog — стартовые зоны робота",
     "ServicePanel.cpp": "ServicePanel — сервисная панель",
     "AdminPanel.cpp": "AdminPanel — админка",
     "NatsClient.cpp": "NatsClient — ошибки NATS",
-    "PlcClient.cpp": "PlcClient — ошибки ПЛК",
+    "PlcClient.cpp": "PlcClient — связь с ПЛК, режимы и коды",
     "ArduinoLink.cpp": "ArduinoLink — тензодатчик",
     "ConnectionSettings.cpp": "ConnectionSettings — настройки",
 }

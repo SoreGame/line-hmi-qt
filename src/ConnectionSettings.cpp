@@ -1,5 +1,4 @@
 #include "ConnectionSettings.h"
-#include "Texts.h"
 #include "ArduinoLink.h"
 #include "PlcClient.h"
 
@@ -8,6 +7,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QStandardPaths>
@@ -46,83 +46,32 @@ QStringList configSearchPaths()
     return paths;
 }
 
-constexpr int kPlcStatusSize = PlcClient::kStatusSize;
-constexpr int kLegacyStatusSize = PlcClient::kMinStatusSize; // прежний кадр 50 int16
+const char *const kZoneKeys[] = {"xMin", "xMax", "yMin", "yMax", "zMin", "zMax", "rMin", "rMax"};
 
-QByteArray defaultPlcMask()
+std::array<double *, 8> zoneBounds(StartZone &zone)
 {
-    // Первые 100 байт — прежняя проверка. Байты int16 50–59 (кнопки корпуса/подозрения)
-    // в маску не входят: excludeLiveSignals обнуляет их.
-    QByteArray mask(kPlcStatusSize, 0);
-    const int checked = qMin(kLegacyStatusSize, kPlcStatusSize);
-    for (int i = 0; i < checked; ++i)
-        mask[i] = char(0xFF);
-    PlcClient::excludeLiveSignals(&mask);
-    return mask;
+    return {&zone.xMin, &zone.xMax, &zone.yMin, &zone.yMax,
+            &zone.zMin, &zone.zMax, &zone.rMin, &zone.rMax};
 }
 
-QByteArray defaultPlcValue()
+StartZone readZone(const QJsonObject &obj)
 {
-    return QByteArray(kPlcStatusSize, 0);
+    StartZone zone;
+    zone.enabled = obj.value(QStringLiteral("enabled")).toBool(false);
+    const auto bounds = zoneBounds(zone);
+    for (int i = 0; i < 8; ++i)
+        *bounds[i] = obj.value(QLatin1String(kZoneKeys[i])).toDouble(0.0);
+    return zone;
 }
 
-QByteArray decodeHex100(const QString &hex, bool *ok)
+QJsonObject writeZone(StartZone zone)
 {
-    QString s = hex;
-    s.remove(QLatin1Char(' '));
-    s.remove(QLatin1Char('\n'));
-    s.remove(QLatin1Char('\r'));
-    const int nbytes = s.size() / 2;
-    // Любая чётная длина 100..kPlcStatusSize; хвост до kPlcStatusSize — нули (не проверяется).
-    if (s.size() % 4 != 0 || nbytes < kLegacyStatusSize || nbytes > kPlcStatusSize) {
-        *ok = false;
-        return {};
-    }
-    QByteArray out(kPlcStatusSize, 0);
-    for (int i = 0; i < nbytes; ++i) {
-        bool byteOk = false;
-        const int v = s.mid(i * 2, 2).toInt(&byteOk, 16);
-        if (!byteOk || v < 0 || v > 255) {
-            *ok = false;
-            return {};
-        }
-        out[i] = static_cast<char>(v);
-    }
-    *ok = true;
-    return out;
-}
-
-QString encodeHex100(const QByteArray &bytes)
-{
-    QString out;
-    out.reserve(bytes.size() * 2);
-    for (unsigned char b : bytes)
-        out += QStringLiteral("%1").arg(b, 2, 16, QLatin1Char('0'));
-    return out;
-}
-
-void takePlcPattern(const QJsonObject &plc, const char *key, const QByteArray &fallback,
-                    QByteArray *dst, QString *warning)
-{
-    if (!plc.contains(QLatin1String(key))) {
-        *dst = fallback;
-        return;
-    }
-    bool ok = false;
-    const QByteArray decoded = decodeHex100(plc.value(QLatin1String(key)).toString(), &ok);
-    if (!ok) {
-        *dst = fallback;
-        if (warning->isEmpty()) {
-            *warning = tx(
-                "plc.%1 в config.json должен быть hex из %2..%3 байт "
-                "(чётное число) — взята маска по умолчанию")
-                           .arg(QLatin1String(key))
-                           .arg(kLegacyStatusSize)
-                           .arg(kPlcStatusSize);
-        }
-        return;
-    }
-    *dst = decoded;
+    QJsonObject obj;
+    obj.insert(QStringLiteral("enabled"), zone.enabled);
+    const auto bounds = zoneBounds(zone);
+    for (int i = 0; i < 8; ++i)
+        obj.insert(QLatin1String(kZoneKeys[i]), *bounds[i]);
+    return obj;
 }
 
 ConnectionSettings normalize(ConnectionSettings c)
@@ -135,18 +84,7 @@ ConnectionSettings normalize(ConnectionSettings c)
         c.plcHost = QStringLiteral("192.168.58.88");
     if (c.plcPort == 0)
         c.plcPort = 2025;
-    if (c.plcReadyMask.size() != kPlcStatusSize)
-        c.plcReadyMask = defaultPlcMask();
-    if (c.plcReadyValue.size() != kPlcStatusSize)
-        c.plcReadyValue = defaultPlcValue();
-    if (c.plcStatusBytes < kLegacyStatusSize)
-        c.plcStatusBytes = kLegacyStatusSize;
-    if (c.plcStatusBytes > kPlcStatusSize)
-        c.plcStatusBytes = kPlcStatusSize;
-    if (c.plcStatusBytes % 2 != 0)
-        c.plcStatusBytes += 1;
-    if (c.plcStatusBytes > kPlcStatusSize)
-        c.plcStatusBytes = kPlcStatusSize;
+    c.plcStatusBytes = PlcClient::normalizeStatusSize(c.plcStatusBytes);
 
     const ConnectionSettings defaults;
     for (auto [field, fallback] : {
@@ -154,13 +92,12 @@ ConnectionSettings normalize(ConnectionSettings c)
              std::pair{&c.initScriptDetail2, &defaults.initScriptDetail2},
              std::pair{&c.mainScriptDetail1, &defaults.mainScriptDetail1},
              std::pair{&c.mainScriptDetail2, &defaults.mainScriptDetail2},
-             std::pair{&c.estopScript, &defaults.estopScript},
          }) {
         *field = field->trimmed();
         if (field->isEmpty())
             *field = *fallback;
     }
-    c.startCountdownSec = qBound(0, c.startCountdownSec, 60);
+    c.placementImage = c.placementImage.trimmed();
     return c;
 }
 
@@ -187,10 +124,7 @@ bool readConfigFile(const QString &path, ConnectionSettings *out)
     if (!plc.isEmpty()) {
         out->plcHost = plc.value(QStringLiteral("ip")).toString(out->plcHost).trimmed();
         out->plcPort = static_cast<quint16>(plc.value(QStringLiteral("port")).toInt(out->plcPort));
-        takePlcPattern(plc, "ready_mask", defaultPlcMask(), &out->plcReadyMask, &out->plcPatternWarning);
-        takePlcPattern(plc, "ready_value", defaultPlcValue(), &out->plcReadyValue, &out->plcPatternWarning);
-        if (plc.contains(QStringLiteral("status_bytes")))
-            out->plcStatusBytes = plc.value(QStringLiteral("status_bytes")).toInt(out->plcStatusBytes);
+        out->plcStatusBytes = plc.value(QStringLiteral("statusBytes")).toInt(out->plcStatusBytes);
     }
 
     const QJsonObject system = root.value(QStringLiteral("system")).toObject();
@@ -202,8 +136,6 @@ bool readConfigFile(const QString &path, ConnectionSettings *out)
         out->showCursor = system.value(QStringLiteral("showCursor")).toBool(true);
     if (system.contains(QStringLiteral("ignoreLoadCell")))
         out->ignoreLoadCell = system.value(QStringLiteral("ignoreLoadCell")).toBool(false);
-    if (system.contains(QStringLiteral("ignoreLaunchLocks")))
-        out->ignoreLaunchLocks = system.value(QStringLiteral("ignoreLaunchLocks")).toBool(false);
 
     const QJsonObject arduino = root.value(QStringLiteral("arduino")).toObject();
     if (!arduino.isEmpty()) {
@@ -226,8 +158,15 @@ bool readConfigFile(const QString &path, ConnectionSettings *out)
         out->initScriptDetail2 = programs.value(QStringLiteral("initDetail2")).toString(out->initScriptDetail2);
         out->mainScriptDetail1 = programs.value(QStringLiteral("mainDetail1")).toString(out->mainScriptDetail1);
         out->mainScriptDetail2 = programs.value(QStringLiteral("mainDetail2")).toString(out->mainScriptDetail2);
-        out->estopScript = programs.value(QStringLiteral("estop")).toString(out->estopScript);
-        out->startCountdownSec = programs.value(QStringLiteral("countdownSec")).toInt(out->startCountdownSec);
+        out->stopTimeoutSec = qMax(0, programs.value(QStringLiteral("stopTimeoutSec")).toInt(out->stopTimeoutSec));
+    }
+
+    const QJsonObject robot = root.value(QStringLiteral("robot")).toObject();
+    if (!robot.isEmpty()) {
+        const QJsonArray zones = robot.value(QStringLiteral("startZones")).toArray();
+        for (int i = 0; i < ConnectionSettings::kZoneCount && i < zones.size(); ++i)
+            out->zones[i] = readZone(zones.at(i).toObject());
+        out->placementImage = robot.value(QStringLiteral("placementImage")).toString(out->placementImage);
     }
 
     return true;
@@ -252,12 +191,9 @@ bool writeConfigFile(const QString &path, const ConnectionSettings &cfg)
     QJsonObject plc = root.value(QStringLiteral("plc")).toObject();
     plc.insert(QStringLiteral("ip"), cfg.plcHost);
     plc.insert(QStringLiteral("port"), cfg.plcPort);
-    // В файл — только байты кадра: дальше statusBytes ПЛК ничего не шлёт.
-    if (cfg.plcReadyMask.size() == kPlcStatusSize)
-        plc.insert(QStringLiteral("ready_mask"), encodeHex100(cfg.plcReadyMask.left(cfg.plcStatusBytes)));
-    if (cfg.plcReadyValue.size() == kPlcStatusSize)
-        plc.insert(QStringLiteral("ready_value"), encodeHex100(cfg.plcReadyValue.left(cfg.plcStatusBytes)));
-    plc.insert(QStringLiteral("status_bytes"), cfg.plcStatusBytes);
+    plc.insert(QStringLiteral("statusBytes"), cfg.plcStatusBytes);
+    for (const char *obsolete : {"ready_mask", "ready_value", "status_bytes", "_ready_comment"})
+        plc.remove(QLatin1String(obsolete));
 
     root.insert(QStringLiteral("server"), server);
     root.insert(QStringLiteral("plc"), plc);
@@ -267,7 +203,7 @@ bool writeConfigFile(const QString &path, const ConnectionSettings &cfg)
     system.insert(QStringLiteral("hmiAutostart"), cfg.hmiAutostart);
     system.insert(QStringLiteral("showCursor"), cfg.showCursor);
     system.insert(QStringLiteral("ignoreLoadCell"), cfg.ignoreLoadCell);
-    system.insert(QStringLiteral("ignoreLaunchLocks"), cfg.ignoreLaunchLocks);
+    system.remove(QStringLiteral("ignoreLaunchLocks"));
     root.insert(QStringLiteral("system"), system);
 
     QJsonObject arduino = root.value(QStringLiteral("arduino")).toObject();
@@ -281,9 +217,18 @@ bool writeConfigFile(const QString &path, const ConnectionSettings &cfg)
     programs.insert(QStringLiteral("initDetail2"), cfg.initScriptDetail2);
     programs.insert(QStringLiteral("mainDetail1"), cfg.mainScriptDetail1);
     programs.insert(QStringLiteral("mainDetail2"), cfg.mainScriptDetail2);
-    programs.insert(QStringLiteral("estop"), cfg.estopScript);
-    programs.insert(QStringLiteral("countdownSec"), cfg.startCountdownSec);
+    programs.insert(QStringLiteral("stopTimeoutSec"), cfg.stopTimeoutSec);
+    programs.remove(QStringLiteral("estop"));
+    programs.remove(QStringLiteral("countdownSec"));
     root.insert(QStringLiteral("programs"), programs);
+
+    QJsonObject robot = root.value(QStringLiteral("robot")).toObject();
+    QJsonArray zones;
+    for (const StartZone &zone : cfg.zones)
+        zones.append(writeZone(zone));
+    robot.insert(QStringLiteral("startZones"), zones);
+    robot.insert(QStringLiteral("placementImage"), cfg.placementImage);
+    root.insert(QStringLiteral("robot"), robot);
 
     const QDir dir = QFileInfo(path).absoluteDir();
     if (!dir.exists() && !QDir().mkpath(dir.absolutePath()))
@@ -319,6 +264,31 @@ QString ConnectionSettings::natsUrl() const
 QString ConnectionSettings::plcEndpoint() const
 {
     return QStringLiteral("%1:%2").arg(plcHost).arg(plcPort);
+}
+
+bool StartZone::contains(double x, double y, double z, double r) const
+{
+    return enabled && x >= xMin && x <= xMax && y >= yMin && y <= yMax
+        && z >= zMin && z <= zMax && r >= rMin && r <= rMax;
+}
+
+QString ConnectionSettings::initScript(int program) const
+{
+    return program == 1 ? initScriptDetail1 : program == 2 ? initScriptDetail2 : QString();
+}
+
+QString ConnectionSettings::mainScript(int program) const
+{
+    return program == 1 ? mainScriptDetail1 : program == 2 ? mainScriptDetail2 : QString();
+}
+
+int ConnectionSettings::zoneOf(double x, double y, double z, double r) const
+{
+    for (int i = 0; i < kZoneCount; ++i) {
+        if (zones[i].contains(x, y, z, r))
+            return i + 1;
+    }
+    return 0;
 }
 
 void ConnectionSettings::applyShowCursor(bool show)

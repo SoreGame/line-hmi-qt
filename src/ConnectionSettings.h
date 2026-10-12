@@ -1,30 +1,37 @@
 #ifndef CONNECTIONSETTINGS_H
 #define CONNECTIONSETTINGS_H
 
-#include <QByteArray>
 #include <QString>
 #include <QtGlobal>
 
+#include <array>
+
+// Прямоугольная область по x, y, z, r, из которой init-скрипт сам выводит робота в старт.
+struct StartZone {
+    bool enabled = false;
+    double xMin = 0, xMax = 0;
+    double yMin = 0, yMax = 0;
+    double zMin = 0, zMax = 0;
+    double rMin = 0, rMax = 0;
+
+    bool contains(double x, double y, double z, double r) const;
+};
+
 struct ConnectionSettings {
+    static constexpr int kZoneCount = 4;
+
     QString natsHost = QStringLiteral("192.168.11.170");
     quint16 natsPort = 4222;
     QString plcHost = QStringLiteral("192.168.58.88");
     quint16 plcPort = 2025;
-    // До 1000 байт (500 int16); в config.json можно короче, от 100 байт — хвост не проверяется.
-    // Маска 0x00 — байт не проверяется.
-    QByteArray plcReadyMask;
-    QByteArray plcReadyValue;
-    QString plcPatternWarning;
-    // Ожидаемый размер статус-кадра ПЛК в байтах: чётное, 100..1000 (50..500 int16).
-    int plcStatusBytes = 120;
+    // Размер кадра от ПЛК в байтах, чётный: int16 на ячейку.
+    int plcStatusBytes = 160;
     bool autostart = false;
     bool hmiAutostart = false;
     // Курсор мыши. По умолчанию включён; в админке можно выключить для киоска.
     bool showCursor = true;
-    // Игнорирование тензодатчика. Вкл → старт [7,1,1,0], выкл → [7,1,1,1].
+    // Уходит на ПЛК в 7 1 N X: X = 0, если тензодатчик игнорируется.
     bool ignoreLoadCell = false;
-    // Игнорировать блокировки старта (ПЛК, vision, CTRL, буфер и т.д.).
-    bool ignoreLaunchLocks = false;
     // COM-порт Arduino (пусто — не открывать). Порог уходит командой T <int>.
     QString arduinoPort = QStringLiteral("/dev/ttyUSB0");
     qint32 arduinoThreshold = 1100000;
@@ -35,12 +42,18 @@ struct ConnectionSettings {
     QString initScriptDetail2 = QStringLiteral("preProg2.chai");
     QString mainScriptDetail1 = QStringLiteral("ai.chai");
     QString mainScriptDetail2 = QStringLiteral("ai2.chai");
-    QString estopScript = QStringLiteral("e-stop_out.chai");
-    // Пауза между концом инициализации и запуском основной программы. 0 — сразу.
-    int startCountdownSec = 5;
+    // Стоп в цикле: сколько ждать конца цикла, потом полный стоп роботу. 0 — ждать без ограничения.
+    int stopTimeoutSec = 30;
+    std::array<StartZone, kZoneCount> zones{};
+    // Картинка для окна ручной установки робота. Пусто — окно без картинки.
+    QString placementImage;
 
     QString natsUrl() const;
     QString plcEndpoint() const;
+    QString initScript(int program) const;
+    QString mainScript(int program) const;
+    // 0 — ни в одной включённой зоне, иначе 1..kZoneCount.
+    int zoneOf(double x, double y, double z, double r) const;
 
     static ConnectionSettings load();
     void save() const;

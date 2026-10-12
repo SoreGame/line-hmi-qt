@@ -41,7 +41,8 @@ public:
 
 signals:
     void applyRequested(const ConnectionSettings &settings);
-    void estopResetRequested();
+    // Настройки сохранены без переподключения (зоны, тензодатчик).
+    void settingsChanged(const ConnectionSettings &settings);
 
 private slots:
     void onApplyClicked();
@@ -54,7 +55,7 @@ private slots:
     void onRemoteAutostartToggled(bool enabled);
     void onShowCursorToggled(bool enabled);
     void onIgnoreLoadCellToggled(bool enabled);
-    void onIgnoreLaunchLocksToggled(bool enabled);
+    void onZonesClicked();
     void onStepChanged(int index);
     void onPlcStateChanged();
     void onArduinoValue(qint32 value);
@@ -82,6 +83,8 @@ private:
     void sendMoveOffset(double x, double y, double z, double r);
     void updateMotionPowerButton();
     void refreshPlcBufferLog();
+    void updatePlcLogTitle();
+    void updateLoadCellToggle();
     void fitPlcLogPanel();
     void fitTogglesPanel();
     void fitProgramsPanel();
@@ -100,6 +103,8 @@ private:
     static constexpr int kPageSize = 10;
     static constexpr int kPlcLogMaxLines = 120;
 
+    // Полные настройки: поля, которых нет на панели (зоны), не теряются при сохранении.
+    ConnectionSettings m_settings;
     NatsClient *m_nats = nullptr;
     PlcClient *m_plc = nullptr;
     ArduinoLink *m_arduino = nullptr;
@@ -129,10 +134,10 @@ private:
     QFrame *m_programsPanel = nullptr;
     QLineEdit *m_initScript1 = nullptr;
     QLineEdit *m_initScript2 = nullptr;
+    QSpinBox *m_stopTimeout = nullptr;
     QLineEdit *m_mainScript1 = nullptr;
     QLineEdit *m_mainScript2 = nullptr;
-    QLineEdit *m_estopScript = nullptr;
-    QSpinBox *m_startCountdown = nullptr;
+    QPushButton *m_btnZones = nullptr;
     QFrame *m_arduinoPanel = nullptr;
     QFrame *m_jogPanel = nullptr;
     int m_leftColW = 420;
@@ -166,8 +171,6 @@ private:
     QPushButton *m_btnRemoteAutostart = nullptr;
     QPushButton *m_btnShowCursor = nullptr;
     QPushButton *m_btnIgnoreLoadCell = nullptr;
-    QPushButton *m_btnIgnoreLaunchLocks = nullptr;
-    QPushButton *m_btnResetEstop = nullptr;
     QLabel *m_droX = nullptr;
     QLabel *m_droY = nullptr;
     QLabel *m_droZ = nullptr;

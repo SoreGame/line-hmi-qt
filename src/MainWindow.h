@@ -1,16 +1,20 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include <QByteArray>
+#include "LineController.h"
+#include "PlcClient.h"
+
 #include <QDateTime>
-#include <QElapsedTimer>
 #include <QFile>
-#include <QMainWindow>
 #include <QFutureWatcher>
+#include <QMainWindow>
 #include <QPointer>
 #include <QString>
 #include <QStringList>
 #include <QVector>
+
+#include <functional>
+#include <optional>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -18,18 +22,21 @@ class MainWindow;
 }
 QT_END_NAMESPACE
 
+class EstopOverlay;
 class NatsClient;
-class PlcClient;
+class OverlayCard;
+class PlaceOverlay;
 class PrepOverlay;
-class RecoveryOverlay;
-class QCloseEvent;
 class QGraphicsView;
 class QLabel;
+class QMessageBox;
 class QResizeEvent;
 class QShowEvent;
 class QTimer;
 class QVBoxLayout;
 
+// Главный экран. Показывает кадр ПЛК и передаёт на ПЛК запросы оператора;
+// решения принимает ПЛК, скрипты робота ведёт LineController.
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -41,12 +48,11 @@ public:
 protected:
     void resizeEvent(QResizeEvent *event) override;
     void showEvent(QShowEvent *event) override;
-    void closeEvent(QCloseEvent *event) override;
 
 private slots:
     void on_btnStart_clicked();
     void on_btnStop_clicked();
-    void on_btnEmergencyStop_clicked();
+    void on_btnHistory_clicked();
     void on_btnProg1_clicked();
     void on_btnProg2_clicked();
     void on_btnAdmin_clicked();
@@ -54,11 +60,7 @@ private slots:
     void on_btnExportLog_clicked();
 
 private:
-    enum class Mode { Ready, Run, Recovery };
-    enum class Program { None, Detail1, Detail2 };
     enum class LogLevel { Info, Ok, Warn, Err };
-    // Очередь кадров на ПЛК: commandFinished приходит в том же порядке.
-    enum class PlcAck { Program, Start, Control };
 
     struct LogEntry {
         QDateTime time;
@@ -66,51 +68,37 @@ private:
         QString message;
     };
 
+    // Запрос на ПЛК, результат которого виден только по кадру.
+    struct PendingRequest {
+        QString name;
+        std::function<bool()> accepted;
+        // Почему ПЛК мог не принять запрос; пустая строка — причина неизвестна.
+        std::function<QString()> reason;
+    };
+
+    void onPlcFrame();
     void refreshUi();
-    void selectProgram(Program program);
-    void sendPlcControl(int code);
+    void sendRequest(const QByteArray &frame, const QString &name, std::function<bool()> accepted,
+                     std::function<QString()> reason = {});
+    void showNotice(const QString &title, const QString &message);
+    void onRequestTimeout();
+    void selectProgram(int program);
+    void syncOverlays();
+    void logModeChange();
+
     void applyProgramVisuals();
     void applyModeVisuals();
     void updateNatsStatusIndicator();
     void updatePlcIndicators();
-    void updateClock();
-    void updateUptime();
-    void startUptime();
-    void resetUptime();
-    void updateCycleTime();
-    void startCycleTimer();
-    void resetCycleTimer();
-    void finishCycle();
-    void updateOutputCounters();
-    void registerGood();
-    void registerScrap();
-    void onScriptStatus(bool running, bool completed, int line, const QString &filename);
-    void openPrepOverlay();
     void updateModuleIndicators();
     void setModuleIndicator(QLabel *label, bool alive);
     void setupChecklistPanel();
-    void updateLeftPanel();
-    void updateStartupChecklist();
-    void updateSuspicionWarnings();
-    bool modulesReady() const;
-    bool plcReady() const;
-    bool bufferReady() const;
-    // E-stop на ПЛК: 30 в int16[50] или зажатый грибок в int16[51].
-    bool plcEstopPressed() const;
-    bool plcEstopHeld() const;
-    bool canStartNow(QString *reason = nullptr) const;
-    bool canPowerOff() const;
-    void syncPowerOffLatch();
-    // Кнопки корпуса (int16[50] ПЛК) — те же действия, что кнопки на экране.
-    void handlePanelButtons();
-    void panelStopPressed();
-    void panelStartPressed();
-    void maybeEnterRecoveryFromPlc();
-    void forceLeaveRecovery(const QString &logMessage = QString());
-    void enterRecovery(const QString &reason);
-    void openRecoveryOverlay();
-    void onRecoveryFinished();
-    void closePrepOverlay();
+    void updateChecklist();
+    void updateOutputCounters();
+    void updatePowerOff();
+    void updateLamellaType();
+    void updateClock();
+    void updateKpi();
 
     void appendLog(LogLevel level, const QString &message);
     void appendLogToSessionFile(const LogEntry &entry);
@@ -120,14 +108,6 @@ private:
     QColor logLevelColor(LogLevel level) const;
     bool exportLogsToFile(const QString &path, QString *errorOut = nullptr) const;
 
-    // NATS: старт/стоп скрипта, привязанного к выбранной детали.
-    QString scriptFilenameForProgram(Program p) const;
-    /// freshSession=true: сброс uptime (ручной Старт). false: следующий цикл после auto-restart.
-    void startSelectedProgramScript(int fromLine = 1, bool freshSession = true);
-    void sendStopCommandAsync(const QString &reason, LogLevel logLevel = LogLevel::Info,
-                              bool countScrap = false);
-    void sendStopThenRecover(const QString &reason);
-
     void setupAndroidCanvas();
     void fitAndroidCanvas();
     void enableKeepScreenOn();
@@ -135,21 +115,29 @@ private:
     void beginNatsConnect(bool notifyOnError, bool quiet = false);
     void startPlcClient();
 
-    Ui::MainWindow *ui = nullptr;
-    Mode m_mode = Mode::Ready;
-    // До выбора оператором программа не выбрана: Старт выдаёт сообщение.
-    Program m_program = Program::None;
+    bool plcLinked() const;
+    PlcClient::Mode plcMode() const;
+    bool stopRequested() const;
+    bool needsPlacement() const;
+    // Режим 2 или ПЛК уже в «Готов», а скрипт робота ещё доигрывается.
+    bool finishingWork() const;
+    // Режим 3 «в работе» или 2 «остановка»: робот ещё может работать, клапаны сварки открыты.
+    bool lineRunning() const;
 
+    Ui::MainWindow *ui = nullptr;
     NatsClient *m_nats = nullptr;
     PlcClient *m_plc = nullptr;
+    LineController *m_line = nullptr;
+
     QPointer<PrepOverlay> m_prep;
-    QPointer<RecoveryOverlay> m_recovery;
-    bool m_prepArming = false;
-    QVector<PlcAck> m_plcAcks;
-    // Стоп основной программы: дожать текущий цикл и не запускать следующий.
-    bool m_stopAfterCycle = false;
-    QFutureWatcher<QString> *m_execWatcher = nullptr;
-    QFutureWatcher<QString> *m_stopWatcher = nullptr;
+    QPointer<EstopOverlay> m_estop;
+    QPointer<PlaceOverlay> m_place;
+    QPointer<OverlayCard> m_stopPopup;
+
+    std::optional<PendingRequest> m_pending;
+    QTimer *m_requestTimer = nullptr;
+    QPointer<QMessageBox> m_rejectBox;
+
     QFutureWatcher<QString> *m_connectWatcher = nullptr;
     bool m_reconnectPending = false;
     bool m_notifyOnConnectError = false;
@@ -158,56 +146,28 @@ private:
 
     QString m_natsUrl;
     QString m_plcHost;
-    quint16 m_plcPort = 1502;
-    QByteArray m_plcReadyMask;
-    QByteArray m_plcReadyValue;
-    int m_plcStatusBytes = 120;
+    quint16 m_plcPort = 2025;
+    int m_plcStatusBytes = PlcClient::kDefaultStatusSize;
 
     QGraphicsView *m_androidView = nullptr;
 
-    // Uptime текущего запуска: тикает в Run, сброс на Stop / EMERGENCY STOP.
-    qint64 m_uptimeAccumulatedMs = 0;
-    QElapsedTimer m_uptimeTick;
-    bool m_uptimeRunning = false;
-
-    // Замер текущего цикла (не показывается в KPI). В KPI — только m_lastCycleMs.
-    qint64 m_cycleAccumulatedMs = 0;
-    QElapsedTimer m_cycleTick;
-    bool m_cycleRunning = false;
-    qint64 m_lastCycleMs = -1; // последний завершённый цикл; -1 = ещё не было
-
-    // Выдача (годные) / брак за сессию пульта.
-    int m_goodCount = 0;
-    int m_scrapCount = 0;
-
     QVBoxLayout *m_checklistLayout = nullptr;
-    QVector<QLabel *> m_checklistItems;
     QStringList m_lastChecklistTasks;
-    enum class LeftPanelKind { Startup, Warnings };
-    LeftPanelKind m_leftPanelKind = LeftPanelKind::Startup;
 
     QVector<LogEntry> m_logEntries;
     QString m_sessionLogPath;
     QFile m_sessionLogFile; // держим открытым; каждая запись сразу на диск (flush+fsync)
+
+    bool m_moduleStateInitialized = false;
     bool m_prevNatsOk = false;
     bool m_prevCtrlOk = false;
     bool m_prevBehaviourOk = false;
     bool m_prevVision1Ok = false;
     bool m_prevVision2Ok = false;
-    bool m_prevPlcLinked = false;
     bool m_prevPlcOk = false;
-    qint16 m_prevPanelValue = 0;
-    bool m_panelValueKnown = false;
-    bool m_prevEstopActive = false;
-    // Аварийный стоп запрошен, окно восстановления ещё не открыто.
-    // Пока стоит — exec/stop не переводят пульт в Run/Ready.
-    bool m_estopPending = false;
-    QString m_estopPendingReason;
-    // После 7 5: ждём, пока ПЛК снимет 30 в int16[50] и грибок отжат. Старт заблокирован.
-    bool m_awaitEstopClear = false;
-    QTimer *m_estopClearTimer = nullptr;
-    bool m_moduleStateInitialized = false;
-    bool m_initReadyLogged = false;
+    int m_loggedMode = -1;
+    int m_loggedProgram = -1;
+    int m_loggedPrepDone = -1;
 };
 
 #endif // MAINWINDOW_H

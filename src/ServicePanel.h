@@ -38,7 +38,7 @@ private:
 
     static constexpr int kWidth = 1920;
     static constexpr int kHeight = 1080;
-    static constexpr int kBufRows = 12;
+    static constexpr int kBufRows = 16;
     static constexpr int kBufCols = 5;
     static constexpr int kBufCellCount = kBufRows * kBufCols;
     static constexpr int kDoRows = 10;
