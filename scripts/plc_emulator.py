@@ -22,6 +22,9 @@
   doors 0|1            — двери: 0 = открыты, 1 = закрыты (в одной цепи с грибком, ячейка 51)
   nolamel 0|1          — долго нет ламелей (1 — авария)
   noholders 0|1        — долго нет держателей ламелей (1 — авария)
+  weldfail 0|1         — сварка долго не отрабатывает (1 — авария)
+  holderpick 0|1       — долго не можем взять держатель (1 — авария)
+  lamelpick 0|1        — долго не можем взять ламели (1 — авария)
   lameltype T          — на выдаче ламель типа T (0 — пусто)
   start | stop         — кнопки СТАРТ / СТОП на корпусе
   set I V | unset I|all — подменить ячейку кадра int16[I] значением V / вернуть как было
@@ -81,6 +84,9 @@ NO_HOLDERS_INT = 61
 GOOD_INT = 62
 SCRAP_INT = 63
 SAFE_POWER_OFF_INT = 64
+WELD_TIMEOUT_INT = 65
+HOLDER_PICK_INT = 66
+LAMEL_PICK_INT = 67
 LAMEL_TYPE_INT = 69
 
 MODE_BOOT, MODE_READY, MODE_STOPPING, MODE_RUN, MODE_ESTOP, MODE_SERVICE = range(6)
@@ -141,6 +147,9 @@ class Plc:
         self.load_cell = 0
         self.no_lamel = False
         self.no_holders = False
+        self.weld_timeout = False
+        self.holder_pick = False
+        self.lamel_pick = False
         self.lamel_type = 1
         self.holders = {name: True for name in HOLDER_NAMES}
         self.init_permit = 0
@@ -182,6 +191,12 @@ class Plc:
             return "долго нет ламелей"
         if self.no_holders:
             return "долго нет держателей"
+        if self.weld_timeout:
+            return "сварка долго не отрабатывает"
+        if self.holder_pick:
+            return "долго не можем взять держатель"
+        if self.lamel_pick:
+            return "долго не можем взять ламели"
         return ""
 
     def estop_circuit_ok(self) -> bool:
@@ -408,6 +423,9 @@ class Plc:
         put_i16(out, GOOD_INT, self.good)
         put_i16(out, SCRAP_INT, self.scrap)
         put_i16(out, SAFE_POWER_OFF_INT, int(self.mode not in LINE_ACTIVE))
+        put_i16(out, WELD_TIMEOUT_INT, int(self.weld_timeout))
+        put_i16(out, HOLDER_PICK_INT, int(self.holder_pick))
+        put_i16(out, LAMEL_PICK_INT, int(self.lamel_pick))
         put_i16(out, LAMEL_TYPE_INT, self.lamel_type)
         for index, value in self.overrides.items():
             put_i16(out, index, value)
@@ -443,6 +461,17 @@ class Plc:
             if flag:
                 self.raise_alarm("долго нет держателей")
             return f"долго нет держателей = {int(flag)}"
+        alarm_flags = {
+            "weldfail": ("weld_timeout", "сварка долго не отрабатывает"),
+            "holderpick": ("holder_pick", "долго не можем взять держатель"),
+            "lamelpick": ("lamel_pick", "долго не можем взять ламели"),
+        }
+        if cmd in alarm_flags and flag is not None:
+            attr, why = alarm_flags[cmd]
+            setattr(self, attr, flag)
+            if flag:
+                self.raise_alarm(why)
+            return f"{why} = {int(flag)}"
         if cmd == "lameltype" and args and args[0].isdigit():
             self.lamel_type = int(args[0])
             return f"на выдаче тип {self.lamel_type}"
@@ -497,6 +526,8 @@ class Plc:
             f"prep_waiting={self.prep_waiting()} holders={self.holders} "
             f"mushroom={self.mushroom} doors={'closed' if self.doors_closed else 'open'} "
             f"nolamel={int(self.no_lamel)} noholders={int(self.no_holders)} "
+            f"weldfail={int(self.weld_timeout)} holderpick={int(self.holder_pick)} "
+            f"lamelpick={int(self.lamel_pick)} "
             f"lameltype={self.lamel_type} "
             f"zone={self.zone} flags={self.hmi_flags} hmi_lost={int(self.hmi_lost)}"
         )
@@ -653,6 +684,8 @@ def print_status(frame: bytes) -> None:
         f"prep_done={get_i16(frame, PREP_DONE_INT)} program={get_i16(frame, PROGRAM_INT)} "
         f"loadcell={get_i16(frame, LOAD_CELL_INT)} "
         f"nolamel={get_i16(frame, NO_LAMEL_INT)} noholders={get_i16(frame, NO_HOLDERS_INT)} "
+        f"weldfail={get_i16(frame, WELD_TIMEOUT_INT)} holderpick={get_i16(frame, HOLDER_PICK_INT)} "
+        f"lamelpick={get_i16(frame, LAMEL_PICK_INT)} "
         f"lameltype={get_i16(frame, LAMEL_TYPE_INT)} "
         f"init={get_i16(frame, INIT_PERMIT_INT)} "
         f"good={get_i16(frame, GOOD_INT)} scrap={get_i16(frame, SCRAP_INT)} "

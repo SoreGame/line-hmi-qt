@@ -57,7 +57,6 @@ private slots:
     void on_btnProg2_clicked();
     void on_btnAdmin_clicked();
     void on_btnService_clicked();
-    void on_btnExportLog_clicked();
 
 private:
     enum class LogLevel { Info, Ok, Warn, Err };
@@ -118,7 +117,6 @@ private:
     void syncSessionLogToDisk();
     QString logLevelTag(LogLevel level) const;
     QColor logLevelColor(LogLevel level) const;
-    bool exportLogsToFile(const QString &path, QString *errorOut = nullptr) const;
 
     void setupAndroidCanvas();
     void fitAndroidCanvas();

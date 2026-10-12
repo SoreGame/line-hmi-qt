@@ -388,6 +388,12 @@ QStringList LineController::alarmCauses() const
         causes << tx("Долго нет ламелей");
     if (flag(PlcClient::kNoHoldersIndex))
         causes << tx("Долго нет держателей ламелей");
+    if (flag(PlcClient::kWeldTimeoutIndex))
+        causes << tx("Сварка долго не отрабатывает");
+    if (flag(PlcClient::kHolderPickIndex))
+        causes << tx("Долго не можем взять держатель");
+    if (flag(PlcClient::kLamellaPickIndex))
+        causes << tx("Долго не можем взять ламели");
     if (m_scriptFailed)
         causes << tx("Скрипт робота не дошёл до конца");
     if (!m_report.natsConnected) {

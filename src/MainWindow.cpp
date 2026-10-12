@@ -1179,7 +1179,10 @@ QString MainWindow::startRejectDetails() const
           << tx("грибок %1").arg(cell(PlcClient::kMushroomIndex))
           << tx("клапаны сварки [10..14,16]=%1").arg(valves.join(QLatin1Char(' ')))
           << tx("держатели %1 %2").arg(cell(PlcClient::kBigHoldersSensorIndex), cell(PlcClient::kSmallHoldersSensorIndex))
-          << tx("причины аварии %1 %2").arg(cell(PlcClient::kNoLamellaeIndex), cell(PlcClient::kNoHoldersIndex))
+          << tx("причины аварии %1 %2 %3 %4 %5")
+                 .arg(cell(PlcClient::kNoLamellaeIndex), cell(PlcClient::kNoHoldersIndex),
+                      cell(PlcClient::kWeldTimeoutIndex), cell(PlcClient::kHolderPickIndex),
+                      cell(PlcClient::kLamellaPickIndex))
           << cell(PlcClient::kInitPermitIndex)
           << tx("опрос пульта: NATS %1, CTRL %2, Behaviour %3, скрипт %4, Z %5")
                  .arg(int(report.natsConnected))
@@ -1268,32 +1271,6 @@ void MainWindow::on_btnAdmin_clicked()
     appendLog(LogLevel::Info, tx("Админ: панель закрыта"));
     refreshUi();
 #endif
-}
-
-void MainWindow::on_btnExportLog_clicked()
-{
-    const QString dir = QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
-                            .filePath(QStringLiteral("logs"));
-    const QString path = QDir(dir).filePath(
-        QStringLiteral("line-hmi-export-%1.log")
-            .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss"))));
-
-    QString err;
-    if (!QDir().mkpath(dir)) {
-        err = tx("не удалось создать папку %1").arg(dir);
-        appendLog(LogLevel::Err, tx("Не удалось выгрузить журнал: %1").arg(err));
-        QMessageBox::warning(this, tx("Журнал"), tx("Не удалось сохранить файл:\n%1").arg(err));
-        return;
-    }
-    if (!exportLogsToFile(path, &err)) {
-        appendLog(LogLevel::Err, tx("Не удалось выгрузить журнал: %1").arg(err));
-        QMessageBox::warning(this, tx("Журнал"),
-                             tx("Не удалось сохранить файл:\n%1").arg(err));
-        return;
-    }
-
-    appendLog(LogLevel::Ok, tx("Журнал выгружен: %1").arg(path));
-    QMessageBox::information(this, tx("Журнал"), tx("Журнал сохранён в:\n%1").arg(path));
 }
 
 QString MainWindow::logLevelTag(LogLevel level) const
@@ -1404,41 +1381,4 @@ void MainWindow::syncSessionLogToDisk()
     if (fd >= 0)
         ::fsync(fd);
 #endif
-}
-
-bool MainWindow::exportLogsToFile(const QString &path, QString *errorOut) const
-{
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-        if (errorOut)
-            *errorOut = file.errorString();
-        return false;
-    }
-
-    QTextStream out(&file);
-    out << QStringLiteral("# line-hmi-qt event log\n");
-    out << QStringLiteral("# exported ")
-        << QDateTime::currentDateTime().toString(Qt::ISODate) << '\n';
-    out << QStringLiteral("# session file: ") << m_sessionLogPath << "\n\n";
-
-    // Файл сессии полнее экранного журнала: в нём и изменения буфера ПЛК.
-    QFile session(m_sessionLogPath);
-    if (session.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        out.flush();
-        file.write(session.readAll());
-    } else {
-        for (const LogEntry &entry : m_logEntries) {
-            out << entry.time.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz"))
-                << " [" << logLevelTag(entry.level) << "] "
-                << entry.message << '\n';
-        }
-    }
-    out.flush();
-    file.flush();
-#ifdef Q_OS_UNIX
-    const int fd = file.handle();
-    if (fd >= 0)
-        ::fsync(fd);
-#endif
-    return true;
 }

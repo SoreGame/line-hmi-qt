@@ -43,6 +43,9 @@ public:
     // Причины аварии от ПЛК: 1 — есть. Активны могут быть сразу несколько.
     static constexpr int kNoLamellaeIndex = 59;
     static constexpr int kNoHoldersIndex = 61;
+    static constexpr int kWeldTimeoutIndex = 65;
+    static constexpr int kHolderPickIndex = 66;
+    static constexpr int kLamellaPickIndex = 67;
     // Индикаторы, решений по ним пульт не принимает.
     // Клапаны сварки: в безопасном положении все = 1.
     static constexpr int kWeldValveInts[] = {10, 11, 12, 13, 14, 16};

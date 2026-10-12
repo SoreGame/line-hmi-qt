@@ -28,7 +28,8 @@ SCENARIOS: list[tuple[str, str, list[tuple[float, str]]]] = [
     ("reboot", "Перезагрузка ПЛК", [(0, "reboot")]),
     ("reboot_estop", "Включение после E-STOP", [(0, "reboot estop")]),
     ("all_ok", "Всё в норме: входы по умолчанию, подмены сняты",
-     [(0, a) for a in ("mushroom 1", "doors 1", "nolamel 0", "noholders 0", "ready weld 1",
+     [(0, a) for a in ("mushroom 1", "doors 1", "nolamel 0", "noholders 0", "weldfail 0",
+                       "holderpick 0", "lamelpick 0", "ready weld 1",
                        "ready vision1 1", "ready vision2 1", "holders big 1", "holders small 1",
                        "lameltype 1", "unset all")]),
 ]
@@ -94,6 +95,9 @@ def cell_names(emu: ModuleType) -> dict[int, str]:
         emu.GOOD_INT: "годные",
         emu.SCRAP_INT: "брак",
         emu.SAFE_POWER_OFF_INT: "можно выключать",
+        emu.WELD_TIMEOUT_INT: "сварка долго не отрабатывает",
+        emu.HOLDER_PICK_INT: "долго не можем взять держатель",
+        emu.LAMEL_PICK_INT: "долго не можем взять ламели",
         emu.LAMEL_TYPE_INT: "тип ламели на выдаче",
     }
     for index in emu.WELD_VALVE_INTS:
@@ -119,6 +123,9 @@ def snapshot(plc, emu: ModuleType, runner: ScenarioRunner) -> dict:
                 "doors": int(plc.doors_closed),
                 "nolamel": int(plc.no_lamel),
                 "noholders": int(plc.no_holders),
+                "weldfail": int(plc.weld_timeout),
+                "holderpick": int(plc.holder_pick),
+                "lamelpick": int(plc.lamel_pick),
                 "weld": int(plc.ready["weld"]),
                 "vision1": int(plc.ready["vision1"]),
                 "vision2": int(plc.ready["vision2"]),
@@ -243,7 +250,10 @@ const INPUTS=[
  ['mushroom','Грибок отжат','mushroom'],['doors','Двери закрыты','doors'],
  ['weld','Клапаны сварки в 1','ready weld'],['vision1','Vision 1','ready vision1'],['vision2','Vision 2','ready vision2'],
  ['holdersBig','Большие держатели','holders big'],['holdersSmall','Малые держатели','holders small'],
- ['nolamel','Долго нет ламелей (авария)','nolamel',1],['noholders','Долго нет держателей (авария)','noholders',1]];
+ ['nolamel','Долго нет ламелей (авария)','nolamel',1],['noholders','Долго нет держателей (авария)','noholders',1],
+ ['weldfail','Сварка долго не отрабатывает (авария)','weldfail',1],
+ ['holderpick','Долго не можем взять держатель (авария)','holderpick',1],
+ ['lamelpick','Долго не можем взять ламели (авария)','lamelpick',1]];
 async function post(url,body){const r=await fetch(url,{method:'POST',body:JSON.stringify(body)});
  const j=await r.json();document.getElementById('res').textContent=j.result||'';refresh();}
 function act(a){return post('/api/action',{action:a});}

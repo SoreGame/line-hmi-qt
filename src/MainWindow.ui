@@ -1455,28 +1455,6 @@ Vision 2</string>
      <string notr="true">color:#737880; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:12px; font-weight:600;</string>
     </property>
    </widget>
-   <widget class="QPushButton" name="btnExportLog">
-    <property name="geometry">
-     <rect>
-      <x>1720</x>
-      <y>712</y>
-      <width>172</width>
-      <height>28</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Выгрузить в файл</string>
-    </property>
-    <property name="styleSheet">
-     <string notr="true">QPushButton{background:#FFFFFF; color:#1F2126; border:1px solid #DBDEE3; border-radius:8px; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:12px; font-weight:600;} QPushButton:pressed{background:#F0F2F5;}</string>
-    </property>
-    <property name="cursor">
-     <cursorShape>PointingHandCursor</cursorShape>
-    </property>
-    <property name="focusPolicy">
-     <enum>Qt::FocusPolicy::NoFocus</enum>
-    </property>
-   </widget>
    <widget class="QListWidget" name="logList">
     <property name="geometry">
      <rect>
@@ -1583,7 +1561,6 @@ Vision 2</string>
    <zorder>kpiUptimeValue</zorder>
    <zorder>panelLog</zorder>
    <zorder>labelLog</zorder>
-   <zorder>btnExportLog</zorder>
    <zorder>logList</zorder>
   </widget>
  </widget>
