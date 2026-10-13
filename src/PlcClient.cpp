@@ -3,7 +3,6 @@
 
 #include <QDateTime>
 #include <QElapsedTimer>
-#include <QFile>
 #include <QTcpSocket>
 #include <QThread>
 
@@ -14,23 +13,6 @@ namespace {
 constexpr int kPingIntervalMs = 1000;
 constexpr int kPingTimeoutMs = 800;
 constexpr int kConnectTimeoutMs = 3000;
-
-// #region agent log
-void agentDbg(const char *hypothesisId, const char *location, const char *message,
-              const QString &dataJson)
-{
-    QFile f(QStringLiteral("/home/egor/repos/robot/.cursor/debug-3a8ff8.log"));
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Append))
-        return;
-    const qint64 ts = QDateTime::currentMSecsSinceEpoch();
-    const QByteArray line =
-        QByteArray("{\"sessionId\":\"3a8ff8\",\"runId\":\"hmi-plc\",\"hypothesisId\":\"")
-        + hypothesisId + "\",\"location\":\"" + location + "\",\"message\":\"" + message
-        + "\",\"data\":" + dataJson.toUtf8() + ",\"timestamp\":" + QByteArray::number(ts)
-        + "}\n";
-    f.write(line);
-}
-// #endregion
 
 bool readStatusFrame(QTcpSocket &sock, QByteArray *out, int size, int timeoutMs)
 {
@@ -104,20 +86,6 @@ protected:
                 break;
 
             if (!command.isEmpty()) {
-                // #region agent log
-                {
-                    QStringList hex;
-                    for (char b : command)
-                        hex << QString::number(quint8(b));
-                    const bool looksStop4 = command.size() >= 2 && quint8(command[0]) == 7
-                        && quint8(command[1]) == 4;
-                    agentDbg(looksStop4 ? "C" : "C", "PlcClient.cpp:writeCommand", "tx_command",
-                             QStringLiteral("{\"bytes\":[%1],\"is_7_4\":%2}")
-                                 .arg(hex.join(QLatin1Char(',')),
-                                      looksStop4 ? QStringLiteral("true")
-                                                 : QStringLiteral("false")));
-                }
-                // #endregion
                 if (!writeFrame(sock, command)) {
                     emit m_owner->commandFinished(false, tx("Не удалось отправить кадр на ПЛК"));
                     sock.abort();
@@ -186,29 +154,6 @@ private:
             std::lock_guard<std::mutex> lock(m_owner->m_dataMutex);
             m_owner->m_status = reply;
         }
-        // #region agent log
-        {
-            auto i16 = [&reply](int idx) -> int {
-                const int b = idx * 2;
-                if (b + 1 >= reply.size())
-                    return -999;
-                return qint16(quint8(reply[b]) | (quint8(reply[b + 1]) << 8));
-            };
-            const int state = i16(52);
-            const int emerg = i16(51);
-            const int btn = i16(50);
-            const char *hyp = (emerg == 0) ? "A" : (state == 4 ? "B" : (state == 2 ? "D" : "E"));
-            agentDbg(hyp, "PlcClient.cpp:pingPong", "rx_frame",
-                     QStringLiteral("{\"state_52\":%1,\"btn_emergency_51\":%2,\"btn_pressed_50\":%3,"
-                                    "\"program_54\":%4,\"cell56\":%5,\"bytes\":%6}")
-                         .arg(state)
-                         .arg(emerg)
-                         .arg(btn)
-                         .arg(i16(54))
-                         .arg(i16(56))
-                         .arg(reply.size()));
-        }
-        // #endregion
         m_owner->m_lastOkMs.store(QDateTime::currentMSecsSinceEpoch(), std::memory_order_relaxed);
         if (ticket > m_owner->m_pollServed.load(std::memory_order_acquire))
             m_owner->m_pollServed.store(ticket, std::memory_order_release);
