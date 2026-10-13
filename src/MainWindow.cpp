@@ -479,11 +479,12 @@ void MainWindow::enableKeepScreenOn()
 
 void MainWindow::startPlcClient()
 {
-    m_plc->start(m_plcHost, m_plcPort, m_plcStatusBytes);
-    appendLog(LogLevel::Info, tx("Подключение к ПЛК (%1:%2), кадр %3 байт")
+    m_plc->start(m_plcHost, m_plcPort, m_plcStatusBytes, m_plcPollMs);
+    appendLog(LogLevel::Info, tx("Подключение к ПЛК (%1:%2), кадр %3 байт, опрос %4 мс")
                                   .arg(m_plcHost)
                                   .arg(m_plcPort)
-                                  .arg(m_plc->statusSize()));
+                                  .arg(m_plc->statusSize())
+                                  .arg(m_plc->pollMs()));
     ui->statusPlc->setToolTip(QStringLiteral("%1:%2").arg(m_plcHost).arg(m_plcPort));
     updatePlcIndicators();
 }
@@ -495,6 +496,7 @@ void MainWindow::applyConnectionSettings(bool notifyOnError)
     m_plcHost = cfg.plcHost;
     m_plcPort = cfg.plcPort;
     m_plcStatusBytes = cfg.plcStatusBytes;
+    m_plcPollMs = cfg.plcPollMs;
     m_line->setSettings(cfg);
     ui->statusNats->setToolTip(m_natsUrl);
     startPlcClient();
@@ -791,7 +793,9 @@ void MainWindow::syncOverlays()
     QWidget *host = ui->centralwidget;
 
     const int mainDelaySec = m_line->mainDelayRemainingSec();
-    const bool wantPrep = linked && lineRunning() && (!m_plc->prepDone() || mainDelaySec > 0);
+    const bool wantPrep = linked && lineRunning()
+        && (m_line->awaitingPrep() || !m_plc->prepDone() || mainDelaySec > 0
+            || m_line->initState() == LineController::InitState::Running);
     if (wantPrep && !m_prep) {
         m_prep = new PrepOverlay(host);
         connect(m_prep, &PrepOverlay::stopRequested, this, &MainWindow::on_btnStop_clicked);

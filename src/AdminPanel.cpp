@@ -320,12 +320,20 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     m_plcStatusBytes->setSingleStep(PlcClient::kStatusIntBytes);
     m_plcStatusBytes->setValue(initial.plcStatusBytes);
     m_plcStatusBytes->setFixedWidth(88);
+    m_plcPollMs = new QSpinBox(networkPanel);
+    m_plcPollMs->setRange(PlcClient::kMinPollMs, PlcClient::kMaxPollMs);
+    m_plcPollMs->setSingleStep(50);
+    m_plcPollMs->setSuffix(tx(" мс"));
+    m_plcPollMs->setValue(initial.plcPollMs);
+    m_plcPollMs->setFixedWidth(100);
+    m_plcPollMs->setToolTip(tx("Как часто пульт шлёт опрос 203 на ПЛК. База — 1000 мс."));
 
     for (QWidget *w : {static_cast<QWidget *>(m_natsHost),
                        static_cast<QWidget *>(m_natsPort),
                        static_cast<QWidget *>(m_plcHost),
                        static_cast<QWidget *>(m_plcPort),
-                       static_cast<QWidget *>(m_plcStatusBytes)}) {
+                       static_cast<QWidget *>(m_plcStatusBytes),
+                       static_cast<QWidget *>(m_plcPollMs)}) {
         w->setStyleSheet(QLatin1String(kFieldStyle));
     }
 
@@ -343,6 +351,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     rowPlcLay->addWidget(makeLabeledField(tx("ПЛК хост"), m_plcHost, rowPlc), 1);
     rowPlcLay->addWidget(makeLabeledField(tx("Порт"), m_plcPort, rowPlc), 0);
     rowPlcLay->addWidget(makeLabeledField(tx("Кадр, байт"), m_plcStatusBytes, rowPlc), 0);
+    rowPlcLay->addWidget(makeLabeledField(tx("Опрос ПЛК"), m_plcPollMs, rowPlc), 0);
 
     auto *panelLay = new QVBoxLayout(networkPanel);
     panelLay->setContentsMargins(12, 10, 12, 10);
@@ -1111,6 +1120,8 @@ ConnectionSettings AdminPanel::networkSettings() const
     c.plcHost = m_plcHost->text().trimmed();
     c.plcPort = static_cast<quint16>(m_plcPort->value());
     c.plcStatusBytes = PlcClient::normalizeStatusSize(m_plcStatusBytes->value());
+    c.plcPollMs = PlcClient::normalizePollMs(m_plcPollMs ? m_plcPollMs->value()
+                                                         : ConnectionSettings::kDefaultPlcPollMs);
     c.autostart = m_btnRemoteAutostart && m_btnRemoteAutostart->isChecked();
     c.hmiAutostart = m_btnHmiAutostart && m_btnHmiAutostart->isChecked();
     c.showCursor = m_btnShowCursor && m_btnShowCursor->isChecked();

@@ -85,6 +85,7 @@ ConnectionSettings normalize(ConnectionSettings c)
     if (c.plcPort == 0)
         c.plcPort = 2025;
     c.plcStatusBytes = PlcClient::normalizeStatusSize(c.plcStatusBytes);
+    c.plcPollMs = PlcClient::normalizePollMs(c.plcPollMs);
 
     const ConnectionSettings defaults;
     for (auto [field, fallback] : {
@@ -125,6 +126,8 @@ bool readConfigFile(const QString &path, ConnectionSettings *out)
         out->plcHost = plc.value(QStringLiteral("ip")).toString(out->plcHost).trimmed();
         out->plcPort = static_cast<quint16>(plc.value(QStringLiteral("port")).toInt(out->plcPort));
         out->plcStatusBytes = plc.value(QStringLiteral("statusBytes")).toInt(out->plcStatusBytes);
+        if (plc.contains(QStringLiteral("pollMs")))
+            out->plcPollMs = plc.value(QStringLiteral("pollMs")).toInt(out->plcPollMs);
     }
 
     const QJsonObject system = root.value(QStringLiteral("system")).toObject();
@@ -194,6 +197,7 @@ bool writeConfigFile(const QString &path, const ConnectionSettings &cfg)
     plc.insert(QStringLiteral("ip"), cfg.plcHost);
     plc.insert(QStringLiteral("port"), cfg.plcPort);
     plc.insert(QStringLiteral("statusBytes"), cfg.plcStatusBytes);
+    plc.insert(QStringLiteral("pollMs"), cfg.plcPollMs);
     for (const char *obsolete : {"ready_mask", "ready_value", "status_bytes", "_ready_comment"})
         plc.remove(QLatin1String(obsolete));
 

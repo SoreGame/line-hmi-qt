@@ -114,6 +114,7 @@ private:
     QLineEdit *m_plcHost = nullptr;
     QSpinBox *m_plcPort = nullptr;
     QSpinBox *m_plcStatusBytes = nullptr;
+    QSpinBox *m_plcPollMs = nullptr;
     QLabel *m_plcLogTitle = nullptr;
     QPlainTextEdit *m_plcBufferLog = nullptr;
     QLabel *m_plcBufferStatus = nullptr;

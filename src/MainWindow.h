@@ -168,6 +168,7 @@ private:
     QString m_plcHost;
     quint16 m_plcPort = 2025;
     int m_plcStatusBytes = PlcClient::kDefaultStatusSize;
+    int m_plcPollMs = PlcClient::kDefaultPollMs;
 
     QGraphicsView *m_androidView = nullptr;
 

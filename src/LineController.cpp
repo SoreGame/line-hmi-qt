@@ -89,6 +89,21 @@ void LineController::baseline()
     m_prevProgram = m_plc->statusInt16(PlcClient::kProgramIndex);
     m_prevPrepDone = m_plc->prepDone();
     m_awaitDecision = false;
+    m_awaitingPrep = false;
+    m_sawPrepZero = false;
+    m_needInit = false;
+}
+
+void LineController::beginPrepCycle()
+{
+    cancelMainDelay();
+    m_awaitDecision = false;
+    m_awaitingPrep = true;
+    m_sawPrepZero = !m_plc->prepDone();
+    m_prevPrepDone = m_plc->prepDone();
+    m_needInit = true;
+    setInitState(InitState::Idle);
+    emit note(Level::Info, tx("Предподготовка · новый цикл"));
 }
 
 void LineController::onPlcFrame()
@@ -113,6 +128,19 @@ void LineController::onPlcFrame()
     const qint16 initPermit = m_plc->statusInt16(PlcClient::kInitPermitIndex);
     const int program = m_plc->statusInt16(PlcClient::kProgramIndex);
 
+    // Старт после Стопа/Готов: снова окно предподготовки и init (даже если 60 не сдвинулась).
+    if (mode == PlcClient::Mode::Run && m_prevMode != PlcClient::Mode::Run
+        && m_prevMode != PlcClient::Mode::Stopping) {
+        beginPrepCycle();
+    }
+    if (!lineActive(mode) && lineActive(m_prevMode)) {
+        m_awaitingPrep = false;
+        m_needInit = false;
+        m_sawPrepZero = false;
+        if (m_initState != InitState::Idle)
+            setInitState(InitState::Idle);
+    }
+
     if (m_prevMode == PlcClient::Mode::Estop && mode != PlcClient::Mode::Estop)
         m_scriptFailed = false;
 
@@ -121,7 +149,11 @@ void LineController::onPlcFrame()
         m_lastCycleMs = -1;
     }
 
+    if (mode == PlcClient::Mode::Run && !prepDone)
+        m_sawPrepZero = true;
+
     if (initPermit != m_prevInitPermit) {
+        m_needInit = false;
         if (m_role == Role::None) {
             setInitState(InitState::Idle);
             startScript(Role::Init, program);
@@ -129,9 +161,14 @@ void LineController::onPlcFrame()
             emit note(Level::Warn, tx("ПЛК разрешил init, но скрипт робота ещё идёт · init не запущен"));
             m_plc->sendCommand(PlcClient::scriptReportCommand(PlcClient::RoleInit, false));
         }
+    } else if (m_needInit && mode == PlcClient::Mode::Run && m_role == Role::None
+               && !m_awaitDecision) {
+        // Повторный Старт: ПЛК иногда не меняет 60 — init всё равно нужен для предподготовки.
+        m_needInit = false;
+        startScript(Role::Init, program);
     }
 
-    if (mode == PlcClient::Mode::Run && prepDone && !m_prevPrepDone) {
+    if (mode == PlcClient::Mode::Run && prepDone && !m_prevPrepDone && m_sawPrepZero) {
         if (m_role == Role::None && !m_awaitDecision)
             requestMain(program);
         else
@@ -193,6 +230,8 @@ void LineController::requestMain(int program)
 {
     if (m_mainDelay.isValid())
         return;
+    m_awaitingPrep = false;
+    m_needInit = false;
     m_pendingMainProgram = program;
     m_mainDelay.start();
     emit note(Level::Info, tx("Основная программа через %1 с").arg(kMainDelayMs / 1000));
@@ -312,6 +351,12 @@ void LineController::finishScript(bool completed)
                             : tx("init-скрипт не дошёл до конца · ПЛК 7 7 1 0"));
         m_plc->sendCommand(PlcClient::scriptReportCommand(PlcClient::RoleInit, completed));
         m_plc->pollNow();
+        // Если 56 уже была 1 (залипла), 0→1 не будет — после успешного init всё равно идём в цикл.
+        if (completed && m_plc->mode() == PlcClient::Mode::Run && m_plc->prepDone()
+            && m_role == Role::None && !m_awaitDecision && !m_mainDelay.isValid()) {
+            m_sawPrepZero = true;
+            requestMain(m_plc->statusInt16(PlcClient::kProgramIndex));
+        }
         return;
     }
 

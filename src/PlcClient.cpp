@@ -10,7 +10,6 @@
 
 namespace {
 
-constexpr int kPingIntervalMs = 1000;
 constexpr int kPingTimeoutMs = 800;
 constexpr int kConnectTimeoutMs = 3000;
 
@@ -68,12 +67,13 @@ protected:
                 sock.setSocketOption(QAbstractSocket::LowDelayOption, 1);
             }
 
+            const int pollMs = m_owner->m_pollMs.load(std::memory_order_relaxed);
             QByteArray command;
             {
                 std::unique_lock<std::mutex> lock(m_owner->m_cmdMutex);
-                const auto ready = [this, &pingTimer] {
+                const auto ready = [this, &pingTimer, pollMs] {
                     return isInterruptionRequested() || !m_owner->m_cmdQueue.empty() || pollPending()
-                        || pingTimer.elapsed() >= kPingIntervalMs;
+                        || pingTimer.elapsed() >= pollMs;
                 };
                 if (!ready())
                     m_owner->m_cmdCv.wait_for(lock, std::chrono::milliseconds(50), ready);
@@ -95,7 +95,7 @@ protected:
                 continue;
             }
 
-            if (!pollPending() && pingTimer.elapsed() < kPingIntervalMs)
+            if (!pollPending() && pingTimer.elapsed() < pollMs)
                 continue;
             pingTimer.restart();
 
@@ -177,6 +177,11 @@ int PlcClient::normalizeStatusSize(int bytes)
     return qBound(kMinStatusSize, bytes, kMaxStatusSize) / kStatusIntBytes * kStatusIntBytes;
 }
 
+int PlcClient::normalizePollMs(int ms)
+{
+    return qBound(kMinPollMs, ms, kMaxPollMs);
+}
+
 PlcClient::~PlcClient()
 {
     stop();
@@ -222,12 +227,13 @@ QString PlcClient::modeText(Mode mode)
     return tx("Режим %1").arg(int(mode));
 }
 
-void PlcClient::start(const QString &host, quint16 port, int statusBytes)
+void PlcClient::start(const QString &host, quint16 port, int statusBytes, int pollMs)
 {
     stop();
     m_lastOkMs.store(0, std::memory_order_relaxed);
     const int size = normalizeStatusSize(statusBytes);
     m_statusSize.store(size, std::memory_order_relaxed);
+    m_pollMs.store(normalizePollMs(pollMs), std::memory_order_relaxed);
     {
         std::lock_guard<std::mutex> lock(m_dataMutex);
         m_status = QByteArray(size, 0);

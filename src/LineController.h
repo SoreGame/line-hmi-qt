@@ -32,6 +32,8 @@ public:
     void setSettings(const ConnectionSettings &cfg);
 
     InitState initState() const { return m_initState; }
+    // Идёт предподготовка текущего запуска (после Старта, до первого основного цикла).
+    bool awaitingPrep() const { return m_awaitingPrep; }
     // Секунд до exec основного скрипта; 0 — таймер не идёт.
     int mainDelayRemainingSec() const;
     qint64 lastCycleMs() const { return m_lastCycleMs; }
@@ -68,6 +70,8 @@ private:
     void tick();
 
     void baseline();
+    // Новый заход в режим 3 после Стопа/Готов: снова init и окно предподготовки.
+    void beginPrepCycle();
     void startScript(Role role, int program);
     void requestMain(int program);
     void cancelMainDelay();
@@ -95,6 +99,12 @@ private:
     qint16 m_prevInitPermit = 0;
     int m_prevProgram = 0;
     bool m_prevPrepDone = false;
+    // В этом заходе в «В работе» уже видели 56 = 0 (иначе main не стартуем по залипшей 56 = 1).
+    bool m_sawPrepZero = false;
+    // Пока true — окно предподготовки и ждём первый основной цикл.
+    bool m_awaitingPrep = false;
+    // Один раз за предподготовку запустить init, если ячейка 60 не изменилась.
+    bool m_needInit = false;
 
     Role m_role = Role::None;
     QString m_filename;

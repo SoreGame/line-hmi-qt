@@ -22,8 +22,12 @@ public:
     static constexpr int kDefaultStatusSize = 160;
     static constexpr int kMinStatusSize = 2;
     static constexpr int kMaxStatusSize = 2048;
+    static constexpr int kDefaultPollMs = 1000;
+    static constexpr int kMinPollMs = 100;
+    static constexpr int kMaxPollMs = 5000;
     // Чётное число байт в пределах [kMinStatusSize, kMaxStatusSize].
     static int normalizeStatusSize(int bytes);
+    static int normalizePollMs(int ms);
 
     // Ячейки кадра (индексы int16).
     static constexpr int kModeIndex = 52;
@@ -101,8 +105,10 @@ public:
     explicit PlcClient(QObject *parent = nullptr);
     ~PlcClient() override;
 
-    void start(const QString &host, quint16 port, int statusBytes = kDefaultStatusSize);
+    void start(const QString &host, quint16 port, int statusBytes = kDefaultStatusSize,
+               int pollMs = kDefaultPollMs);
     void stop();
+    int pollMs() const { return m_pollMs.load(std::memory_order_relaxed); }
 
     bool isOk() const;
     qint64 lastOkMs() const { return m_lastOkMs.load(std::memory_order_relaxed); }
@@ -144,6 +150,7 @@ private:
     mutable std::mutex m_dataMutex;
     QByteArray m_status;
     std::atomic<int> m_statusSize{kDefaultStatusSize};
+    std::atomic<int> m_pollMs{kDefaultPollMs};
     std::atomic<int> m_extraBytes{0};
     RobotReport m_report;
     std::mutex m_cmdMutex;

@@ -26,6 +26,11 @@ struct ConnectionSettings {
     quint16 plcPort = 2025;
     // Размер кадра от ПЛК в байтах, чётный: int16 на ячейку.
     int plcStatusBytes = 160;
+    // Период опроса ПЛК (кадр 203), мс. База — 1000.
+    static constexpr int kDefaultPlcPollMs = 1000;
+    static constexpr int kMinPlcPollMs = 100;
+    static constexpr int kMaxPlcPollMs = 5000;
+    int plcPollMs = kDefaultPlcPollMs;
     bool autostart = false;
     bool hmiAutostart = false;
     // Курсор мыши. По умолчанию включён; в админке можно выключить для киоска.
