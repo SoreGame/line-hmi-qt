@@ -16,6 +16,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QFrame>
+#include <QGridLayout>
 #include <QGraphicsProxyWidget>
 #include <QGraphicsScene>
 #include <QGraphicsView>
@@ -165,6 +167,7 @@ MainWindow::MainWindow(QWidget *parent)
         ui->btnService->hide();
 #endif
     setupChecklistPanel();
+    setupCompanionHud();
 
     const QString logDir =
         QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
@@ -289,12 +292,119 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 {
     QMainWindow::resizeEvent(event);
     fitAndroidCanvas();
+    placeCompanionHud();
 }
 
 void MainWindow::showEvent(QShowEvent *event)
 {
     QMainWindow::showEvent(event);
     fitAndroidCanvas();
+    placeCompanionHud();
+}
+
+void MainWindow::setupCompanionHud()
+{
+    constexpr int kCols = 10;
+    constexpr int kRows = 8;
+    constexpr int kCellW = 36;
+    constexpr int kCellH = 20;
+    m_companionHud = new QFrame(ui->centralwidget);
+    m_companionHud->setObjectName(QStringLiteral("companionHud"));
+    m_companionHud->setStyleSheet(QStringLiteral(
+        "QFrame#companionHud {"
+        "  background:#FFFFFF; border:1px solid #DBDEE3; border-radius:8px;"
+        "}"));
+    auto *lay = new QVBoxLayout(m_companionHud);
+    lay->setContentsMargins(8, 6, 8, 6);
+    lay->setSpacing(4);
+    auto *title = new QLabel(tx("Сопроводительные логи · буфер ПЛК"), m_companionHud);
+    title->setStyleSheet(QStringLiteral(
+        "color:#737880; font-size:11px; font-weight:600; background:transparent; border:none;"));
+    m_companionStatus = new QLabel(m_companionHud);
+    m_companionStatus->setStyleSheet(QStringLiteral(
+        "color:#1F2126; font-size:11px; background:transparent; border:none;"));
+    auto *gridHost = new QWidget(m_companionHud);
+    auto *grid = new QGridLayout(gridHost);
+    grid->setContentsMargins(0, 0, 0, 0);
+    grid->setHorizontalSpacing(1);
+    grid->setVerticalSpacing(1);
+    m_companionCells.resize(kCols * kRows);
+    for (int n = 0; n < m_companionCells.size(); ++n) {
+        auto *lab = new QLabel(gridHost);
+        lab->setAlignment(Qt::AlignCenter);
+        lab->setFixedSize(kCellW, kCellH);
+        lab->setTextFormat(Qt::RichText);
+        grid->addWidget(lab, n / kCols, n % kCols);
+        m_companionCells[n] = lab;
+    }
+    lay->addWidget(title);
+    lay->addWidget(m_companionStatus);
+    lay->addWidget(gridHost);
+    m_companionHud->hide();
+    placeCompanionHud();
+}
+
+void MainWindow::placeCompanionHud()
+{
+    if (!m_companionHud)
+        return;
+    m_companionHud->adjustSize();
+    const int w = m_companionHud->sizeHint().width();
+    const int h = m_companionHud->sizeHint().height();
+    // Правый нижний угол области журнала — это правый нижний угол экрана.
+    const QRect area = ui->logList ? ui->logList->geometry() : QRect(0, 0, 1920, 1080);
+    m_companionHud->setGeometry(area.right() - w + 1, area.bottom() - h + 1, w, h);
+}
+
+void MainWindow::updateCompanionHud()
+{
+    if (!m_companionHud)
+        return;
+    const bool on = ConnectionSettings::load().companionLogs;
+    m_companionHud->setVisible(on);
+    if (!on)
+        return;
+    placeCompanionHud();
+    m_companionHud->raise();
+    const auto paint = [](QLabel *lab, int n, bool hasValue, qint16 value) {
+        QString valueHtml = QStringLiteral("—");
+        QString bg = QStringLiteral("#FFFFFF");
+        if (hasValue) {
+            if (value == 0) {
+                bg = QStringLiteral("#F6E27A");
+                valueHtml = QStringLiteral(
+                    "<span style=\"font-size:11px;font-weight:800;color:#1F2126;\">0</span>");
+            } else if (value == 1) {
+                bg = QStringLiteral("#8FD19A");
+                valueHtml = QStringLiteral(
+                    "<span style=\"font-size:11px;font-weight:800;color:#1F2126;\">1</span>");
+            } else {
+                valueHtml = QStringLiteral(
+                    "<span style=\"font-size:10px;font-weight:600;color:#1F2126;\">%1</span>")
+                                .arg(value);
+            }
+        }
+        lab->setStyleSheet(QStringLiteral(
+            "QLabel { background:%1; border:none; padding:0px; }").arg(bg));
+        lab->setText(QStringLiteral(
+            "<span style=\"font-size:7px;font-weight:600;color:#737880;\">%1</span> %2")
+                         .arg(n)
+                         .arg(valueHtml));
+    };
+    if (!m_plc) {
+        m_companionStatus->setText(tx("ПЛК-клиент не подключён"));
+        for (int n = 0; n < m_companionCells.size(); ++n)
+            paint(m_companionCells[n], n, false, 0);
+        return;
+    }
+    if (!m_plc->isOk()) {
+        m_companionStatus->setText(tx("Нет свежего кадра от ПЛК"));
+        return;
+    }
+    const int received = m_plc->statusIntCount();
+    m_companionStatus->setText(tx("Кадр ок, %1 int16").arg(received));
+    for (int n = 0; n < m_companionCells.size(); ++n)
+        paint(m_companionCells[n], n, n < received, m_plc->statusInt16(n));
 }
 
 void MainWindow::setupAndroidCanvas()
@@ -388,6 +498,7 @@ void MainWindow::applyConnectionSettings(bool notifyOnError)
     ui->statusNats->setToolTip(m_natsUrl);
     startPlcClient();
     beginNatsConnect(notifyOnError);
+    updateCompanionHud();
 }
 
 void MainWindow::beginNatsConnect(bool notifyOnError, bool quiet)
@@ -516,6 +627,8 @@ void MainWindow::onPlcFrame()
 {
     if (m_pending && m_pending->accepted()) {
         appendLog(LogLevel::Ok, tx("ПЛК принял «%1»").arg(m_pending->name));
+        if (m_pendingProgram > 0)
+            m_programChosen = true;
         m_pending.reset();
         m_pendingProgram = 0;
         m_requestTimer->stop();
@@ -574,10 +687,14 @@ void MainWindow::logModeChange()
                 text += tx(" · %1").arg(causes.join(QStringLiteral(", ")));
         }
         appendLog(level, text);
+        if (mode == int(PlcClient::Mode::Estop) && m_loggedMode != int(PlcClient::Mode::Estop))
+            forgetProgram();
+        if (mode == int(PlcClient::Mode::Stopping) && m_loggedMode == int(PlcClient::Mode::Run))
+            forgetProgram();
         m_loggedMode = mode;
     }
     if (program != m_loggedProgram) {
-        if (program > 0)
+        if (m_programChosen && program > 0)
             appendLog(LogLevel::Info, tx("ПЛК · выбрана Деталь %1").arg(program));
         m_loggedProgram = program;
     }
@@ -659,6 +776,7 @@ void MainWindow::refreshUi()
     updateLamellaType();
     updateChecklist();
     updateKpi();
+    updateCompanionHud();
     syncOverlays();
 }
 
@@ -723,6 +841,8 @@ void MainWindow::syncOverlays()
     }
     if (m_stopPopup && wantStopPopup)
         m_stopPopup->raise();
+    if (m_companionHud && m_companionHud->isVisible())
+        m_companionHud->raise();
 }
 
 void MainWindow::updateNatsStatusIndicator()
@@ -849,7 +969,7 @@ QList<MainWindow::ReadinessItem> MainWindow::readinessItems() const
         items.append({m_plc->weldValvesSafe(), tx("Клапаны сварки в безопасном положении")});
     const int zone = m_line->zone();
     items.append({zone > 0, zone > 0 ? tx("Робот в стартовой зоне %1").arg(zone) : tx("Робот в стартовой зоне")});
-    items.append({linked && m_plc->statusInt16(PlcClient::kProgramIndex) > 0, tx("Деталь выбрана")});
+    items.append({chosenProgram() > 0, tx("Деталь выбрана")});
     return items;
 }
 
@@ -879,7 +999,7 @@ void MainWindow::updateChecklist()
             text += tx(" и ещё %1").arg(causes.size() - 1);
         tasks << QStringLiteral("!|") + text;
     }
-    if (linked && plcMode() == PlcClient::Mode::Ready && m_plc->statusInt16(PlcClient::kProgramIndex) == 0)
+    if (linked && plcMode() == PlcClient::Mode::Ready && chosenProgram() == 0)
         tasks << QStringLiteral("!|") + tx("Выберите деталь");
 
     for (const ReadinessItem &item : readinessItems())
@@ -982,9 +1102,32 @@ void MainWindow::updateLamellaType()
                                          : tx("На выдаче: тип %1").arg(type));
 }
 
+int MainWindow::chosenProgram() const
+{
+    if (m_pendingProgram > 0)
+        return 0;
+    if (!m_programChosen || !plcLinked())
+        return 0;
+    const int program = m_plc->statusInt16(PlcClient::kProgramIndex);
+    return program > 0 ? program : 0;
+}
+
+void MainWindow::forgetProgram()
+{
+    if (!m_programChosen && m_pendingProgram == 0)
+        return;
+    m_programChosen = false;
+    m_pendingProgram = 0;
+    if (plcLinked()) {
+        const bool useLoadCell = !ConnectionSettings::load().ignoreLoadCell;
+        m_plc->sendCommand(PlcClient::selectCommand(0, useLoadCell));
+        m_plc->pollNow();
+    }
+}
+
 void MainWindow::applyProgramVisuals()
 {
-    const int program = m_plc->statusInt16(PlcClient::kProgramIndex);
+    const int program = chosenProgram();
     const bool d1 = program == 1;
     const bool d2 = program == 2;
     const int pending = m_pending ? m_pendingProgram : 0;
@@ -1101,7 +1244,7 @@ void MainWindow::applyModeVisuals()
                 pill(tx("●  Готовность · СТОП"), kPillInit);
             else if (needsPlacement())
                 pill(tx("●  Готовность · УСТАНОВКА"), kPillInit);
-            else if (m_plc->statusInt16(PlcClient::kProgramIndex) == 0)
+            else if (chosenProgram() == 0)
                 pill(tx("●  Готовность · НЕТ ДЕТАЛИ"), kPillInit);
             else if (!startBlockers().isEmpty())
                 pill(tx("●  Готовность · НЕ ГОТОВО"), kPillInit);
@@ -1144,7 +1287,7 @@ void MainWindow::on_btnStart_clicked()
         showNotice(tx("Старт"), tx("Робот ещё заканчивает программу. Дождитесь её конца"));
         return;
     }
-    if (m_plc->statusInt16(PlcClient::kProgramIndex) == 0) {
+    if (chosenProgram() == 0) {
         appendLog(LogLevel::Warn, tx("Старт: деталь не выбрана"));
         showNotice(tx("Старт"), tx("Сначала выберите деталь, затем нажмите «Старт»"));
         return;
@@ -1156,46 +1299,12 @@ void MainWindow::on_btnStart_clicked()
         return;
     }
     sendRequest(PlcClient::controlCommand(PlcClient::CmdStart), tx("Старт"),
-                [this] { return plcMode() != PlcClient::Mode::Ready; },
-                [this] { return startRejectDetails(); });
-}
-
-QString MainWindow::startRejectDetails() const
-{
-    const auto cell = [this](int index) {
-        return QStringLiteral("[%1]=%2").arg(index).arg(m_plc->statusInt16(index));
-    };
-    QStringList valves;
-    for (int index : PlcClient::kWeldValveInts)
-        valves << QString::number(m_plc->statusInt16(index));
-    const PlcClient::RobotReport &report = m_line->report();
-    const qint64 ageMs = QDateTime::currentMSecsSinceEpoch() - m_plc->lastOkMs();
-
-    QStringList parts;
-    parts << tx("режим %1 «%2»").arg(cell(PlcClient::kModeIndex), PlcClient::modeText(plcMode()))
-          << tx("деталь %1").arg(cell(PlcClient::kProgramIndex))
-          << tx("тензодатчик %1").arg(cell(PlcClient::kLoadCellIndex))
-          << tx("предподготовка %1").arg(cell(PlcClient::kPrepDoneIndex))
-          << tx("грибок %1").arg(cell(PlcClient::kMushroomIndex))
-          << tx("клапаны сварки [10..14,16]=%1").arg(valves.join(QLatin1Char(' ')))
-          << tx("держатели %1 %2").arg(cell(PlcClient::kBigHoldersSensorIndex), cell(PlcClient::kSmallHoldersSensorIndex))
-          << tx("причины аварии %1 %2 %3 %4 %5")
-                 .arg(cell(PlcClient::kNoLamellaeIndex), cell(PlcClient::kNoHoldersIndex),
-                      cell(PlcClient::kWeldTimeoutIndex), cell(PlcClient::kHolderPickIndex),
-                      cell(PlcClient::kLamellaPickIndex))
-          << cell(PlcClient::kInitPermitIndex)
-          << tx("опрос пульта: NATS %1, CTRL %2, Behaviour %3, скрипт %4, Z %5")
-                 .arg(int(report.natsConnected))
-                 .arg(int(report.ctrlAlive))
-                 .arg(int(report.behaviourAlive))
-                 .arg(int(report.scriptRunning))
-                 .arg(report.zone)
-          << tx("кадр %1 мс назад").arg(ageMs);
-    return tx("ПЛК остался в режиме «Готов». В кадре: %1").arg(parts.join(QStringLiteral("; ")));
+                [this] { return plcMode() != PlcClient::Mode::Ready; });
 }
 
 void MainWindow::on_btnStop_clicked()
 {
+    forgetProgram();
     sendRequest(PlcClient::controlCommand(PlcClient::CmdStop), tx("Стоп"),
                 [this] { return plcMode() != PlcClient::Mode::Run; });
 }
@@ -1266,6 +1375,7 @@ void MainWindow::on_btnAdmin_clicked()
     });
     connect(&panel, &AdminPanel::settingsChanged, this, [this](const ConnectionSettings &cfg) {
         m_line->setSettings(cfg);
+        updateCompanionHud();
     });
     panel.exec();
     appendLog(LogLevel::Info, tx("Админ: панель закрыта"));

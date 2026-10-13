@@ -55,6 +55,7 @@ private slots:
     void onRemoteAutostartToggled(bool enabled);
     void onShowCursorToggled(bool enabled);
     void onIgnoreLoadCellToggled(bool enabled);
+    void onCompanionLogsToggled(bool enabled);
     void onZonesClicked();
     void onStepChanged(int index);
     void onPlcStateChanged();
@@ -171,6 +172,7 @@ private:
     QPushButton *m_btnRemoteAutostart = nullptr;
     QPushButton *m_btnShowCursor = nullptr;
     QPushButton *m_btnIgnoreLoadCell = nullptr;
+    QPushButton *m_btnCompanionLogs = nullptr;
     QLabel *m_droX = nullptr;
     QLabel *m_droY = nullptr;
     QLabel *m_droZ = nullptr;

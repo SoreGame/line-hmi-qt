@@ -283,10 +283,11 @@ class Plc:
             log(f"неизвестная команда 7 {sub} {a} {b}")
 
     def on_select(self, program: int, load_cell: int) -> None:
-        if program not in (1, 2) or load_cell not in (0, 1):
+        if program not in (0, 1, 2) or load_cell not in (0, 1):
             log(f"7 1 {program} {load_cell}: неверные параметры")
             return
-        if self.mode not in (MODE_READY, MODE_BOOT):
+        # Снять выбор (N=0) можно в любом режиме — после Стопа и Estop. Выбор 1/2 — только в Готов.
+        if program != 0 and self.mode not in (MODE_READY, MODE_BOOT):
             log(f"7 1: выбор программы отклонён, режим {MODE_NAMES[self.mode]}")
             return
         if program != self.program:
@@ -706,7 +707,7 @@ def run_client(host: str, port: int, action: str | None, status: bool) -> int:
         if status:
             sock.sendall(bytes((POLL_TAG, 0, 0, 0)))
             print_status(reader.read(STATUS_SIZE))
-    return 0
+            return 0
 
 
 def main(argv: list[str] | None = None) -> int:

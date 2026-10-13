@@ -52,6 +52,8 @@ public:
     static constexpr qint16 kWeldValveSafe = 1;
     static constexpr int kVision1Index = 57;
     static constexpr int kVision2Index = 58;
+    // Датчик импульса сварки (индикатор; решений пульт по нему не принимает).
+    static constexpr int kWeldPulseIndex = 32;
     static constexpr int kPanelButtonsIndex = 50;
     static constexpr int kMushroomIndex = 51;
     static constexpr qint16 kMushroomReleased = 1;
@@ -78,7 +80,7 @@ public:
 
     // [7, code, 0, 0].
     static QByteArray controlCommand(Command code);
-    // [7, 1, N, X]: программа N, X = 1 — учитывать тензодатчик.
+    // [7, 1, N, X]: программа N (0 — снять выбор), X = 1 — учитывать тензодатчик.
     static QByteArray selectCommand(int program, bool useLoadCell);
     // [7, 7, R, S]: скрипт R закончился, S = 1 — дошёл до конца.
     static QByteArray scriptReportCommand(ScriptRole role, bool completed);

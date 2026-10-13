@@ -27,6 +27,7 @@ class NatsClient;
 class OverlayCard;
 class PlaceOverlay;
 class PrepOverlay;
+class QFrame;
 class QGraphicsView;
 class QLabel;
 class QMessageBox;
@@ -82,6 +83,9 @@ private:
     void showNotice(const QString &title, const QString &message);
     void onRequestTimeout();
     void selectProgram(int program);
+    void forgetProgram();
+    // Деталь, которую оператор выбрал на этом сеансе; 0 — ещё не нажимал / сброшено.
+    int chosenProgram() const;
     void syncOverlays();
     void logModeChange();
 
@@ -100,8 +104,6 @@ private:
     // Пункты готовности из панели слева; «Старт» доступен, только когда все выполнены.
     QList<ReadinessItem> readinessItems() const;
     QStringList startBlockers() const;
-    // Что ПЛК видел в кадре, когда не принял «Старт»: ячейки условий старта и опрос пульта.
-    QString startRejectDetails() const;
     // Изменения ячеек кадра ПЛК — только в файл сессии, не на экран.
     void logBufferChanges();
     void appendLogFileOnly(LogLevel level, const QString &message);
@@ -118,6 +120,9 @@ private:
     QString logLevelTag(LogLevel level) const;
     QColor logLevelColor(LogLevel level) const;
 
+    void setupCompanionHud();
+    void placeCompanionHud();
+    void updateCompanionHud();
     void setupAndroidCanvas();
     void fitAndroidCanvas();
     void enableKeepScreenOn();
@@ -147,6 +152,8 @@ private:
     std::optional<PendingRequest> m_pending;
     // Деталь, выбор которой ждёт подтверждения ПЛК (54); 0 — не ждём.
     int m_pendingProgram = 0;
+    // Оператор нажал «Деталь N» в этом сеансе. После Стопа и E-STOP — false.
+    bool m_programChosen = false;
     QTimer *m_requestTimer = nullptr;
     QPointer<QMessageBox> m_rejectBox;
 
@@ -182,6 +189,10 @@ private:
     int m_loggedPrepDone = -1;
     // Последний залогированный кадр ПЛК; пусто — следующий кадр пишется снимком.
     QVector<qint16> m_loggedBuffer;
+
+    QFrame *m_companionHud = nullptr;
+    QLabel *m_companionStatus = nullptr;
+    QVector<QLabel *> m_companionCells;
 };
 
 #endif // MAINWINDOW_H

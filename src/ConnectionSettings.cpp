@@ -136,6 +136,8 @@ bool readConfigFile(const QString &path, ConnectionSettings *out)
         out->showCursor = system.value(QStringLiteral("showCursor")).toBool(true);
     if (system.contains(QStringLiteral("ignoreLoadCell")))
         out->ignoreLoadCell = system.value(QStringLiteral("ignoreLoadCell")).toBool(false);
+    if (system.contains(QStringLiteral("companionLogs")))
+        out->companionLogs = system.value(QStringLiteral("companionLogs")).toBool(false);
 
     const QJsonObject arduino = root.value(QStringLiteral("arduino")).toObject();
     if (!arduino.isEmpty()) {
@@ -203,6 +205,7 @@ bool writeConfigFile(const QString &path, const ConnectionSettings &cfg)
     system.insert(QStringLiteral("hmiAutostart"), cfg.hmiAutostart);
     system.insert(QStringLiteral("showCursor"), cfg.showCursor);
     system.insert(QStringLiteral("ignoreLoadCell"), cfg.ignoreLoadCell);
+    system.insert(QStringLiteral("companionLogs"), cfg.companionLogs);
     system.remove(QStringLiteral("ignoreLaunchLocks"));
     root.insert(QStringLiteral("system"), system);
 

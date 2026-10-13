@@ -32,6 +32,8 @@ struct ConnectionSettings {
     bool showCursor = true;
     // Уходит на ПЛК в 7 1 N X: X = 0, если тензодатчик игнорируется.
     bool ignoreLoadCell = false;
+    // Окошко текущего кадра ПЛК (как в сервисе) справа снизу на главном экране.
+    bool companionLogs = false;
     // COM-порт Arduino (пусто — не открывать). Порог уходит командой T <int>.
     QString arduinoPort = QStringLiteral("/dev/ttyUSB0");
     qint32 arduinoThreshold = 1100000;

@@ -761,11 +761,19 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
                      tx("Игнорирование тензодатчика"),
                      initial.ignoreLoadCell);
 
+    m_btnCompanionLogs = new QPushButton(m_togglesPanel);
+    makeToggle(m_btnCompanionLogs);
+    m_btnCompanionLogs->setChecked(initial.companionLogs);
+    setToggleCaption(m_btnCompanionLogs,
+                     tx("Сопроводительные логи"),
+                     initial.companionLogs);
+
     auto *targetHint = new QLabel(
         tx("Пульт включается на этой панели. Автозапуск системы — на компьютере с NATS-хостом. "
                        "Игнорирование тензодатчика сразу уходит на ПЛК: 7 1 N 0 — игнорировать, "
                        "7 1 N 1 — учитывать, N — выбранная деталь. Пока деталь не выбрана, "
-                       "переключатель неактивен."),
+                       "переключатель неактивен. Сопроводительные логи — маленькое окошко "
+                       "текущего буфера ПЛК справа снизу на главном экране."),
         m_togglesPanel);
     targetHint->setWordWrap(true);
     targetHint->setStyleSheet(QStringLiteral(
@@ -779,6 +787,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     togglesLay->addWidget(m_btnRemoteAutostart);
     togglesLay->addWidget(m_btnShowCursor);
     togglesLay->addWidget(m_btnIgnoreLoadCell);
+    togglesLay->addWidget(m_btnCompanionLogs);
     togglesLay->addWidget(targetHint);
 
     // --- Программы (.chai) под «Тензодатчиком» -------------------------
@@ -1055,6 +1064,7 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     connect(m_btnRemoteAutostart, &QPushButton::toggled, this, &AdminPanel::onRemoteAutostartToggled);
     connect(m_btnShowCursor, &QPushButton::toggled, this, &AdminPanel::onShowCursorToggled);
     connect(m_btnIgnoreLoadCell, &QPushButton::toggled, this, &AdminPanel::onIgnoreLoadCellToggled);
+    connect(m_btnCompanionLogs, &QPushButton::toggled, this, &AdminPanel::onCompanionLogsToggled);
     connect(m_btnZones, &QPushButton::clicked, this, &AdminPanel::onZonesClicked);
     updateLoadCellToggle();
     connect(m_btnRefresh, &QPushButton::clicked, this, &AdminPanel::onRefreshClicked);
@@ -1105,6 +1115,7 @@ ConnectionSettings AdminPanel::networkSettings() const
     c.hmiAutostart = m_btnHmiAutostart && m_btnHmiAutostart->isChecked();
     c.showCursor = m_btnShowCursor && m_btnShowCursor->isChecked();
     c.ignoreLoadCell = m_btnIgnoreLoadCell && m_btnIgnoreLoadCell->isChecked();
+    c.companionLogs = m_btnCompanionLogs && m_btnCompanionLogs->isChecked();
     if (m_initScript1) {
         c.initScriptDetail1 = m_initScript1->text().trimmed();
         c.initScriptDetail2 = m_initScript2->text().trimmed();
@@ -1284,6 +1295,15 @@ void AdminPanel::onIgnoreLoadCellToggled(bool enabled)
     const int program = m_plc ? m_plc->statusInt16(PlcClient::kProgramIndex) : 0;
     if (program > 0)
         m_plc->sendCommand(PlcClient::selectCommand(program, !enabled));
+}
+
+void AdminPanel::onCompanionLogsToggled(bool enabled)
+{
+    setToggleCaption(m_btnCompanionLogs, tx("Сопроводительные логи"), enabled);
+    m_settings.companionLogs = enabled;
+    ConnectionSettings cfg = networkSettings();
+    cfg.save();
+    emit settingsChanged(cfg);
 }
 
 void AdminPanel::updateLoadCellToggle()
