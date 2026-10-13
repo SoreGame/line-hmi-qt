@@ -83,7 +83,8 @@ private:
     void showNotice(const QString &title, const QString &message);
     void onRequestTimeout();
     void selectProgram(int program);
-    void forgetProgram();
+    // Сброс выбора детали в этом сеансе. notifyPlc — ещё и 7 1 0 X (вход в Estop).
+    void forgetProgram(bool notifyPlc = false);
     // Деталь, которую оператор выбрал на этом сеансе; 0 — ещё не нажимал / сброшено.
     int chosenProgram() const;
     void syncOverlays();

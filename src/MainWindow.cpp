@@ -688,10 +688,13 @@ void MainWindow::logModeChange()
                 text += tx(" · %1").arg(causes.join(QStringLiteral(", ")));
         }
         appendLog(level, text);
-        if (mode == int(PlcClient::Mode::Estop) && m_loggedMode != int(PlcClient::Mode::Estop))
-            forgetProgram();
-        if (mode == int(PlcClient::Mode::Stopping) && m_loggedMode == int(PlcClient::Mode::Run))
-            forgetProgram();
+        const bool leftRun = m_loggedMode == int(PlcClient::Mode::Run)
+            && mode != int(PlcClient::Mode::Run);
+        const bool enteredEstop = mode == int(PlcClient::Mode::Estop)
+            && m_loggedMode != int(PlcClient::Mode::Estop);
+        // Выбор в UI — после кадра, не в момент кнопки «Стоп». На ПЛК 7 1 0 X только в Estop.
+        if (leftRun || enteredEstop)
+            forgetProgram(enteredEstop);
         m_loggedMode = mode;
     }
     if (program != m_loggedProgram) {
@@ -1114,13 +1117,13 @@ int MainWindow::chosenProgram() const
     return program > 0 ? program : 0;
 }
 
-void MainWindow::forgetProgram()
+void MainWindow::forgetProgram(bool notifyPlc)
 {
-    if (!m_programChosen && m_pendingProgram == 0)
+    if (!notifyPlc && !m_programChosen && m_pendingProgram == 0)
         return;
     m_programChosen = false;
     m_pendingProgram = 0;
-    if (plcLinked()) {
+    if (notifyPlc && plcLinked()) {
         const bool useLoadCell = !ConnectionSettings::load().ignoreLoadCell;
         m_plc->sendCommand(PlcClient::selectCommand(0, useLoadCell));
         m_plc->pollNow();
@@ -1306,7 +1309,6 @@ void MainWindow::on_btnStart_clicked()
 
 void MainWindow::on_btnStop_clicked()
 {
-    forgetProgram();
     sendRequest(PlcClient::controlCommand(PlcClient::CmdStop), tx("Стоп"),
                 [this] { return plcMode() != PlcClient::Mode::Run; });
 }
