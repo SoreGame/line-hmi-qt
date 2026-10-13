@@ -109,6 +109,8 @@ public:
                int pollMs = kDefaultPollMs);
     void stop();
     int pollMs() const { return m_pollMs.load(std::memory_order_relaxed); }
+    // Меняет период опроса на лету, без разрыва TCP.
+    void setPollMs(int ms);
 
     bool isOk() const;
     qint64 lastOkMs() const { return m_lastOkMs.load(std::memory_order_relaxed); }

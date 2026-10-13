@@ -492,6 +492,9 @@ void MainWindow::startPlcClient()
 void MainWindow::applyConnectionSettings(bool notifyOnError)
 {
     const ConnectionSettings cfg = ConnectionSettings::load();
+    const bool plcEndpointChanged = cfg.plcHost != m_plcHost || cfg.plcPort != m_plcPort
+        || cfg.plcStatusBytes != m_plcStatusBytes;
+    const bool pollChanged = cfg.plcPollMs != m_plcPollMs;
     m_natsUrl = cfg.natsUrl();
     m_plcHost = cfg.plcHost;
     m_plcPort = cfg.plcPort;
@@ -499,7 +502,12 @@ void MainWindow::applyConnectionSettings(bool notifyOnError)
     m_plcPollMs = cfg.plcPollMs;
     m_line->setSettings(cfg);
     ui->statusNats->setToolTip(m_natsUrl);
-    startPlcClient();
+    if (plcEndpointChanged) {
+        startPlcClient();
+    } else if (pollChanged) {
+        m_plc->setPollMs(m_plcPollMs);
+        appendLog(LogLevel::Info, tx("Опрос ПЛК · %1 мс").arg(m_plc->pollMs()));
+    }
     beginNatsConnect(notifyOnError);
     updateCompanionHud();
 }

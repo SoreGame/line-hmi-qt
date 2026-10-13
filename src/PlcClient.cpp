@@ -242,6 +242,12 @@ void PlcClient::start(const QString &host, quint16 port, int statusBytes, int po
     m_worker->start();
 }
 
+void PlcClient::setPollMs(int ms)
+{
+    m_pollMs.store(normalizePollMs(ms), std::memory_order_relaxed);
+    m_cmdCv.notify_one();
+}
+
 void PlcClient::stop()
 {
     if (!m_worker)
