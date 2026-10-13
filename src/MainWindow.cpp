@@ -203,6 +203,7 @@ MainWindow::MainWindow(QWidget *parent)
         }
     });
     connect(m_line, &LineController::initStateChanged, this, &MainWindow::syncOverlays);
+    connect(m_line, &LineController::mainDelayChanged, this, &MainWindow::syncOverlays);
     connect(m_line, &LineController::cycleFinished, this, &MainWindow::updateKpi);
     connect(m_line, &LineController::runFinished, this, [this](const RunRecord &run) {
         appendLog(LogLevel::Info,
@@ -786,7 +787,8 @@ void MainWindow::syncOverlays()
     const PlcClient::Mode mode = plcMode();
     QWidget *host = ui->centralwidget;
 
-    const bool wantPrep = linked && lineRunning() && !m_plc->prepDone();
+    const int mainDelaySec = m_line->mainDelayRemainingSec();
+    const bool wantPrep = linked && lineRunning() && (!m_plc->prepDone() || mainDelaySec > 0);
     if (wantPrep && !m_prep) {
         m_prep = new PrepOverlay(host);
         connect(m_prep, &PrepOverlay::stopRequested, this, &MainWindow::on_btnStop_clicked);
@@ -796,7 +798,7 @@ void MainWindow::syncOverlays()
         m_prep = nullptr;
     }
     if (m_prep && wantPrep)
-        m_prep->refresh(*m_plc, m_line->initState());
+        m_prep->refresh(*m_plc, m_line->initState(), mainDelaySec);
 
     const bool wantEstop = linked && mode == PlcClient::Mode::Estop;
     if (wantEstop && !m_estop) {

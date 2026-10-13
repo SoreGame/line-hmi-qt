@@ -21,7 +21,8 @@
   mushroom 0|1         — грибок: 0 = зажат, 1 = отжат
   doors 0|1            — двери: 0 = открыты, 1 = закрыты (в одной цепи с грибком, ячейка 51)
   nolamel 0|1          — долго нет ламелей (1 — авария)
-  noholders 0|1        — долго нет держателей ламелей (1 — авария)
+  noholders 0|1        — долго нет держателей: оба типа (ячейка 61 = 3)
+  noholders small|big 0|1 — только малые (61 = 1) или только большие (61 = 2)
   weldfail 0|1         — сварка долго не отрабатывает (1 — авария)
   holderpick 0|1       — долго не можем взять держатель (1 — авария)
   lamelpick 0|1        — долго не можем взять ламели (1 — авария)
@@ -146,7 +147,7 @@ class Plc:
         self.program = 0
         self.load_cell = 0
         self.no_lamel = False
-        self.no_holders = False
+        self.no_holders = 0  # 0 нет, 1 малые, 2 большие, 3 оба
         self.weld_timeout = False
         self.holder_pick = False
         self.lamel_pick = False
@@ -189,8 +190,12 @@ class Plc:
             return "грибок зажат или двери открыты"
         if self.no_lamel:
             return "долго нет ламелей"
+        if self.no_holders == 1:
+            return "долго нет держателей ламелей малых"
+        if self.no_holders == 2:
+            return "долго нет держателей ламелей больших"
         if self.no_holders:
-            return "долго нет держателей"
+            return "долго нет держателей ламелей малых и больших"
         if self.weld_timeout:
             return "сварка долго не отрабатывает"
         if self.holder_pick:
@@ -420,7 +425,7 @@ class Plc:
         put_i16(out, VISION2_INT, int(self.ready["vision2"]))
         put_i16(out, NO_LAMEL_INT, int(self.no_lamel))
         put_i16(out, INIT_PERMIT_INT, self.init_permit)
-        put_i16(out, NO_HOLDERS_INT, int(self.no_holders))
+        put_i16(out, NO_HOLDERS_INT, self.no_holders)
         put_i16(out, GOOD_INT, self.good)
         put_i16(out, SCRAP_INT, self.scrap)
         put_i16(out, SAFE_POWER_OFF_INT, int(self.mode not in LINE_ACTIVE))
@@ -457,11 +462,25 @@ class Plc:
             if flag:
                 self.raise_alarm("долго нет ламелей")
             return f"долго нет ламелей = {int(flag)}"
-        if cmd == "noholders" and flag is not None:
-            self.no_holders = flag
-            if flag:
-                self.raise_alarm("долго нет держателей")
-            return f"долго нет держателей = {int(flag)}"
+        if cmd == "noholders":
+            kind = args[0] if args and args[0] in ("small", "big") else None
+            onoff = args[1] if kind and len(args) > 1 else (args[0] if args else None)
+            if onoff not in ("0", "1"):
+                return "noholders [small|big] 0|1"
+            bit = {"small": 1, "big": 2}.get(kind, 3)
+            if onoff == "1":
+                self.no_holders = 3 if bit == 3 else (self.no_holders | bit)
+                why = {
+                    1: "долго нет держателей ламелей малых",
+                    2: "долго нет держателей ламелей больших",
+                    3: "долго нет держателей ламелей малых и больших",
+                }[bit]
+                self.raise_alarm(why)
+            elif bit == 3:
+                self.no_holders = 0
+            else:
+                self.no_holders &= ~bit
+            return f"int16[61] = {self.no_holders}"
         alarm_flags = {
             "weldfail": ("weld_timeout", "сварка долго не отрабатывает"),
             "holderpick": ("holder_pick", "долго не можем взять держатель"),

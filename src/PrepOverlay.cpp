@@ -27,10 +27,12 @@ OverlayCard::ItemState fromInit(LineController::InitState state)
 } // namespace
 
 PrepOverlay::PrepOverlay(QWidget *parent)
-    : OverlayCard(tx("Предподготовка"), QSize(1080, 620), parent)
+    : OverlayCard(tx("Предподготовка"), QSize(1080, 680), parent)
 {
     for (QLabel *&row : m_rows)
         row = addItemRow();
+    m_countdown = addItemRow();
+    m_countdown->hide();
     m_content->addStretch();
 
     m_btnStop = addButton(tx("Стоп"), ButtonKind::Stop);
@@ -38,7 +40,7 @@ PrepOverlay::PrepOverlay(QWidget *parent)
     connect(m_btnStop, &QPushButton::clicked, this, &PrepOverlay::stopRequested);
 }
 
-void PrepOverlay::refresh(const PlcClient &plc, LineController::InitState init)
+void PrepOverlay::refresh(const PlcClient &plc, LineController::InitState init, int mainDelaySec)
 {
     const int program = plc.statusInt16(PlcClient::kProgramIndex);
     setSubtitle(program > 0 ? tx("Деталь %1").arg(program) : QString());
@@ -61,4 +63,13 @@ void PrepOverlay::refresh(const PlcClient &plc, LineController::InitState init)
     const bool stopping = plc.mode() == PlcClient::Mode::Stopping;
     m_btnStop->setEnabled(!stopping);
     setStatus(stopping ? tx("Стоп запрошен · предподготовка останавливается") : QString());
+
+    if (mainDelaySec > 0) {
+        m_countdown->show();
+        m_countdown->setText(itemMark(ItemState::Active)
+                             + tx("Основная программа через %1 с").arg(mainDelaySec));
+        m_countdown->setStyleSheet(itemStyle(ItemState::Active));
+    } else {
+        m_countdown->hide();
+    }
 }

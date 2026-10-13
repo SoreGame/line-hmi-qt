@@ -43,6 +43,10 @@ public:
     // Причины аварии от ПЛК: 1 — есть. Активны могут быть сразу несколько.
     static constexpr int kNoLamellaeIndex = 59;
     static constexpr int kNoHoldersIndex = 61;
+    // 61: 1 — малые, 2 — большие, 3 — оба.
+    static constexpr qint16 kNoHoldersSmall = 1;
+    static constexpr qint16 kNoHoldersBig = 2;
+    static constexpr qint16 kNoHoldersBoth = 3;
     static constexpr int kWeldTimeoutIndex = 65;
     static constexpr int kHolderPickIndex = 66;
     static constexpr int kLamellaPickIndex = 67;

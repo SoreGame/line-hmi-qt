@@ -17,7 +17,7 @@ class QTimer;
 
 // Связка ПЛК и скриптов робота без UI (docs/PLC_PROTOCOL.md, раздел 6).
 // Запускает init по изменению ячейки 60 и основной скрипт, когда ПЛК закончил
-// предподготовку (ячейка 56), отчитывается 7 7 R S, перезапускает цикл, шлёт 7 8 в «Остановке»,
+// предподготовку (ячейка 56), после паузы 5 с, отчитывается 7 7 R S, перезапускает цикл, шлёт 7 8 в «Остановке»,
 // сообщает ПЛК флаги робота и зону, останавливает робота при потере ПЛК.
 class LineController : public QObject
 {
@@ -32,6 +32,8 @@ public:
     void setSettings(const ConnectionSettings &cfg);
 
     InitState initState() const { return m_initState; }
+    // Секунд до exec основного скрипта; 0 — таймер не идёт.
+    int mainDelayRemainingSec() const;
     qint64 lastCycleMs() const { return m_lastCycleMs; }
     // Время текущего запуска линии (от входа в «В работе»), -1 — запуска нет.
     qint64 runElapsedMs() const;
@@ -53,6 +55,7 @@ public:
 signals:
     void note(LineController::Level level, const QString &message);
     void initStateChanged();
+    void mainDelayChanged();
     void cycleFinished(qint64 ms);
     void runFinished(const RunRecord &record);
 
@@ -66,6 +69,9 @@ private:
 
     void baseline();
     void startScript(Role role, int program);
+    void requestMain(int program);
+    void cancelMainDelay();
+    void finishMainDelay();
     void finishScript(bool completed);
     void sendStopDone();
     void stopRobot(const QString &why);
@@ -112,6 +118,9 @@ private:
     QElapsedTimer m_abortTimer;
 
     InitState m_initState = InitState::Idle;
+    // Отсчёт 5 с перед exec основного скрипта.
+    QElapsedTimer m_mainDelay;
+    int m_pendingMainProgram = 0;
     qint64 m_lastCycleMs = -1;
 
     PlcClient::RobotReport m_report;

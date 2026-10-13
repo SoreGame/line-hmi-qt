@@ -15,13 +15,14 @@ class PrepOverlay : public OverlayCard
 public:
     explicit PrepOverlay(QWidget *parent);
 
-    void refresh(const PlcClient &plc, LineController::InitState init);
+    void refresh(const PlcClient &plc, LineController::InitState init, int mainDelaySec = 0);
 
 signals:
     void stopRequested();
 
 private:
     QLabel *m_rows[4] = {};
+    QLabel *m_countdown = nullptr;
     QPushButton *m_btnStop = nullptr;
 };
 

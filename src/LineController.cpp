@@ -17,6 +17,7 @@ constexpr qint64 kModuleTimeoutMs = 2000;
 // Столько ждём, что ПЛК выйдет из «Остановки» после 7 8, прежде чем повторить.
 constexpr qint64 kStopDoneRetryMs = 3000;
 constexpr qint64 kAbortConfirmMs = 5000;
+constexpr qint64 kMainDelayMs = 5000;
 constexpr int kCounterModulo = 32768;
 
 bool fresh(qint64 lastMs, qint64 now)
@@ -132,7 +133,7 @@ void LineController::onPlcFrame()
 
     if (mode == PlcClient::Mode::Run && prepDone && !m_prevPrepDone) {
         if (m_role == Role::None && !m_awaitDecision)
-            startScript(Role::Main, program);
+            requestMain(program);
         else
             emit note(Level::Warn, tx("ПЛК закончил предподготовку, но скрипт робота ещё идёт · цикл не запущен"));
     }
@@ -149,6 +150,9 @@ void LineController::onPlcFrame()
             startScript(Role::Main, program);
         }
     }
+
+    if (stopping || mode == PlcClient::Mode::Ready || mode == PlcClient::Mode::Estop)
+        cancelMainDelay();
 
     // ПЛК может уйти в «Готов», не дождавшись 7 8: тогда идущий скрипт доводим как при стопе.
     const bool windingDown = stopping || mode == PlcClient::Mode::Ready;
@@ -173,6 +177,48 @@ void LineController::onPlcFrame()
     m_prevMode = mode;
     m_prevInitPermit = initPermit;
     m_prevPrepDone = prepDone;
+}
+
+int LineController::mainDelayRemainingSec() const
+{
+    if (!m_mainDelay.isValid())
+        return 0;
+    const qint64 left = kMainDelayMs - m_mainDelay.elapsed();
+    if (left <= 0)
+        return 0;
+    return int((left + 999) / 1000);
+}
+
+void LineController::requestMain(int program)
+{
+    if (m_mainDelay.isValid())
+        return;
+    m_pendingMainProgram = program;
+    m_mainDelay.start();
+    emit note(Level::Info, tx("Основная программа через %1 с").arg(kMainDelayMs / 1000));
+    emit mainDelayChanged();
+}
+
+void LineController::cancelMainDelay()
+{
+    if (!m_mainDelay.isValid())
+        return;
+    m_mainDelay.invalidate();
+    m_pendingMainProgram = 0;
+    emit mainDelayChanged();
+}
+
+void LineController::finishMainDelay()
+{
+    if (!m_mainDelay.isValid())
+        return;
+    const int program = m_pendingMainProgram;
+    cancelMainDelay();
+    if (m_role != Role::None) {
+        emit note(Level::Warn, tx("ПЛК закончил предподготовку, но скрипт робота ещё идёт · цикл не запущен"));
+        return;
+    }
+    startScript(Role::Main, program);
 }
 
 void LineController::startScript(Role role, int program)
@@ -345,10 +391,19 @@ void LineController::tick()
 {
     updateReport();
     checkStopTimeouts();
+    if (m_mainDelay.isValid()) {
+        if (!m_plc->isOk() || m_plc->mode() != PlcClient::Mode::Run || !m_plc->prepDone())
+            cancelMainDelay();
+        else if (m_mainDelay.elapsed() >= kMainDelayMs)
+            finishMainDelay();
+        else
+            emit mainDelayChanged();
+    }
     if (m_linkLost || m_plc->lastOkMs() <= 0 || m_plc->isOk())
         return;
     m_linkLost = true;
     m_awaitDecision = false;
+    cancelMainDelay();
     emit note(Level::Err, tx("Нет связи с ПЛК"));
     stopRobot(tx("Нет связи с ПЛК · роботу отправлен полный стоп"));
     endRun(tx("Нет связи с ПЛК"));
@@ -386,8 +441,13 @@ QStringList LineController::alarmCauses() const
         causes << tx("Отожмите грибок и/или закройте двери");
     if (flag(PlcClient::kNoLamellaeIndex))
         causes << tx("Долго нет ламелей");
-    if (flag(PlcClient::kNoHoldersIndex))
-        causes << tx("Долго нет держателей ламелей");
+    {
+        const qint16 holders = m_plc->statusInt16(PlcClient::kNoHoldersIndex);
+        if (holders == PlcClient::kNoHoldersSmall || holders == PlcClient::kNoHoldersBoth)
+            causes << tx("Долго нет держателей ламелей малых");
+        if (holders == PlcClient::kNoHoldersBig || holders == PlcClient::kNoHoldersBoth)
+            causes << tx("Долго нет держателей ламелей больших");
+    }
     if (flag(PlcClient::kWeldTimeoutIndex))
         causes << tx("Сварка долго не отрабатывает");
     if (flag(PlcClient::kHolderPickIndex))
