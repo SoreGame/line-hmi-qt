@@ -220,6 +220,12 @@ QByteArray PlcClient::weldSafeCommand()
     return QByteArray(bytes, sizeof(bytes));
 }
 
+QByteArray PlcClient::welderOffCommand()
+{
+    const char bytes[] = {3, 5, 0};
+    return QByteArray(bytes, sizeof(bytes));
+}
+
 QString PlcClient::modeText(Mode mode)
 {
     switch (mode) {

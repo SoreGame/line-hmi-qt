@@ -159,7 +159,7 @@
      <set>Qt::AlignmentFlag::AlignVCenter|Qt::AlignmentFlag::AlignLeft</set>
     </property>
    </widget>
-   <widget class="QLabel" name="statusPowerOff">
+   <widget class="QPushButton" name="statusPowerOff">
     <property name="geometry">
      <rect>
       <x>580</x>
@@ -169,13 +169,19 @@
      </rect>
     </property>
     <property name="text">
-     <string>Можно выключать питание · ДА</string>
+     <string>Можно выключать питание · НЕТ</string>
     </property>
     <property name="styleSheet">
-     <string notr="true">background:#EDF7F0; border:1px solid #59AD6B; border-radius:16px; color:#2E8C47; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:14px; font-weight:700;</string>
+     <string notr="true">background:#FCEAEA; border:1px solid #D96B6B; border-radius:16px; color:#C43B3B; font-family:&quot;Inter&quot;,&quot;Segoe UI&quot;,sans-serif; font-size:14px; font-weight:700;</string>
     </property>
-    <property name="alignment">
-     <set>Qt::AlignmentFlag::AlignCenter</set>
+    <property name="cursor">
+     <cursorShape>PointingHandCursor</cursorShape>
+    </property>
+    <property name="focusPolicy">
+     <enum>Qt::FocusPolicy::NoFocus</enum>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
     </property>
    </widget>
    <widget class="QLabel" name="labelClock">

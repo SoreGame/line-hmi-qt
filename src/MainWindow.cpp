@@ -8,8 +8,11 @@
 #include "NatsClient.h"
 #include "OverlayCard.h"
 #include "PlaceOverlay.h"
+#include "PowerOffOverlay.h"
 #include "PrepOverlay.h"
 #include "RunHistoryDialog.h"
+
+#include <QPushButton>
 
 #include <QColor>
 #include <QDateTime>
@@ -157,8 +160,11 @@ MainWindow::MainWindow(QWidget *parent)
     , m_plc(new PlcClient(this))
 {
     ui->setupUi(this);
-    if (ui->statusPowerOff)
+    if (ui->statusPowerOff) {
         ui->statusPowerOff->raise();
+        ui->statusPowerOff->setCursor(Qt::PointingHandCursor);
+        ui->statusPowerOff->setFocusPolicy(Qt::NoFocus);
+    }
 #ifdef Q_OS_ANDROID
     setupAndroidCanvas();
     enableKeepScreenOn();
@@ -869,6 +875,10 @@ void MainWindow::syncOverlays()
     }
     if (m_stopPopup && wantStopPopup)
         m_stopPopup->raise();
+    if (m_powerOff)
+        m_powerOff->raise();
+    if (m_powerOffReady)
+        m_powerOffReady->raise();
     if (m_companionHud && m_companionHud->isVisible())
         m_companionHud->raise();
 }
@@ -1112,11 +1122,102 @@ void MainWindow::updatePowerOff()
 {
     if (!ui->statusPowerOff)
         return;
-    const bool allow = plcLinked() && m_plc->statusInt16(PlcClient::kPowerOffIndex) == 1;
+    const bool allow = m_powerOffReadyFlag;
     ui->statusPowerOff->setText(allow ? tx("Можно выключать питание · ДА")
                                       : tx("Можно выключать питание · НЕТ"));
     ui->statusPowerOff->setStyleSheet(QString::fromUtf8(allow ? kPillOk : kPillErr)
                                       + QStringLiteral(" font-size:14px; font-weight:700;"));
+    ui->statusPowerOff->setEnabled(!allow);
+    if (m_powerOffReady && allow)
+        m_powerOffReady->raise();
+}
+
+QString MainWindow::powerOffBlockReason() const
+{
+    if (m_powerOffReadyFlag)
+        return tx("Робот уже готов к выключению");
+    if (!plcLinked())
+        return tx("нет связи с ПЛК");
+    if (plcMode() == PlcClient::Mode::Estop || !m_line->alarmCauses().isEmpty())
+        return tx("есть авария или ошибки");
+    if (plcMode() != PlcClient::Mode::Ready)
+        return tx("сейчас: %1 · нужно состояние «Готов»").arg(PlcClient::modeText(plcMode()));
+    if (chosenProgram() > 0)
+        return tx("выбрана деталь · сначала снимите выбор");
+    if (lineRunning())
+        return tx("линия в работе");
+    if (m_line->scriptActive())
+        return tx("робот выполняет скрипт");
+    // Как индикатор «сварка в работе»: открытые клапаны в Ready — не блок, их вернёт чек-лист.
+    if (lineRunning() && !m_plc->weldValvesSafe())
+        return tx("сварка в работе");
+    return {};
+}
+
+void MainWindow::sendPlcFrameLogged(const QByteArray &frame, const QString &name)
+{
+    QStringList bytes;
+    for (char b : frame)
+        bytes << QString::number(quint8(b));
+    appendLog(LogLevel::Info, tx("%1 · ПЛК %2").arg(name, bytes.join(QLatin1Char(' '))));
+    if (m_plc) {
+        m_plc->sendCommand(frame);
+        m_plc->pollNow();
+    }
+}
+
+void MainWindow::on_statusPowerOff_clicked()
+{
+    if (m_powerOffReadyFlag)
+        return;
+    const QString block = powerOffBlockReason();
+    if (!block.isEmpty()) {
+        showNotice(tx("Выключение питания"),
+                   tx("Сейчас нельзя начать выключение:\n%1").arg(block));
+        return;
+    }
+    openPowerOffChecklist();
+}
+
+void MainWindow::openPowerOffChecklist()
+{
+    if (m_powerOff || m_powerOffReadyFlag)
+        return;
+
+    QWidget *host = ui->centralwidget;
+    m_powerOff = new PowerOffOverlay(host);
+    connect(m_powerOff, &PowerOffOverlay::weldSafeRequested, this, [this]() {
+        sendPlcFrameLogged(PlcClient::weldSafeCommand(),
+                           tx("Вернуть сварку в безопасное положение"));
+    });
+    connect(m_powerOff, &PowerOffOverlay::welderOffRequested, this, [this]() {
+        sendPlcFrameLogged(PlcClient::welderOffCommand(),
+                           tx("Выключить сварочный аппарат"));
+    });
+    connect(m_powerOff, &PowerOffOverlay::powerOffConfirmed, this, [this]() {
+        if (m_powerOff) {
+            m_powerOff->deleteLater();
+            m_powerOff = nullptr;
+        }
+        showPowerOffReadyScreen();
+    });
+    m_powerOff->show();
+}
+
+void MainWindow::showPowerOffReadyScreen()
+{
+    m_powerOffReadyFlag = true;
+    updatePowerOff();
+    appendLog(LogLevel::Ok, tx("Робот готов к выключению"));
+
+    if (m_powerOffReady)
+        return;
+    QWidget *host = ui->centralwidget;
+    m_powerOffReady = new OverlayCard(tx("Робот готов к выключению"), QSize(), host);
+    m_powerOffReady->setStatus(
+        tx("Питание можно снимать. Это сообщение останется до выключения пульта."));
+    m_powerOffReady->show();
+    m_powerOffReady->raise();
 }
 
 void MainWindow::updateLamellaType()

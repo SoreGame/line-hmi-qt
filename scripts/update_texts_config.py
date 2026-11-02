@@ -39,6 +39,7 @@ GROUPS = {
     "LineController.cpp": "LineController — скрипты робота и связь с ПЛК",
     "PrepOverlay.cpp": "PrepOverlay — окно предподготовки",
     "EstopOverlay.cpp": "EstopOverlay — окно аварии",
+    "PowerOffOverlay.cpp": "PowerOffOverlay — чек-лист выключения питания",
     "PlaceOverlay.cpp": "PlaceOverlay — окно ручной установки робота",
     "RunHistoryDialog.cpp": "RunHistoryDialog — история запусков",
     "ZonesDialog.cpp": "ZonesDialog — стартовые зоны робота",

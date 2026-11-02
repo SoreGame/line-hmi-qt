@@ -362,12 +362,15 @@ class Plc:
             return
         self.service_do[index] = value
 
-    def on_weld_safe(self, a: int, b: int) -> None:
-        if (a, b) != (6, 0):
-            log(f"3 {a} {b}: игнор")
+    def on_cmd3(self, a: int, b: int) -> None:
+        if (a, b) == (6, 0):
+            self.ready["weld"] = True
+            log("3 6 0: сварка в безопасное положение")
             return
-        self.ready["weld"] = True
-        log("3 6 0: сварка в безопасное положение")
+        if (a, b) == (5, 0):
+            log("3 5 0: сварочный аппарат выключен")
+            return
+        log(f"3 {a} {b}: игнор")
 
     def on_robot_do(self, packet: bytes) -> None:
         changed = []
@@ -617,7 +620,7 @@ def handle_client(conn: socket.socket, addr: tuple[str, int], plc: Plc, hmi_ip: 
                     elif tag == DO_TAG:
                         plc.on_do(frame[1], frame[2])
                     elif tag == WELD_SAFE_TAG:
-                        plc.on_weld_safe(frame[1], frame[2])
+                        plc.on_cmd3(frame[1], frame[2])
                     elif tag is None:
                         plc.on_robot_do(frame)
                 if tag == DEBUG_TAG:

@@ -31,6 +31,8 @@ qt_add_executable(line-hmi-qt MANUAL_FINALIZATION
     src/PrepOverlay.h
     src/EstopOverlay.cpp
     src/EstopOverlay.h
+    src/PowerOffOverlay.cpp
+    src/PowerOffOverlay.h
     src/PlaceOverlay.cpp
     src/PlaceOverlay.h
     src/RunHistory.cpp

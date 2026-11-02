@@ -26,11 +26,13 @@ class EstopOverlay;
 class NatsClient;
 class OverlayCard;
 class PlaceOverlay;
+class PowerOffOverlay;
 class PrepOverlay;
 class QFrame;
 class QGraphicsView;
 class QLabel;
 class QMessageBox;
+class QPushButton;
 class QResizeEvent;
 class QShowEvent;
 class QTimer;
@@ -58,6 +60,7 @@ private slots:
     void on_btnProg2_clicked();
     void on_btnAdmin_clicked();
     void on_btnService_clicked();
+    void on_statusPowerOff_clicked();
 
 private:
     enum class LogLevel { Info, Ok, Warn, Err };
@@ -110,6 +113,11 @@ private:
     void appendLogFileOnly(LogLevel level, const QString &message);
     void updateOutputCounters();
     void updatePowerOff();
+    // Почему нельзя открыть чек-лист выключения; пусто — можно.
+    QString powerOffBlockReason() const;
+    void openPowerOffChecklist();
+    void showPowerOffReadyScreen();
+    void sendPlcFrameLogged(const QByteArray &frame, const QString &name);
     void updateLamellaType();
     void updateClock();
     void updateKpi();
@@ -149,6 +157,10 @@ private:
     QPointer<EstopOverlay> m_estop;
     QPointer<PlaceOverlay> m_place;
     QPointer<OverlayCard> m_stopPopup;
+    QPointer<PowerOffOverlay> m_powerOff;
+    QPointer<OverlayCard> m_powerOffReady;
+    // После «Выключить» — ДА до перезапуска пульта.
+    bool m_powerOffReadyFlag = false;
 
     std::optional<PendingRequest> m_pending;
     // Деталь, выбор которой ждёт подтверждения ПЛК (54); 0 — не ждём.

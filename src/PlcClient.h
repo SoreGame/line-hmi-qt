@@ -100,6 +100,8 @@ public:
     static QByteArray doCommand(int n, bool on);
     // Вернуть сварку в безопасное положение: [3, 6, 0].
     static QByteArray weldSafeCommand();
+    // Выключить сварочный аппарат: [3, 5, 0].
+    static QByteArray welderOffCommand();
 
     // Тексты для экрана; код без текста — «Код N».
     static QString modeText(Mode mode);
