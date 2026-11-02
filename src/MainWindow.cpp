@@ -1118,24 +1118,48 @@ void MainWindow::updateOutputCounters()
     }
 }
 
+bool MainWindow::plcPowerOffAllowed() const
+{
+    return plcLinked() && m_plc->statusInt16(PlcClient::kPowerOffIndex) == 1;
+}
+
+bool MainWindow::powerOffAllowed() const
+{
+    return m_powerOffReadyFlag && plcPowerOffAllowed();
+}
+
 void MainWindow::updatePowerOff()
 {
     if (!ui->statusPowerOff)
         return;
-    const bool allow = m_powerOffReadyFlag;
+    const bool allow = powerOffAllowed();
+    // Плашка всегда на экране: ДА только после полного чек-листа и разрешения ПЛК (ячейка 64).
+    ui->statusPowerOff->setVisible(true);
+    ui->statusPowerOff->show();
+    ui->statusPowerOff->raise();
     ui->statusPowerOff->setText(allow ? tx("Можно выключать питание · ДА")
                                       : tx("Можно выключать питание · НЕТ"));
     ui->statusPowerOff->setStyleSheet(QString::fromUtf8(allow ? kPillOk : kPillErr)
                                       + QStringLiteral(" font-size:14px; font-weight:700;"));
     ui->statusPowerOff->setEnabled(!allow);
-    if (m_powerOffReady && allow)
+    if (m_powerOffReady) {
+        if (allow) {
+            m_powerOffReady->setStatus(
+                tx("Питание можно снимать. Это сообщение останется до выключения пульта."));
+        } else if (m_powerOffReadyFlag) {
+            m_powerOffReady->setStatus(
+                tx("Чек-лист выполнен. Ждём разрешения ПЛК (ячейка 64)."));
+        }
         m_powerOffReady->raise();
+    }
 }
 
 QString MainWindow::powerOffBlockReason() const
 {
-    if (m_powerOffReadyFlag)
+    if (powerOffAllowed())
         return tx("Робот уже готов к выключению");
+    if (m_powerOffReadyFlag)
+        return tx("чек-лист выполнен · ждём разрешения ПЛК");
     if (!plcLinked())
         return tx("нет связи с ПЛК");
     if (plcMode() == PlcClient::Mode::Estop || !m_line->alarmCauses().isEmpty())
@@ -1164,12 +1188,13 @@ void MainWindow::sendPlcFrameLogged(const QByteArray &frame, const QString &name
 
 void MainWindow::on_statusPowerOff_clicked()
 {
-    if (m_powerOffReadyFlag)
+    if (powerOffAllowed())
         return;
     const QString block = powerOffBlockReason();
     if (!block.isEmpty()) {
         showNotice(tx("Выключение питания"),
-                   tx("Сейчас нельзя начать выключение:\n%1").arg(block));
+                   m_powerOffReadyFlag ? block
+                                       : tx("Сейчас нельзя начать выключение:\n%1").arg(block));
         return;
     }
     // Выбор детали при выключении не нужен — снимаем сами и уведомляем ПЛК.
@@ -1209,17 +1234,17 @@ void MainWindow::openPowerOffChecklist()
 void MainWindow::showPowerOffReadyScreen()
 {
     m_powerOffReadyFlag = true;
-    updatePowerOff();
-    appendLog(LogLevel::Ok, tx("Робот готов к выключению"));
+    if (powerOffAllowed())
+        appendLog(LogLevel::Ok, tx("Робот готов к выключению"));
+    else
+        appendLog(LogLevel::Info, tx("Чек-лист выключения выполнен · ждём разрешения ПЛК"));
 
-    if (m_powerOffReady)
-        return;
-    QWidget *host = ui->centralwidget;
-    m_powerOffReady = new OverlayCard(tx("Робот готов к выключению"), QSize(), host);
-    m_powerOffReady->setStatus(
-        tx("Питание можно снимать. Это сообщение останется до выключения пульта."));
-    m_powerOffReady->show();
-    m_powerOffReady->raise();
+    if (!m_powerOffReady) {
+        QWidget *host = ui->centralwidget;
+        m_powerOffReady = new OverlayCard(tx("Робот готов к выключению"), QSize(), host);
+        m_powerOffReady->show();
+    }
+    updatePowerOff();
 }
 
 void MainWindow::updateLamellaType()

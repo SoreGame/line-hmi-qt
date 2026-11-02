@@ -113,6 +113,10 @@ private:
     void appendLogFileOnly(LogLevel level, const QString &message);
     void updateOutputCounters();
     void updatePowerOff();
+    // ПЛК ячейка 64 = 1 — разрешил снимать питание.
+    bool plcPowerOffAllowed() const;
+    // ДА только если пройден чек-лист и ПЛК разрешил.
+    bool powerOffAllowed() const;
     // Почему нельзя открыть чек-лист выключения; пусто — можно.
     QString powerOffBlockReason() const;
     void openPowerOffChecklist();
@@ -159,7 +163,7 @@ private:
     QPointer<OverlayCard> m_stopPopup;
     QPointer<PowerOffOverlay> m_powerOff;
     QPointer<OverlayCard> m_powerOffReady;
-    // После «Выключить» — ДА до перезапуска пульта.
+    // Чек-лист выключения пройден в этом сеансе (до перезапуска пульта).
     bool m_powerOffReadyFlag = false;
 
     std::optional<PendingRequest> m_pending;
