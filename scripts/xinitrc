@@ -1,5 +1,7 @@
 #!/bin/sh
 xset s off
+# Kiosk: X runs on vt7; without chvt the console (tty1 autologin) stays visible.
+sudo -n /bin/chvt 7 2>/dev/null || true
 xset -dpms
 xset s noblank
 

@@ -1142,15 +1142,11 @@ QString MainWindow::powerOffBlockReason() const
         return tx("есть авария или ошибки");
     if (plcMode() != PlcClient::Mode::Ready)
         return tx("сейчас: %1 · нужно состояние «Готов»").arg(PlcClient::modeText(plcMode()));
-    if (chosenProgram() > 0)
-        return tx("выбрана деталь · сначала снимите выбор");
     if (lineRunning())
         return tx("линия в работе");
-    if (m_line->scriptActive())
-        return tx("робот выполняет скрипт");
-    // Как индикатор «сварка в работе»: открытые клапаны в Ready — не блок, их вернёт чек-лист.
-    if (lineRunning() && !m_plc->weldValvesSafe())
-        return tx("сварка в работе");
+    // Скрипт или оси в движении (motion.status.run) — нельзя начинать выключение.
+    if (m_line->robotBusy() || m_line->motionRunning())
+        return tx("робот движется");
     return {};
 }
 
@@ -1175,6 +1171,12 @@ void MainWindow::on_statusPowerOff_clicked()
         showNotice(tx("Выключение питания"),
                    tx("Сейчас нельзя начать выключение:\n%1").arg(block));
         return;
+    }
+    // Выбор детали при выключении не нужен — снимаем сами и уведомляем ПЛК.
+    if (m_programChosen || m_pendingProgram > 0 || chosenProgram() > 0) {
+        forgetProgram(true);
+        applyProgramVisuals();
+        appendLog(LogLevel::Info, tx("Выключение: выбор детали снят"));
     }
     openPowerOffChecklist();
 }

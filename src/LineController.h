@@ -51,6 +51,8 @@ public:
     bool scriptActive() const { return m_role != Role::None; }
     // Робот выполняет скрипт: запущенный пультом или любой другой по script.status.
     bool robotBusy() const { return m_role != Role::None || m_report.scriptRunning; }
+    // CTRL: motion.status.run = true (ось едет / jog / траектория).
+    bool motionRunning() const { return m_motionRunning && m_poseFresh; }
     // Причины аварии, видимые по кадру ПЛК и состоянию робота. Зона сюда не входит.
     QStringList alarmCauses() const;
 
@@ -67,7 +69,7 @@ private:
     void onPlcFrame();
     void onScriptStatus(bool running, bool completed, int line, const QString &filename,
                         const QString &slot);
-    void onPose(double x, double y, double z, double r);
+    void onPose(double x, double y, double z, double r, bool running);
     void tick();
 
     void baseline();
@@ -140,6 +142,7 @@ private:
     bool m_scriptRunning = false;
     bool m_poseKnown = false;
     bool m_poseFresh = false;
+    bool m_motionRunning = false;
     qint64 m_poseMs = 0;
     double m_pose[4] = {0, 0, 0, 0};
 

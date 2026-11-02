@@ -58,7 +58,9 @@ LineController::LineController(NatsClient *nats, PlcClient *plc, QObject *parent
     connect(m_plc, &PlcClient::stateChanged, this, &LineController::onPlcFrame);
     connect(m_nats, &NatsClient::scriptStatusReceived, this, &LineController::onScriptStatus);
     connect(m_nats, &NatsClient::motionPoseReceived, this,
-            [this](double x, double y, double z, double r, bool) { onPose(x, y, z, r); });
+            [this](double x, double y, double z, double r, bool running) {
+                onPose(x, y, z, r, running);
+            });
     connect(m_timer, &QTimer::timeout, this, &LineController::tick);
     m_timer->start(kTickMs);
     updateReport();
@@ -485,13 +487,14 @@ void LineController::tick()
     endRun(tx("Нет связи с ПЛК"));
 }
 
-void LineController::onPose(double x, double y, double z, double r)
+void LineController::onPose(double x, double y, double z, double r, bool running)
 {
     m_pose[0] = x;
     m_pose[1] = y;
     m_pose[2] = z;
     m_pose[3] = r;
     m_poseKnown = true;
+    m_motionRunning = running;
     m_poseMs = QDateTime::currentMSecsSinceEpoch();
 }
 
