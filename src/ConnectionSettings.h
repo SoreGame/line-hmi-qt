@@ -20,7 +20,7 @@ struct StartZone {
 struct ConnectionSettings {
     static constexpr int kZoneCount = 4;
 
-    QString natsHost = QStringLiteral("192.168.11.170");
+    QString natsHost = QStringLiteral("192.168.58.10");
     quint16 natsPort = 4222;
     QString plcHost = QStringLiteral("192.168.58.88");
     quint16 plcPort = 2025;
