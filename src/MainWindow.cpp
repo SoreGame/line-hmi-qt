@@ -879,6 +879,9 @@ void MainWindow::syncOverlays()
         m_powerOff->raise();
     if (m_powerOffReady)
         m_powerOffReady->raise();
+    // Плашка выключения всегда поверх полноэкранных окон выключения.
+    if (ui->statusPowerOff)
+        ui->statusPowerOff->raise();
     if (m_companionHud && m_companionHud->isVisible())
         m_companionHud->raise();
 }
@@ -1152,6 +1155,8 @@ void MainWindow::updatePowerOff()
         }
         m_powerOffReady->raise();
     }
+    // Поверх экрана «Робот готов к выключению».
+    ui->statusPowerOff->raise();
 }
 
 QString MainWindow::powerOffBlockReason() const
