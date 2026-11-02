@@ -6,6 +6,7 @@
 #include <QDialog>
 #include <QVector>
 
+class NatsClient;
 class QCloseEvent;
 class QFrame;
 class QLabel;
@@ -13,13 +14,14 @@ class QPushButton;
 class QShowEvent;
 class QTableWidget;
 class QWidget;
+class RobotDataTable;
 
 class ServicePanel : public QDialog
 {
     Q_OBJECT
 
 public:
-    explicit ServicePanel(PlcClient *plc, QWidget *parent = nullptr);
+    explicit ServicePanel(PlcClient *plc, NatsClient *nats, QWidget *parent = nullptr);
 
 protected:
     void showEvent(QShowEvent *event) override;
@@ -34,9 +36,11 @@ private slots:
 private:
     void leaveServiceIfNeeded();
     void refreshBufferTable();
-    // DO шлются только в режиме 5 «Service»; в остальных кнопки неактивны и сброшены.
+    // DO шлются только пока ячейка 68 = 1; иначе кнопки неактивны и сброшены.
     void updateDoAvailability();
+    void syncServiceUiFromPlc();
     bool plcInMode(PlcClient::Mode mode) const;
+    bool plcServiceActive() const;
     void sendServiceMode(bool on);
     void sendDo(int n, bool on);
 
@@ -50,6 +54,7 @@ private:
     static constexpr int kDoCount = kDoRows * kDoCols;
 
     PlcClient *m_plc = nullptr;
+    RobotDataTable *m_robotTable = nullptr;
     QTableWidget *m_bufferTable = nullptr;
     QLabel *m_bufferStatus = nullptr;
     QPushButton *m_btnServiceMode = nullptr;
@@ -57,6 +62,7 @@ private:
     QVector<QPushButton *> m_doButtons;
     bool m_fullScreenApplied = false;
     bool m_serviceRequested = false;
+    bool m_prevServiceActive = false;
     int m_layoutW = kWidth;
     int m_layoutH = kHeight;
 };

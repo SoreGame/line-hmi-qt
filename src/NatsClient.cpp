@@ -253,16 +253,18 @@ bool NatsClient::publishJson(const char *subject, const QJsonObject &obj, QStrin
 }
 
 bool NatsClient::publishExecCommand(const QString &filename, const QString &code, int fromLine,
-                                    QString *errorOut) const
+                                    QString *errorOut, const QString &slot) const
 {
     // Формат совпадает с executeScript() в веб-редакторе:
-    // { command: 'exec', type: 'Script', code, from_line, filename }
+    // { command: 'exec', type: 'Script', code, from_line, filename, slot }
     QJsonObject cmd;
     cmd.insert(QStringLiteral("command"), QStringLiteral("exec"));
     cmd.insert(QStringLiteral("type"), QStringLiteral("Script"));
     cmd.insert(QStringLiteral("code"), code);
     cmd.insert(QStringLiteral("from_line"), fromLine < 1 ? 1 : fromLine);
     cmd.insert(QStringLiteral("filename"), filename);
+    const QString slotNorm = slot.trimmed().isEmpty() ? QStringLiteral("motion") : slot.trimmed();
+    cmd.insert(QStringLiteral("slot"), slotNorm);
 
     if (!publishJson(kExecSubject, cmd, errorOut))
         return false;
@@ -611,6 +613,7 @@ void NatsClient::onScriptStatus(natsConnection *, natsSubscription *, natsMsg *m
     const bool running = obj.value(QStringLiteral("running")).toBool(false);
     const bool completed = obj.value(QStringLiteral("completed")).toBool(false);
     const QString filename = obj.value(QStringLiteral("filename")).toString();
+    const QString slot = obj.value(QStringLiteral("slot")).toString(QStringLiteral("motion"));
     // Emit из потока NATS → QueuedConnection на GUI (объект живёт в main).
-    emit self->scriptStatusReceived(running, completed, line, filename);
+    emit self->scriptStatusReceived(running, completed, line, filename, slot);
 }

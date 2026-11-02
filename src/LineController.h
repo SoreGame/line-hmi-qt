@@ -65,7 +65,8 @@ private:
     enum class Role { None, Init, Main };
 
     void onPlcFrame();
-    void onScriptStatus(bool running, bool completed, int line, const QString &filename);
+    void onScriptStatus(bool running, bool completed, int line, const QString &filename,
+                        const QString &slot);
     void onPose(double x, double y, double z, double r);
     void tick();
 
@@ -73,6 +74,8 @@ private:
     // Новый заход в режим 3 после Стопа/Готов: снова init и окно предподготовки.
     void beginPrepCycle();
     void startScript(Role role, int program);
+    // Параллельно с init: слот search, не занимает m_role.
+    void startCameraScript(int program);
     void requestMain(int program);
     void cancelMainDelay();
     void finishMainDelay();

@@ -214,6 +214,12 @@ QByteArray PlcClient::doCommand(int n, bool on)
     return QByteArray(bytes, sizeof(bytes));
 }
 
+QByteArray PlcClient::weldSafeCommand()
+{
+    const char bytes[] = {3, 6, 0};
+    return QByteArray(bytes, sizeof(bytes));
+}
+
 QString PlcClient::modeText(Mode mode)
 {
     switch (mode) {
@@ -335,6 +341,11 @@ bool PlcClient::weldValvesSafe() const
             return false;
     }
     return true;
+}
+
+bool PlcClient::serviceActive() const
+{
+    return isOk() && statusInt16(kServiceActiveIndex) == 1;
 }
 
 bool PlcClient::holdersPresent(int program) const

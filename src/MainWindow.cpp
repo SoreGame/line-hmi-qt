@@ -823,6 +823,17 @@ void MainWindow::syncOverlays()
                         [this] { return plcMode() != PlcClient::Mode::Estop; },
                         [this] { return m_line->alarmCauses().join(QStringLiteral(", ")); });
         });
+        connect(m_estop, &EstopOverlay::weldSafeRequested, this, [this]() {
+            const QByteArray frame = PlcClient::weldSafeCommand();
+            QStringList bytes;
+            for (char b : frame)
+                bytes << QString::number(quint8(b));
+            appendLog(LogLevel::Info,
+                      tx("Вернуть сварку в безопасное положение · ПЛК %1")
+                          .arg(bytes.join(QLatin1Char(' '))));
+            m_plc->sendCommand(frame);
+            m_plc->pollNow();
+        });
         m_estop->show();
     } else if (!wantEstop && m_estop) {
         m_estop->deleteLater();
@@ -1355,7 +1366,7 @@ void MainWindow::on_btnService_clicked()
     return;
 #else
     appendLog(LogLevel::Info, tx("Сервис: панель открыта"));
-    ServicePanel panel(m_plc, this);
+    ServicePanel panel(m_plc, m_nats, this);
     panel.exec();
     appendLog(LogLevel::Info, tx("Сервис: панель закрыта"));
     refreshUi();

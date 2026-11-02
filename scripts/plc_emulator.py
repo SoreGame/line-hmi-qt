@@ -57,6 +57,7 @@ POLL_TAG = 203
 CMD_TAG = 7
 SERVICE_TAG = 99
 DO_TAG = 2
+WELD_SAFE_TAG = 3
 DEBUG_TAG = 204
 
 HMI_POLL_SIZE = 6
@@ -88,6 +89,7 @@ SAFE_POWER_OFF_INT = 64
 WELD_TIMEOUT_INT = 65
 HOLDER_PICK_INT = 66
 LAMEL_PICK_INT = 67
+SERVICE_ACTIVE_INT = 68
 LAMEL_TYPE_INT = 69
 
 MODE_BOOT, MODE_READY, MODE_STOPPING, MODE_RUN, MODE_ESTOP, MODE_SERVICE = range(6)
@@ -360,6 +362,13 @@ class Plc:
             return
         self.service_do[index] = value
 
+    def on_weld_safe(self, a: int, b: int) -> None:
+        if (a, b) != (6, 0):
+            log(f"3 {a} {b}: игнор")
+            return
+        self.ready["weld"] = True
+        log("3 6 0: сварка в безопасное положение")
+
     def on_robot_do(self, packet: bytes) -> None:
         changed = []
         for i, value in enumerate(packet[:ROBOT_DO_COUNT]):
@@ -432,6 +441,7 @@ class Plc:
         put_i16(out, WELD_TIMEOUT_INT, int(self.weld_timeout))
         put_i16(out, HOLDER_PICK_INT, int(self.holder_pick))
         put_i16(out, LAMEL_PICK_INT, int(self.lamel_pick))
+        put_i16(out, SERVICE_ACTIVE_INT, int(self.mode == MODE_SERVICE))
         put_i16(out, LAMEL_TYPE_INT, self.lamel_type)
         for index, value in self.overrides.items():
             put_i16(out, index, value)
@@ -581,7 +591,7 @@ def handle_client(conn: socket.socket, addr: tuple[str, int], plc: Plc, hmi_ip: 
                     size = 4
                 elif tag == SERVICE_TAG:
                     size = 2
-                elif tag == DO_TAG:
+                elif tag in (DO_TAG, WELD_SAFE_TAG):
                     size = 3
                 elif robot:
                     tag = None
@@ -606,6 +616,8 @@ def handle_client(conn: socket.socket, addr: tuple[str, int], plc: Plc, hmi_ip: 
                         plc.on_service(frame[1] != 0)
                     elif tag == DO_TAG:
                         plc.on_do(frame[1], frame[2])
+                    elif tag == WELD_SAFE_TAG:
+                        plc.on_weld_safe(frame[1], frame[2])
                     elif tag is None:
                         plc.on_robot_do(frame)
                 if tag == DEBUG_TAG:

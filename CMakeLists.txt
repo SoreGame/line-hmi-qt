@@ -45,6 +45,8 @@ qt_add_executable(line-hmi-qt MANUAL_FINALIZATION
     src/ArduinoLink.h
     src/AdminPanel.cpp
     src/AdminPanel.h
+    src/RobotDataTable.cpp
+    src/RobotDataTable.h
     src/ServicePanel.cpp
     src/ServicePanel.h
     src/Texts.cpp

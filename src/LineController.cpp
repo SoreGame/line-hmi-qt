@@ -156,6 +156,7 @@ void LineController::onPlcFrame()
         m_needInit = false;
         if (m_role == Role::None) {
             setInitState(InitState::Idle);
+            startCameraScript(program);
             startScript(Role::Init, program);
         } else {
             emit note(Level::Warn, tx("ПЛК разрешил init, но скрипт робота ещё идёт · init не запущен"));
@@ -165,6 +166,7 @@ void LineController::onPlcFrame()
                && !m_awaitDecision) {
         // Повторный Старт: ПЛК иногда не меняет 60 — init всё равно нужен для предподготовки.
         m_needInit = false;
+        startCameraScript(program);
         startScript(Role::Init, program);
     }
 
@@ -260,6 +262,30 @@ void LineController::finishMainDelay()
     startScript(Role::Main, program);
 }
 
+void LineController::startCameraScript(int program)
+{
+    const QString filename = m_cfg.cameraScript(program).trimmed();
+    if (filename.isEmpty())
+        return;
+
+    emit note(Level::Info, tx("Запуск скрипта камеры '%1' (search)").arg(filename));
+    NatsClient *nats = m_nats;
+    runAsync(this, [nats, filename]() -> QString {
+        QString code;
+        QString err;
+        if (!nats->isConnected())
+            return tx("нет связи с NATS");
+        if (!nats->fetchScriptCode(filename, &code, &err))
+            return tx("не удалось получить скрипт камеры из NATS KV: %1").arg(err);
+        if (!nats->publishExecCommand(filename, code, 1, &err, QStringLiteral("search")))
+            return tx("не удалось отправить exec камеры в NATS: %1").arg(err);
+        return QString();
+    }, [this, filename](const QString &error) {
+        if (!error.isEmpty())
+            emit note(Level::Err, tx("Скрипт камеры '%1' не запущен: %2").arg(filename, error));
+    });
+}
+
 void LineController::startScript(Role role, int program)
 {
     const QString filename = role == Role::Init ? m_cfg.initScript(program) : m_cfg.mainScript(program);
@@ -295,7 +321,7 @@ void LineController::startScript(Role role, int program)
             return tx("нет связи с NATS");
         if (!nats->fetchScriptCode(filename, &code, &err))
             return tx("не удалось получить скрипт из NATS KV: %1").arg(err);
-        if (!nats->publishExecCommand(filename, code, 1, &err))
+        if (!nats->publishExecCommand(filename, code, 1, &err, QStringLiteral("motion")))
             return tx("не удалось отправить exec в NATS: %1").arg(err);
         return QString();
     }, [this, filename](const QString &error) {
@@ -314,8 +340,13 @@ void LineController::startScript(Role role, int program)
     });
 }
 
-void LineController::onScriptStatus(bool running, bool completed, int /*line*/, const QString &filename)
+void LineController::onScriptStatus(bool running, bool completed, int /*line*/, const QString &filename,
+                                    const QString &slot)
 {
+    // Долгоживущий search не должен держать «скрипт занят» для ПЛК / finishScript.
+    if (slot == QStringLiteral("search"))
+        return;
+
     m_scriptRunning = running;
     updateReport();
     if (m_role == Role::None || filename != m_filename)

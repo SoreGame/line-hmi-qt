@@ -93,6 +93,8 @@ ConnectionSettings normalize(ConnectionSettings c)
              std::pair{&c.initScriptDetail2, &defaults.initScriptDetail2},
              std::pair{&c.mainScriptDetail1, &defaults.mainScriptDetail1},
              std::pair{&c.mainScriptDetail2, &defaults.mainScriptDetail2},
+             std::pair{&c.cameraScriptDetail1, &defaults.cameraScriptDetail1},
+             std::pair{&c.cameraScriptDetail2, &defaults.cameraScriptDetail2},
          }) {
         *field = field->trimmed();
         if (field->isEmpty())
@@ -163,6 +165,10 @@ bool readConfigFile(const QString &path, ConnectionSettings *out)
         out->initScriptDetail2 = programs.value(QStringLiteral("initDetail2")).toString(out->initScriptDetail2);
         out->mainScriptDetail1 = programs.value(QStringLiteral("mainDetail1")).toString(out->mainScriptDetail1);
         out->mainScriptDetail2 = programs.value(QStringLiteral("mainDetail2")).toString(out->mainScriptDetail2);
+        out->cameraScriptDetail1 =
+            programs.value(QStringLiteral("cameraDetail1")).toString(out->cameraScriptDetail1);
+        out->cameraScriptDetail2 =
+            programs.value(QStringLiteral("cameraDetail2")).toString(out->cameraScriptDetail2);
         out->stopTimeoutSec = qMax(0, programs.value(QStringLiteral("stopTimeoutSec")).toInt(out->stopTimeoutSec));
     }
 
@@ -224,6 +230,8 @@ bool writeConfigFile(const QString &path, const ConnectionSettings &cfg)
     programs.insert(QStringLiteral("initDetail2"), cfg.initScriptDetail2);
     programs.insert(QStringLiteral("mainDetail1"), cfg.mainScriptDetail1);
     programs.insert(QStringLiteral("mainDetail2"), cfg.mainScriptDetail2);
+    programs.insert(QStringLiteral("cameraDetail1"), cfg.cameraScriptDetail1);
+    programs.insert(QStringLiteral("cameraDetail2"), cfg.cameraScriptDetail2);
     programs.insert(QStringLiteral("stopTimeoutSec"), cfg.stopTimeoutSec);
     programs.remove(QStringLiteral("estop"));
     programs.remove(QStringLiteral("countdownSec"));
@@ -287,6 +295,11 @@ QString ConnectionSettings::initScript(int program) const
 QString ConnectionSettings::mainScript(int program) const
 {
     return program == 1 ? mainScriptDetail1 : program == 2 ? mainScriptDetail2 : QString();
+}
+
+QString ConnectionSettings::cameraScript(int program) const
+{
+    return program == 1 ? cameraScriptDetail1 : program == 2 ? cameraScriptDetail2 : QString();
 }
 
 int ConnectionSettings::zoneOf(double x, double y, double z, double r) const

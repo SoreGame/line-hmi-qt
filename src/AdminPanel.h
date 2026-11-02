@@ -5,7 +5,6 @@
 #include "NatsClient.h"
 
 #include <QDialog>
-#include <QFutureWatcher>
 #include <QVector>
 
 class ArduinoLink;
@@ -20,8 +19,8 @@ class QPlainTextEdit;
 class QPushButton;
 class QSlider;
 class QSpinBox;
-class QTableWidget;
 class QWidget;
+class RobotDataTable;
 
 class AdminPanel : public QDialog
 {
@@ -30,7 +29,6 @@ class AdminPanel : public QDialog
 public:
     explicit AdminPanel(const ConnectionSettings &initial, NatsClient *nats,
                         PlcClient *plc = nullptr, QWidget *parent = nullptr);
-    ~AdminPanel() override;
 
     ConnectionSettings networkSettings() const;
 
@@ -46,9 +44,6 @@ signals:
 
 private slots:
     void onApplyClicked();
-    void onRefreshClicked();
-    void onPointsLoaded();
-    void onPointSaved();
     void onMotionPose(double x, double y, double z, double r, bool running);
     void onMotionPowerClicked();
     void onHmiAutostartToggled(bool enabled);
@@ -67,20 +62,7 @@ private slots:
     void onArduinoResetCalibration();
 
 private:
-    struct PointsLoadResult {
-        QString error;
-        QVector<NatsClient::RobotPoint> points;
-    };
-
-    void setBusy(bool busy);
-    void fillTable();
     void fitTablePanel();
-    int pageCount() const;
-    void clampPage();
-    void goToPage(int page);
-    void updatePager();
-    void editPoint(const NatsClient::RobotPoint &point);
-    void savePoint(const QString &kvKey, double x, double y, double z, double r);
     void sendMoveOffset(double x, double y, double z, double r);
     void updateMotionPowerButton();
     void refreshPlcBufferLog();
@@ -101,7 +83,6 @@ private:
     static constexpr const char *kPassword = "scara";
     static constexpr int kWidth = 1920;
     static constexpr int kHeight = 1080;
-    static constexpr int kPageSize = 10;
     static constexpr int kPlcLogMaxLines = 120;
 
     // Полные настройки: поля, которых нет на панели (зоны), не теряются при сохранении.
@@ -120,16 +101,7 @@ private:
     QLabel *m_plcBufferStatus = nullptr;
     QFrame *m_plcLogPanel = nullptr;
 
-    QLabel *m_tableStatus = nullptr;
-    QPushButton *m_btnRefresh = nullptr;
-    QFrame *m_tablePanel = nullptr;
-    QTableWidget *m_table = nullptr;
-    QWidget *m_pager = nullptr;
-    QPushButton *m_btnPrevPage = nullptr;
-    QPushButton *m_btnNextPage = nullptr;
-    QLabel *m_pageLabel = nullptr;
-    QVector<NatsClient::RobotPoint> m_points;
-    int m_page = 0;
+    RobotDataTable *m_tablePanel = nullptr;
 
     QFrame *m_networkPanel = nullptr;
     QFrame *m_togglesPanel = nullptr;
@@ -139,6 +111,8 @@ private:
     QSpinBox *m_stopTimeout = nullptr;
     QLineEdit *m_mainScript1 = nullptr;
     QLineEdit *m_mainScript2 = nullptr;
+    QLineEdit *m_cameraScript1 = nullptr;
+    QLineEdit *m_cameraScript2 = nullptr;
     QPushButton *m_btnZones = nullptr;
     QFrame *m_arduinoPanel = nullptr;
     QFrame *m_jogPanel = nullptr;
@@ -164,9 +138,6 @@ private:
     double m_arduinoUnitsPerKgBaseline = 100000.0;
     double m_arduinoCalibScaleSum = 0.0;
     int m_arduinoCalibPoints = 0;
-
-    QFutureWatcher<PointsLoadResult> *m_loadWatcher = nullptr;
-    QFutureWatcher<QString> *m_saveWatcher = nullptr;
 
     QPushButton *m_btnMotionPower = nullptr;
     QPushButton *m_btnHmiAutostart = nullptr;

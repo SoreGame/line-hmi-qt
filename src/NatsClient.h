@@ -40,8 +40,10 @@ public:
     // Публикует команду запуска скрипта на subject "script.command",
     // в том же формате, что и веб-редактор (executeScript()).
     // fromLine > 1 — продолжение с прерванной строки (replay interrupted).
+    // slot: "motion" (default) или "search" — слот ChaiScript на behaviour.
     bool publishExecCommand(const QString &filename, const QString &code, int fromLine,
-                            QString *errorOut = nullptr) const;
+                            QString *errorOut = nullptr,
+                            const QString &slot = QStringLiteral("motion")) const;
 
     // Как Stop в robot-gui: motion + behaviour + script.
     bool publishStopCommand(QString *errorOut = nullptr) const;
@@ -81,7 +83,9 @@ public:
 
 signals:
     // Приходит из потока NATS — подключайте QueuedConnection (по умолчанию Auto).
-    void scriptStatusReceived(bool running, bool completed, int line, const QString &filename);
+    // slot из script.status: "motion" / "search" (пусто — считать motion).
+    void scriptStatusReceived(bool running, bool completed, int line, const QString &filename,
+                              const QString &slot);
     void motionPoseReceived(double x, double y, double z, double r, bool running);
 
 private:

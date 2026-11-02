@@ -49,6 +49,9 @@ struct ConnectionSettings {
     QString initScriptDetail2 = QStringLiteral("preProg2.chai");
     QString mainScriptDetail1 = QStringLiteral("ai.chai");
     QString mainScriptDetail2 = QStringLiteral("ai2.chai");
+    // Долгоживущий скрипт камеры (слот search). Пустое имя — не запускать.
+    QString cameraScriptDetail1 = QStringLiteral("cam_search.chai");
+    QString cameraScriptDetail2 = QStringLiteral("cam_search2.chai");
     // Стоп в цикле: сколько ждать конца цикла, потом полный стоп роботу. 0 — ждать без ограничения.
     int stopTimeoutSec = 30;
     std::array<StartZone, kZoneCount> zones{};
@@ -59,6 +62,7 @@ struct ConnectionSettings {
     QString plcEndpoint() const;
     QString initScript(int program) const;
     QString mainScript(int program) const;
+    QString cameraScript(int program) const;
     // 0 — ни в одной включённой зоне, иначе 1..kZoneCount.
     int zoneOf(double x, double y, double z, double r) const;
 

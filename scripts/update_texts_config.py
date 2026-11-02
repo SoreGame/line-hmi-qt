@@ -44,6 +44,7 @@ GROUPS = {
     "ZonesDialog.cpp": "ZonesDialog — стартовые зоны робота",
     "ServicePanel.cpp": "ServicePanel — сервисная панель",
     "AdminPanel.cpp": "AdminPanel — админка",
+    "RobotDataTable.cpp": "RobotDataTable — таблица точек робота",
     "NatsClient.cpp": "NatsClient — ошибки NATS",
     "PlcClient.cpp": "PlcClient — связь с ПЛК, режимы и коды",
     "ArduinoLink.cpp": "ArduinoLink — тензодатчик",

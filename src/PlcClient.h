@@ -54,6 +54,8 @@ public:
     static constexpr int kWeldTimeoutIndex = 65;
     static constexpr int kHolderPickIndex = 66;
     static constexpr int kLamellaPickIndex = 67;
+    // Подтверждение сервисного режима: 1 — ПЛК в сервисе (после 99 1), 0 — нет.
+    static constexpr int kServiceActiveIndex = 68;
     // Индикаторы, решений по ним пульт не принимает.
     // Клапаны сварки: в безопасном положении все = 1.
     static constexpr int kWeldValveInts[] = {10, 11, 12, 13, 14, 16};
@@ -96,6 +98,8 @@ public:
     static QByteArray serviceModeCommand(bool on);
     // Дискретный выход: [2, n, 1] вкл, [2, n, 0] выкл.
     static QByteArray doCommand(int n, bool on);
+    // Вернуть сварку в безопасное положение: [3, 6, 0].
+    static QByteArray weldSafeCommand();
 
     // Тексты для экрана; код без текста — «Код N».
     static QString modeText(Mode mode);
@@ -125,6 +129,8 @@ public:
     bool vision1Ok() const { return isOk() && statusInt16(kVision1Index) == 1; }
     bool vision2Ok() const { return isOk() && statusInt16(kVision2Index) == 1; }
     bool weldValvesSafe() const;
+    // Сервисный режим для пульта: подтверждение по ячейке 68, не по режиму 52.
+    bool serviceActive() const;
     bool lamellaIssued() const { return isOk() && statusInt16(kLamellaTypeIndex) != 0; }
     // Держатели для программы: 1 — большие (25), 2 — малые (1). Без программы — нет.
     bool holdersPresent(int program) const;

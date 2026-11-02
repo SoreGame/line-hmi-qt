@@ -1,6 +1,7 @@
 #include "ServicePanel.h"
 #include "Texts.h"
 #include "PlcClient.h"
+#include "RobotDataTable.h"
 
 #include <QAbstractItemView>
 #include <QAbstractScrollArea>
@@ -153,7 +154,7 @@ QLabel *makeTitle(const QString &text, QWidget *parent)
 
 } // namespace
 
-ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
+ServicePanel::ServicePanel(PlcClient *plc, NatsClient *nats, QWidget *parent)
     : QDialog(parent)
     , m_plc(plc)
 {
@@ -347,13 +348,30 @@ ServicePanel::ServicePanel(PlcClient *plc, QWidget *parent)
     const int togglesH = qMax(togglesPanel->sizeHint().height(), 90);
     togglesPanel->setGeometry(bodyX, bodyY + tablesH + gap, togglesW, togglesH);
 
+    m_robotTable = new RobotDataTable(nats, this);
+    const int tableW = m_robotTable->preferredWidth();
+    const int tableH = m_robotTable->contentHeight();
+    const int rightX = bodyX + bufferW + gap + doW + gap;
+    int tableX = rightX;
+    int tableY = bodyY;
+    if (rightX + tableW > m_layoutW - 12) {
+        tableX = bodyX;
+        tableY = bodyY + tablesH + gap + togglesH + gap;
+    }
+    m_robotTable->setGeometry(tableX, tableY, tableW, tableH);
+    connect(m_robotTable, &RobotDataTable::contentHeightChanged, this, [this]() {
+        const QRect g = m_robotTable->geometry();
+        m_robotTable->setGeometry(g.x(), g.y(), m_robotTable->preferredWidth(),
+                                  m_robotTable->contentHeight());
+    });
+
     connect(btnBack, &QPushButton::clicked, this, &QDialog::reject);
     connect(m_btnServiceMode, &QPushButton::toggled, this, &ServicePanel::onServiceModeToggled);
     if (m_plc)
         connect(m_plc, &PlcClient::stateChanged, this, &ServicePanel::onPlcStateChanged);
 
     refreshBufferTable();
-    updateDoAvailability();
+    syncServiceUiFromPlc();
 }
 
 bool ServicePanel::plcInMode(PlcClient::Mode mode) const
@@ -361,9 +379,14 @@ bool ServicePanel::plcInMode(PlcClient::Mode mode) const
     return m_plc && m_plc->isOk() && m_plc->mode() == mode;
 }
 
+bool ServicePanel::plcServiceActive() const
+{
+    return m_plc && m_plc->serviceActive();
+}
+
 void ServicePanel::updateDoAvailability()
 {
-    const bool inService = plcInMode(PlcClient::Mode::Service);
+    const bool inService = plcServiceActive();
     for (QPushButton *btn : std::as_const(m_doButtons)) {
         if (!inService && btn->isChecked()) {
             const QSignalBlocker blocker(btn);
@@ -374,6 +397,24 @@ void ServicePanel::updateDoAvailability()
     if (m_doTitle)
         m_doTitle->setText(inService ? QStringLiteral("DO 0..%1").arg(kDoCount - 1)
                                      : tx("DO 0..%1 · только в сервисном режиме").arg(kDoCount - 1));
+}
+
+void ServicePanel::syncServiceUiFromPlc()
+{
+    const bool active = plcServiceActive();
+    if (m_btnServiceMode) {
+        const QSignalBlocker blocker(m_btnServiceMode);
+        m_btnServiceMode->setChecked(active);
+        setToggleCaption(m_btnServiceMode, tx("Перевести ПЛК в сервисный режим"), active);
+    }
+    // После 99 1 ячейка 68 ещё может быть 0 — запрос держим, пока ПЛК не ответит.
+    // Как только 68 с 1 ушёл в 0, сервис для пульта закончен.
+    if (m_prevServiceActive && !active)
+        m_serviceRequested = false;
+    if (active)
+        m_serviceRequested = true;
+    m_prevServiceActive = active;
+    updateDoAvailability();
 }
 
 void ServicePanel::showEvent(QShowEvent *event)
@@ -399,22 +440,17 @@ void ServicePanel::reject()
 
 void ServicePanel::leaveServiceIfNeeded()
 {
-    if (!m_serviceRequested)
+    if (!m_serviceRequested && !plcServiceActive())
         return;
     sendServiceMode(false);
     m_serviceRequested = false;
-    if (m_btnServiceMode) {
-        const QSignalBlocker blocker(m_btnServiceMode);
-        m_btnServiceMode->setChecked(false);
-        setToggleCaption(m_btnServiceMode, tx("Перевести ПЛК в сервисный режим"),
-                         false);
-    }
+    syncServiceUiFromPlc();
 }
 
 void ServicePanel::onPlcStateChanged()
 {
     refreshBufferTable();
-    updateDoAvailability();
+    syncServiceUiFromPlc();
 }
 
 void ServicePanel::refreshBufferTable()
@@ -450,12 +486,8 @@ void ServicePanel::refreshBufferTable()
 
 void ServicePanel::onServiceModeToggled(bool on)
 {
-    // Включать сервис можно только из «Готов» (52 = 1); выключать — всегда.
-    if (on && !plcInMode(PlcClient::Mode::Ready) && !plcInMode(PlcClient::Mode::Service)) {
-        {
-            const QSignalBlocker blocker(m_btnServiceMode);
-            m_btnServiceMode->setChecked(false);
-        }
+    // Запрос 99 1 только из «Готов»; факт сервиса — по ячейке 68, не по кнопке.
+    if (on && !plcInMode(PlcClient::Mode::Ready) && !plcServiceActive()) {
         const QString now = !m_plc || !m_plc->isOk() ? tx("нет связи с ПЛК")
                                                      : tx("сейчас: %1").arg(PlcClient::modeText(m_plc->mode()));
         QMessageBox box(QMessageBox::Warning, tx("Сервисный режим"),
@@ -465,11 +497,18 @@ void ServicePanel::onServiceModeToggled(bool on)
                         QMessageBox::Ok, this);
         box.setStyleSheet(QString::fromUtf8(kNoticeStyle));
         box.exec();
+        syncServiceUiFromPlc();
         return;
     }
-    setToggleCaption(m_btnServiceMode, tx("Перевести ПЛК в сервисный режим"), on);
-    m_serviceRequested = on;
-    sendServiceMode(on);
+    if (on) {
+        m_serviceRequested = true;
+        sendServiceMode(true);
+    } else {
+        m_serviceRequested = false;
+        sendServiceMode(false);
+    }
+    // Кнопка и DO следуют за ячейкой 68: ВКЛ только при 1, ВЫКЛ — как только 0.
+    syncServiceUiFromPlc();
 }
 
 void ServicePanel::onDoToggled(int n, bool on)
