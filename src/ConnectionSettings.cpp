@@ -77,7 +77,7 @@ QJsonObject writeZone(StartZone zone)
 ConnectionSettings normalize(ConnectionSettings c)
 {
     if (c.natsHost.isEmpty())
-        c.natsHost = QStringLiteral("192.168.11.170");
+        c.natsHost = QStringLiteral("192.168.58.10");
     if (c.natsPort == 0)
         c.natsPort = 4222;
     if (c.plcHost.isEmpty())

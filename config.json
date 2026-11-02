@@ -7,7 +7,7 @@
         "_comment": "Протокол v2: docs/PLC_PROTOCOL.md. Опрос [203,f1,f2,f3,f4,Z] раз в pollMs мс, ответ — кадр statusBytes байт (int16 LE)."
     },
     "server": {
-        "ip": "192.168.11.170",
+        "ip": "192.168.58.10",
         "port": 4222
     },
     "arduino": {
