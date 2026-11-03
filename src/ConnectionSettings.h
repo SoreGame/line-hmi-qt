@@ -52,6 +52,11 @@ struct ConnectionSettings {
     // Долгоживущий скрипт камеры (слот search). Пустое имя — не запускать.
     QString cameraScriptDetail1 = QStringLiteral("cam_search.chai");
     QString cameraScriptDetail2 = QStringLiteral("cam_search2.chai");
+    // Доп. программа после каждых N успешных основных циклов. Пустое имя или N = 0 — выкл.
+    QString extraScriptDetail1;
+    QString extraScriptDetail2;
+    int extraEveryNDetail1 = 0;
+    int extraEveryNDetail2 = 0;
     // Стоп в цикле: сколько ждать конца цикла, потом полный стоп роботу. 0 — ждать без ограничения.
     int stopTimeoutSec = 30;
     std::array<StartZone, kZoneCount> zones{};
@@ -63,6 +68,10 @@ struct ConnectionSettings {
     QString initScript(int program) const;
     QString mainScript(int program) const;
     QString cameraScript(int program) const;
+    QString extraScript(int program) const;
+    int extraEveryN(int program) const;
+    // everyN > 0 и имя скрипта непустое.
+    bool extraEnabled(int program) const;
     // 0 — ни в одной включённой зоне, иначе 1..kZoneCount.
     int zoneOf(double x, double y, double z, double r) const;
 

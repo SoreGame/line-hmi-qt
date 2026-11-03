@@ -169,6 +169,14 @@ bool readConfigFile(const QString &path, ConnectionSettings *out)
             programs.value(QStringLiteral("cameraDetail1")).toString(out->cameraScriptDetail1);
         out->cameraScriptDetail2 =
             programs.value(QStringLiteral("cameraDetail2")).toString(out->cameraScriptDetail2);
+        out->extraScriptDetail1 =
+            programs.value(QStringLiteral("extraDetail1")).toString(out->extraScriptDetail1).trimmed();
+        out->extraScriptDetail2 =
+            programs.value(QStringLiteral("extraDetail2")).toString(out->extraScriptDetail2).trimmed();
+        out->extraEveryNDetail1 =
+            qMax(0, programs.value(QStringLiteral("extraEveryNDetail1")).toInt(out->extraEveryNDetail1));
+        out->extraEveryNDetail2 =
+            qMax(0, programs.value(QStringLiteral("extraEveryNDetail2")).toInt(out->extraEveryNDetail2));
         out->stopTimeoutSec = qMax(0, programs.value(QStringLiteral("stopTimeoutSec")).toInt(out->stopTimeoutSec));
     }
 
@@ -232,6 +240,10 @@ bool writeConfigFile(const QString &path, const ConnectionSettings &cfg)
     programs.insert(QStringLiteral("mainDetail2"), cfg.mainScriptDetail2);
     programs.insert(QStringLiteral("cameraDetail1"), cfg.cameraScriptDetail1);
     programs.insert(QStringLiteral("cameraDetail2"), cfg.cameraScriptDetail2);
+    programs.insert(QStringLiteral("extraDetail1"), cfg.extraScriptDetail1.trimmed());
+    programs.insert(QStringLiteral("extraDetail2"), cfg.extraScriptDetail2.trimmed());
+    programs.insert(QStringLiteral("extraEveryNDetail1"), qMax(0, cfg.extraEveryNDetail1));
+    programs.insert(QStringLiteral("extraEveryNDetail2"), qMax(0, cfg.extraEveryNDetail2));
     programs.insert(QStringLiteral("stopTimeoutSec"), cfg.stopTimeoutSec);
     programs.remove(QStringLiteral("estop"));
     programs.remove(QStringLiteral("countdownSec"));
@@ -300,6 +312,25 @@ QString ConnectionSettings::mainScript(int program) const
 QString ConnectionSettings::cameraScript(int program) const
 {
     return program == 1 ? cameraScriptDetail1 : program == 2 ? cameraScriptDetail2 : QString();
+}
+
+QString ConnectionSettings::extraScript(int program) const
+{
+    return program == 1 ? extraScriptDetail1.trimmed()
+         : program == 2 ? extraScriptDetail2.trimmed()
+                        : QString();
+}
+
+int ConnectionSettings::extraEveryN(int program) const
+{
+    return program == 1 ? qMax(0, extraEveryNDetail1)
+         : program == 2 ? qMax(0, extraEveryNDetail2)
+                        : 0;
+}
+
+bool ConnectionSettings::extraEnabled(int program) const
+{
+    return extraEveryN(program) > 0 && !extraScript(program).isEmpty();
 }
 
 int ConnectionSettings::zoneOf(double x, double y, double z, double r) const

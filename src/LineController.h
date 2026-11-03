@@ -64,7 +64,7 @@ signals:
     void runFinished(const RunRecord &record);
 
 private:
-    enum class Role { None, Init, Main };
+    enum class Role { None, Init, Main, Extra };
 
     void onPlcFrame();
     void onScriptStatus(bool running, bool completed, int line, const QString &filename,
@@ -76,6 +76,9 @@ private:
     // Новый заход в режим 3 после Стопа/Готов: снова init и окно предподготовки.
     void beginPrepCycle();
     void startScript(Role role, int program);
+    // Следующий цикл после успешного Main: Extra раз в N или снова Main.
+    void startNextAfterMain(int program);
+    void resetMainCycleCounter();
     // Параллельно с init: слот search, не занимает m_role.
     void startCameraScript(int program);
     void requestMain(int program);
@@ -124,6 +127,8 @@ private:
     bool m_awaitDecision = false;
     quint64 m_decisionTicket = 0;
     bool m_lastMainCompleted = false;
+    // Успешные основные циклы с последней Extra (или с начала партии).
+    int m_mainCyclesSinceExtra = 0;
 
     bool m_stopDoneSent = false;
     QElapsedTimer m_stopDoneTimer;

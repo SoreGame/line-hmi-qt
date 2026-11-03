@@ -113,6 +113,10 @@ private:
     QLineEdit *m_mainScript2 = nullptr;
     QLineEdit *m_cameraScript1 = nullptr;
     QLineEdit *m_cameraScript2 = nullptr;
+    QLineEdit *m_extraScript1 = nullptr;
+    QLineEdit *m_extraScript2 = nullptr;
+    QSpinBox *m_extraEveryN1 = nullptr;
+    QSpinBox *m_extraEveryN2 = nullptr;
     QPushButton *m_btnZones = nullptr;
     QFrame *m_arduinoPanel = nullptr;
     QFrame *m_jogPanel = nullptr;

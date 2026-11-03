@@ -96,6 +96,11 @@ void LineController::baseline()
     m_needInit = false;
 }
 
+void LineController::resetMainCycleCounter()
+{
+    m_mainCyclesSinceExtra = 0;
+}
+
 void LineController::beginPrepCycle()
 {
     cancelMainDelay();
@@ -104,6 +109,7 @@ void LineController::beginPrepCycle()
     m_sawPrepZero = !m_plc->prepDone();
     m_prevPrepDone = m_plc->prepDone();
     m_needInit = true;
+    resetMainCycleCounter();
     setInitState(InitState::Idle);
     emit note(Level::Info, tx("Предподготовка · новый цикл"));
 }
@@ -139,9 +145,13 @@ void LineController::onPlcFrame()
         m_awaitingPrep = false;
         m_needInit = false;
         m_sawPrepZero = false;
+        resetMainCycleCounter();
         if (m_initState != InitState::Idle)
             setInitState(InitState::Idle);
     }
+
+    if (mode == PlcClient::Mode::Estop && m_prevMode != PlcClient::Mode::Estop)
+        resetMainCycleCounter();
 
     if (m_prevMode == PlcClient::Mode::Estop && mode != PlcClient::Mode::Estop)
         m_scriptFailed = false;
@@ -149,6 +159,7 @@ void LineController::onPlcFrame()
     if (program != m_prevProgram) {
         m_prevProgram = program;
         m_lastCycleMs = -1;
+        resetMainCycleCounter();
     }
 
     if (mode == PlcClient::Mode::Run && !prepDone)
@@ -188,7 +199,7 @@ void LineController::onPlcFrame()
         } else if (!m_lastMainCompleted) {
             emit note(Level::Warn, tx("Скрипт не дошёл до конца · новый цикл не запускается"));
         } else if (m_role == Role::None) {
-            startScript(Role::Main, program);
+            startNextAfterMain(program);
         }
     }
 
@@ -200,7 +211,7 @@ void LineController::onPlcFrame()
     if (windingDown && m_role == Role::Init && !m_abortSent)
         abortScript(tx("Стоп во время предподготовки · init остановлен"));
 
-    if (windingDown && m_role == Role::Main) {
+    if (windingDown && (m_role == Role::Main || m_role == Role::Extra)) {
         if (!m_stopWaitTimer.isValid())
             m_stopWaitTimer.start();
     } else {
@@ -288,15 +299,39 @@ void LineController::startCameraScript(int program)
     });
 }
 
+void LineController::startNextAfterMain(int program)
+{
+    if (m_cfg.extraEnabled(program) && m_mainCyclesSinceExtra >= m_cfg.extraEveryN(program))
+        startScript(Role::Extra, program);
+    else
+        startScript(Role::Main, program);
+}
+
 void LineController::startScript(Role role, int program)
 {
-    const QString filename = role == Role::Init ? m_cfg.initScript(program) : m_cfg.mainScript(program);
-    const PlcClient::ScriptRole plcRole = role == Role::Init ? PlcClient::RoleInit : PlcClient::RoleMain;
-    const QString kind = role == Role::Init ? tx("init") : tx("основной");
+    QString filename;
+    QString kind;
+    if (role == Role::Init) {
+        filename = m_cfg.initScript(program);
+        kind = tx("init");
+    } else if (role == Role::Extra) {
+        filename = m_cfg.extraScript(program);
+        kind = tx("доп.");
+    } else {
+        filename = m_cfg.mainScript(program);
+        kind = tx("основной");
+    }
     if (filename.isEmpty()) {
         emit note(Level::Err, tx("ПЛК не выбрал программу (ячейка 54 = %1) · %2 скрипт не запущен")
                                   .arg(program)
                                   .arg(kind));
+        if (role == Role::Extra) {
+            // Extra не отчитывается в ПЛК — сразу основной, если имя пустое.
+            startScript(Role::Main, program);
+            return;
+        }
+        const PlcClient::ScriptRole plcRole =
+            role == Role::Init ? PlcClient::RoleInit : PlcClient::RoleMain;
         m_plc->sendCommand(PlcClient::scriptReportCommand(plcRole, false));
         m_plc->pollNow();
         if (role == Role::Init)
@@ -312,7 +347,12 @@ void LineController::startScript(Role role, int program)
     m_scriptFailed = false;
     if (role == Role::Init)
         setInitState(InitState::Running);
-    emit note(Level::Info, tx("Запуск скрипта '%1' (%2)").arg(filename, kind));
+    if (role == Role::Extra)
+        m_mainCyclesSinceExtra = 0;
+    if (role == Role::Extra)
+        emit note(Level::Info, tx("Доп. программа · '%1'").arg(filename));
+    else
+        emit note(Level::Info, tx("Запуск скрипта '%1' (%2)").arg(filename, kind));
     updateReport();
 
     NatsClient *nats = m_nats;
@@ -393,7 +433,20 @@ void LineController::finishScript(bool completed)
         return;
     }
 
+    if (role == Role::Extra) {
+        emit note(completed ? Level::Ok : Level::Warn,
+                  completed ? tx("Доп. программа выполнена")
+                            : tx("Доп. программа не дошла до конца"));
+        if (!completed)
+            return;
+        if (m_plc->mode() == PlcClient::Mode::Run && m_plc->prepDone() && m_role == Role::None)
+            startScript(Role::Main, m_plc->statusInt16(PlcClient::kProgramIndex));
+        return;
+    }
+
     m_lastMainCompleted = completed;
+    if (completed)
+        ++m_mainCyclesSinceExtra;
     if (completed && m_cycleTimer.isValid()) {
         m_lastCycleMs = m_cycleTimer.elapsed();
         if (m_run) {
@@ -458,8 +511,8 @@ void LineController::checkStopTimeouts()
         return;
     }
     const qint64 limitMs = qint64(m_cfg.stopTimeoutSec) * 1000;
-    if (m_role == Role::Main && !m_abortSent && m_stopWaitTimer.isValid() && limitMs > 0
-        && m_stopWaitTimer.elapsed() > limitMs) {
+    if ((m_role == Role::Main || m_role == Role::Extra) && !m_abortSent
+        && m_stopWaitTimer.isValid() && limitMs > 0 && m_stopWaitTimer.elapsed() > limitMs) {
         abortScript(tx("Стоп: цикл не закончился за %1 с · роботу отправлен полный стоп")
                         .arg(m_cfg.stopTimeoutSec));
     }

@@ -32,6 +32,8 @@ private slots:
     void onPlcStateChanged();
     void onServiceModeToggled(bool on);
     void onDoToggled(int n, bool on);
+    void onWeldSafeClicked();
+    void onWelderOffClicked();
 
 private:
     void leaveServiceIfNeeded();
@@ -43,6 +45,7 @@ private:
     bool plcServiceActive() const;
     void sendServiceMode(bool on);
     void sendDo(int n, bool on);
+    void sendWeldCommand(const QByteArray &frame);
 
     static constexpr int kWidth = 1920;
     static constexpr int kHeight = 1080;
@@ -58,6 +61,8 @@ private:
     QTableWidget *m_bufferTable = nullptr;
     QLabel *m_bufferStatus = nullptr;
     QPushButton *m_btnServiceMode = nullptr;
+    QPushButton *m_btnWeldSafe = nullptr;
+    QPushButton *m_btnWelderOff = nullptr;
     QLabel *m_doTitle = nullptr;
     QVector<QPushButton *> m_doButtons;
     bool m_fullScreenApplied = false;

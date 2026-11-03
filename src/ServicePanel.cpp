@@ -337,11 +337,25 @@ ServicePanel::ServicePanel(PlcClient *plc, NatsClient *nats, QWidget *parent)
     m_btnServiceMode->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     setToggleCaption(m_btnServiceMode, tx("Перевести ПЛК в сервисный режим"), false);
 
+    auto makeWeldBtn = [togglesPanel](const QString &caption) {
+        auto *btn = new QPushButton(caption, togglesPanel);
+        btn->setCursor(Qt::PointingHandCursor);
+        btn->setFocusPolicy(Qt::NoFocus);
+        btn->setMinimumHeight(44);
+        btn->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+        btn->setStyleSheet(QLatin1String(kToggleOffBtn));
+        return btn;
+    };
+    m_btnWeldSafe = makeWeldBtn(tx("Вернуть сварку в безопасное положение"));
+    m_btnWelderOff = makeWeldBtn(tx("Выключить сварочный аппарат"));
+
     auto *togglesLay = new QVBoxLayout(togglesPanel);
     togglesLay->setContentsMargins(12, 10, 12, 12);
     togglesLay->setSpacing(8);
     togglesLay->addWidget(togglesTitle);
     togglesLay->addWidget(m_btnServiceMode);
+    togglesLay->addWidget(m_btnWeldSafe);
+    togglesLay->addWidget(m_btnWelderOff);
     togglesLay->activate();
 
     const int togglesW = bufferW + gap + doW;
@@ -367,6 +381,8 @@ ServicePanel::ServicePanel(PlcClient *plc, NatsClient *nats, QWidget *parent)
 
     connect(btnBack, &QPushButton::clicked, this, &QDialog::reject);
     connect(m_btnServiceMode, &QPushButton::toggled, this, &ServicePanel::onServiceModeToggled);
+    connect(m_btnWeldSafe, &QPushButton::clicked, this, &ServicePanel::onWeldSafeClicked);
+    connect(m_btnWelderOff, &QPushButton::clicked, this, &ServicePanel::onWelderOffClicked);
     if (m_plc)
         connect(m_plc, &PlcClient::stateChanged, this, &ServicePanel::onPlcStateChanged);
 
@@ -521,6 +537,50 @@ void ServicePanel::sendServiceMode(bool on)
     if (!m_plc)
         return;
     m_plc->sendCommand(PlcClient::serviceModeCommand(on));
+}
+
+void ServicePanel::sendWeldCommand(const QByteArray &frame)
+{
+    if (!m_plc)
+        return;
+    m_plc->sendCommand(frame);
+    m_plc->pollNow();
+}
+
+void ServicePanel::onWeldSafeClicked()
+{
+    QMessageBox confirm(this);
+    confirm.setIcon(QMessageBox::Question);
+    confirm.setWindowTitle(tx("Вернуть сварку в безопасное положение"));
+    confirm.setText(tx("Уверены?"));
+    confirm.setInformativeText(
+        tx("На ПЛК уйдёт команда 3 6 0.\nСварка будет возвращена в безопасное положение."));
+    auto *yes = confirm.addButton(tx("Да"), QMessageBox::AcceptRole);
+    auto *no = confirm.addButton(tx("Нет"), QMessageBox::RejectRole);
+    confirm.setDefaultButton(no);
+    confirm.setStyleSheet(QString::fromUtf8(kNoticeStyle));
+    confirm.exec();
+    if (confirm.clickedButton() != yes)
+        return;
+    sendWeldCommand(PlcClient::weldSafeCommand());
+}
+
+void ServicePanel::onWelderOffClicked()
+{
+    QMessageBox confirm(this);
+    confirm.setIcon(QMessageBox::Question);
+    confirm.setWindowTitle(tx("Выключить сварочный аппарат"));
+    confirm.setText(tx("Уверены?"));
+    confirm.setInformativeText(
+        tx("На ПЛК уйдёт команда 3 5 0.\nСварочный аппарат будет выключен."));
+    auto *yes = confirm.addButton(tx("Да"), QMessageBox::AcceptRole);
+    auto *no = confirm.addButton(tx("Нет"), QMessageBox::RejectRole);
+    confirm.setDefaultButton(no);
+    confirm.setStyleSheet(QString::fromUtf8(kNoticeStyle));
+    confirm.exec();
+    if (confirm.clickedButton() != yes)
+        return;
+    sendWeldCommand(PlcClient::welderOffCommand());
 }
 
 void ServicePanel::sendDo(int n, bool on)

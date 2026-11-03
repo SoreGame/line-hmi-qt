@@ -657,12 +657,27 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     m_mainScript2 = new QLineEdit(initial.mainScriptDetail2, m_programsPanel);
     m_cameraScript1 = new QLineEdit(initial.cameraScriptDetail1, m_programsPanel);
     m_cameraScript2 = new QLineEdit(initial.cameraScriptDetail2, m_programsPanel);
+    m_extraScript1 = new QLineEdit(initial.extraScriptDetail1, m_programsPanel);
+    m_extraScript2 = new QLineEdit(initial.extraScriptDetail2, m_programsPanel);
+    m_extraEveryN1 = new QSpinBox(m_programsPanel);
+    m_extraEveryN2 = new QSpinBox(m_programsPanel);
+    for (QSpinBox *box : {m_extraEveryN1, m_extraEveryN2}) {
+        box->setRange(0, 9999);
+        box->setSpecialValueText(tx("выкл"));
+        box->setSuffix(tx(" цикл."));
+    }
+    m_extraEveryN1->setValue(initial.extraEveryNDetail1);
+    m_extraEveryN2->setValue(initial.extraEveryNDetail2);
     for (QWidget *w : {static_cast<QWidget *>(m_initScript1),
                        static_cast<QWidget *>(m_initScript2),
                        static_cast<QWidget *>(m_mainScript1),
                        static_cast<QWidget *>(m_mainScript2),
                        static_cast<QWidget *>(m_cameraScript1),
-                       static_cast<QWidget *>(m_cameraScript2)}) {
+                       static_cast<QWidget *>(m_cameraScript2),
+                       static_cast<QWidget *>(m_extraScript1),
+                       static_cast<QWidget *>(m_extraScript2),
+                       static_cast<QWidget *>(m_extraEveryN1),
+                       static_cast<QWidget *>(m_extraEveryN2)}) {
         w->setStyleSheet(QLatin1String(kFieldStyle));
     }
 
@@ -684,6 +699,12 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     auto *rowCamera = makeProgramsRow(
         makeLabeledField(tx("Камера · Деталь 1"), m_cameraScript1, m_programsPanel),
         makeLabeledField(tx("Камера · Деталь 2"), m_cameraScript2, m_programsPanel));
+    auto *rowExtra = makeProgramsRow(
+        makeLabeledField(tx("Доп. · Деталь 1 (большие)"), m_extraScript1, m_programsPanel),
+        makeLabeledField(tx("Доп. · Деталь 2 (малые)"), m_extraScript2, m_programsPanel));
+    auto *rowExtraN = makeProgramsRow(
+        makeLabeledField(tx("Доп. раз в N циклов · Деталь 1"), m_extraEveryN1, m_programsPanel),
+        makeLabeledField(tx("Доп. раз в N циклов · Деталь 2"), m_extraEveryN2, m_programsPanel));
     m_stopTimeout = new QSpinBox(m_programsPanel);
     m_stopTimeout->setRange(0, 600);
     m_stopTimeout->setValue(initial.stopTimeoutSec);
@@ -705,6 +726,8 @@ AdminPanel::AdminPanel(const ConnectionSettings &initial, NatsClient *nats, PlcC
     programsLay->addWidget(rowInit);
     programsLay->addWidget(rowMain);
     programsLay->addWidget(rowCamera);
+    programsLay->addWidget(rowExtra);
+    programsLay->addWidget(rowExtraN);
     programsLay->addWidget(rowStop);
     programsLay->addWidget(m_btnZones);
 
@@ -958,6 +981,14 @@ ConnectionSettings AdminPanel::networkSettings() const
         if (m_cameraScript1) {
             c.cameraScriptDetail1 = m_cameraScript1->text().trimmed();
             c.cameraScriptDetail2 = m_cameraScript2->text().trimmed();
+        }
+        if (m_extraScript1) {
+            c.extraScriptDetail1 = m_extraScript1->text().trimmed();
+            c.extraScriptDetail2 = m_extraScript2->text().trimmed();
+        }
+        if (m_extraEveryN1) {
+            c.extraEveryNDetail1 = m_extraEveryN1->value();
+            c.extraEveryNDetail2 = m_extraEveryN2->value();
         }
     }
     if (m_stopTimeout)

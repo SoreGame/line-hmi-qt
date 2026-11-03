@@ -442,6 +442,11 @@ void RobotDataTable::editPoint(const NatsClient::RobotPoint &point)
     btnUseCurrent->setFocusPolicy(Qt::NoFocus);
     btnUseCurrent->setEnabled(m_poseKnown);
 
+    auto *btnCancel = new QPushButton(tx("Отмена"), &dlg);
+    btnCancel->setStyleSheet(QLatin1String(kSecondaryBtn));
+    btnCancel->setCursor(Qt::PointingHandCursor);
+    btnCancel->setFocusPolicy(Qt::NoFocus);
+
     auto *btnSave = new QPushButton(tx("Сохранить"), &dlg);
     btnSave->setStyleSheet(QLatin1String(kPrimaryBtn));
     btnSave->setCursor(Qt::PointingHandCursor);
@@ -453,6 +458,7 @@ void RobotDataTable::editPoint(const NatsClient::RobotPoint &point)
     buttons->setSpacing(8);
     buttons->addWidget(btnUseCurrent);
     buttons->addStretch(1);
+    buttons->addWidget(btnCancel);
     buttons->addWidget(btnSave);
 
     auto *lay = new QVBoxLayout(&dlg);
@@ -512,6 +518,7 @@ void RobotDataTable::editPoint(const NatsClient::RobotPoint &point)
         zSpin->setValue(m_poseZ);
         rSpin->setValue(m_poseR);
     });
+    connect(btnCancel, &QPushButton::clicked, &dlg, &QDialog::reject);
     connect(btnSave, &QPushButton::clicked, &dlg, &QDialog::accept);
 
     if (dlg.exec() != QDialog::Accepted)
