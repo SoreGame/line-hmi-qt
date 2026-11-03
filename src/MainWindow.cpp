@@ -577,6 +577,16 @@ void MainWindow::beginNatsConnect(bool notifyOnError, bool quiet)
             m_natsFailureLogged = false;
             appendLog(LogLevel::Info,
                       tx("Ожидание CTRL и Behaviour…"));
+            // Скорость из config → Behaviour (после рестарта Behaviour снова 100%, пока не пришлём).
+            if (m_nats) {
+                const int pct = qBound(ConnectionSettings::kMinMotionSpeedPercent,
+                                        ConnectionSettings::load().motionSpeedPercent,
+                                        ConnectionSettings::kMaxMotionSpeedPercent);
+                QString speedErr;
+                if (!m_nats->publishMotionSpeedPercent(pct, &speedErr))
+                    appendLog(LogLevel::Warn,
+                              tx("Скорость движения %1% не отправлена: %2").arg(pct).arg(speedErr));
+            }
         } else {
             const bool isWarn = result.startsWith(QLatin1String("warn\n"));
             const QString message = result.section(QLatin1Char('\n'), 1);

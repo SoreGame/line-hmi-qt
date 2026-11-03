@@ -312,6 +312,21 @@ bool NatsClient::publishMotionStop(QString *errorOut) const
     return true;
 }
 
+bool NatsClient::publishMotionSpeedPercent(int percent, QString *errorOut) const
+{
+    if (percent < 5)
+        percent = 5;
+    if (percent > 110)
+        percent = 110;
+    QJsonObject cmd;
+    cmd.insert(QStringLiteral("command"), QStringLiteral("setMotionSpeed"));
+    cmd.insert(QStringLiteral("percent"), percent);
+    if (!publishJson(kBehaviourCommandSubject, cmd, errorOut))
+        return false;
+    natsConnection_Flush(m_conn);
+    return true;
+}
+
 bool NatsClient::publishMoveOffset(double x, double y, double z, double r, QString *errorOut) const
 {
     QJsonObject offset;

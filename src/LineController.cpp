@@ -99,6 +99,7 @@ void LineController::baseline()
 void LineController::resetMainCycleCounter()
 {
     m_mainCyclesSinceExtra = 0;
+    m_extraRunCount = 0;
 }
 
 void LineController::beginPrepCycle()
@@ -347,22 +348,30 @@ void LineController::startScript(Role role, int program)
     m_scriptFailed = false;
     if (role == Role::Init)
         setInitState(InitState::Running);
-    if (role == Role::Extra)
+    int extraRun = 0;
+    if (role == Role::Extra) {
         m_mainCyclesSinceExtra = 0;
-    if (role == Role::Extra)
-        emit note(Level::Info, tx("Доп. программа · '%1'").arg(filename));
-    else
+        ++m_extraRunCount;
+        extraRun = m_extraRunCount;
+        emit note(Level::Info,
+                  tx("Доп. программа · '%1' · запуск %2").arg(filename).arg(extraRun));
+    } else {
         emit note(Level::Info, tx("Запуск скрипта '%1' (%2)").arg(filename, kind));
+    }
     updateReport();
 
     NatsClient *nats = m_nats;
-    runAsync(this, [nats, filename]() -> QString {
+    const bool injectExtraRun = role == Role::Extra;
+    runAsync(this, [nats, filename, injectExtraRun, extraRun]() -> QString {
         QString code;
         QString err;
         if (!nats->isConnected())
             return tx("нет связи с NATS");
         if (!nats->fetchScriptCode(filename, &code, &err))
             return tx("не удалось получить скрипт из NATS KV: %1").arg(err);
+        // Номер запуска Extra в партии: скрипт читает extraRun (1, 2, 3…).
+        if (injectExtraRun)
+            code = QStringLiteral("var extraRun = %1;\n").arg(extraRun) + code;
         if (!nats->publishExecCommand(filename, code, 1, &err, QStringLiteral("motion")))
             return tx("не удалось отправить exec в NATS: %1").arg(err);
         return QString();

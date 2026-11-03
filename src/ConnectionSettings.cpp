@@ -143,6 +143,12 @@ bool readConfigFile(const QString &path, ConnectionSettings *out)
         out->ignoreLoadCell = system.value(QStringLiteral("ignoreLoadCell")).toBool(false);
     if (system.contains(QStringLiteral("companionLogs")))
         out->companionLogs = system.value(QStringLiteral("companionLogs")).toBool(false);
+    if (system.contains(QStringLiteral("motionSpeedPercent"))) {
+        out->motionSpeedPercent = qBound(ConnectionSettings::kMinMotionSpeedPercent,
+                                          system.value(QStringLiteral("motionSpeedPercent"))
+                                              .toInt(out->motionSpeedPercent),
+                                          ConnectionSettings::kMaxMotionSpeedPercent);
+    }
 
     const QJsonObject arduino = root.value(QStringLiteral("arduino")).toObject();
     if (!arduino.isEmpty()) {
@@ -224,6 +230,9 @@ bool writeConfigFile(const QString &path, const ConnectionSettings &cfg)
     system.insert(QStringLiteral("showCursor"), cfg.showCursor);
     system.insert(QStringLiteral("ignoreLoadCell"), cfg.ignoreLoadCell);
     system.insert(QStringLiteral("companionLogs"), cfg.companionLogs);
+    system.insert(QStringLiteral("motionSpeedPercent"),
+                  qBound(ConnectionSettings::kMinMotionSpeedPercent, cfg.motionSpeedPercent,
+                          ConnectionSettings::kMaxMotionSpeedPercent));
     system.remove(QStringLiteral("ignoreLaunchLocks"));
     root.insert(QStringLiteral("system"), system);
 

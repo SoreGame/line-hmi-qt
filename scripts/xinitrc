@@ -1,6 +1,7 @@
 #!/bin/sh
 xset s off
-# Kiosk: X on vt1; keep the graphics VT active (no login console).
+# Kiosk: X on vt1 (getty@tty1 masked). Consoles stay on tty2+ (Ctrl+Alt+F2).
+# logind drop-in: scripts/kiosk-logind.conf → /etc/systemd/logind.conf.d/kiosk.conf
 sudo -n /bin/chvt 1 2>/dev/null || true
 xset -dpms
 xset s noblank

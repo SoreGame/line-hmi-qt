@@ -51,6 +51,8 @@ public:
     bool publishMotionStart(QString *errorOut = nullptr) const;
     bool publishMotionStop(QString *errorOut = nullptr) const;
     bool publishMoveOffset(double x, double y, double z, double r, QString *errorOut = nullptr) const;
+    // Скорость скриптовых движений: behaviour.command setMotionSpeed, percent 5..110.
+    bool publishMotionSpeedPercent(int percent, QString *errorOut = nullptr) const;
 
     // Строка прогресса из KV "script.progress" (после паузы/стопа).
     bool fetchScriptProgressLine(int *lineOut, QString *errorOut = nullptr) const;

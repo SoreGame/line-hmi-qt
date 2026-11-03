@@ -1,5 +1,7 @@
 #include "ServicePanel.h"
+#include "ConnectionSettings.h"
 #include "Texts.h"
+#include "NatsClient.h"
 #include "PlcClient.h"
 #include "RobotDataTable.h"
 
@@ -17,6 +19,7 @@
 #include <QScreen>
 #include <QShowEvent>
 #include <QSizePolicy>
+#include <QSpinBox>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
@@ -157,6 +160,7 @@ QLabel *makeTitle(const QString &text, QWidget *parent)
 ServicePanel::ServicePanel(PlcClient *plc, NatsClient *nats, QWidget *parent)
     : QDialog(parent)
     , m_plc(plc)
+    , m_nats(nats)
 {
     setWindowTitle(tx("Сервисная панель"));
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
@@ -349,6 +353,36 @@ ServicePanel::ServicePanel(PlcClient *plc, NatsClient *nats, QWidget *parent)
     m_btnWeldSafe = makeWeldBtn(tx("Вернуть сварку в безопасное положение"));
     m_btnWelderOff = makeWeldBtn(tx("Выключить сварочный аппарат"));
 
+    const ConnectionSettings cfg = ConnectionSettings::load();
+    m_motionSpeed = new QSpinBox(togglesPanel);
+    m_motionSpeed->setRange(ConnectionSettings::kMinMotionSpeedPercent,
+                            ConnectionSettings::kMaxMotionSpeedPercent);
+    m_motionSpeed->setSuffix(QStringLiteral(" %"));
+    m_motionSpeed->setValue(qBound(ConnectionSettings::kMinMotionSpeedPercent, cfg.motionSpeedPercent,
+                                    ConnectionSettings::kMaxMotionSpeedPercent));
+    m_motionSpeed->setMinimumHeight(44);
+    m_motionSpeed->setFocusPolicy(Qt::StrongFocus);
+    m_motionSpeed->setStyleSheet(QStringLiteral(
+        "QSpinBox {"
+        "  background:#FFFFFF; color:#1F2126; border:1px solid #DBDEE3; border-radius:8px;"
+        "  padding:8px 12px; min-height:44px;"
+        "  font-family:\"Inter\",\"Segoe UI\",sans-serif; font-size:13px; font-weight:600;"
+        "}"));
+
+    auto *speedRow = new QWidget(togglesPanel);
+    auto *speedLay = new QHBoxLayout(speedRow);
+    speedLay->setContentsMargins(0, 0, 0, 0);
+    speedLay->setSpacing(12);
+    auto *speedLabel = new QLabel(tx("Скорость движения"), speedRow);
+    speedLabel->setStyleSheet(QStringLiteral(
+        "QLabel {"
+        "  font-family:\"Inter\",\"Segoe UI\",sans-serif;"
+        "  font-size:13px; font-weight:600; color:#1F2126;"
+        "  background:transparent; border:none;"
+        "}"));
+    speedLay->addWidget(speedLabel, 1);
+    speedLay->addWidget(m_motionSpeed);
+
     auto *togglesLay = new QVBoxLayout(togglesPanel);
     togglesLay->setContentsMargins(12, 10, 12, 12);
     togglesLay->setSpacing(8);
@@ -356,6 +390,7 @@ ServicePanel::ServicePanel(PlcClient *plc, NatsClient *nats, QWidget *parent)
     togglesLay->addWidget(m_btnServiceMode);
     togglesLay->addWidget(m_btnWeldSafe);
     togglesLay->addWidget(m_btnWelderOff);
+    togglesLay->addWidget(speedRow);
     togglesLay->activate();
 
     const int togglesW = bufferW + gap + doW;
@@ -383,11 +418,14 @@ ServicePanel::ServicePanel(PlcClient *plc, NatsClient *nats, QWidget *parent)
     connect(m_btnServiceMode, &QPushButton::toggled, this, &ServicePanel::onServiceModeToggled);
     connect(m_btnWeldSafe, &QPushButton::clicked, this, &ServicePanel::onWeldSafeClicked);
     connect(m_btnWelderOff, &QPushButton::clicked, this, &ServicePanel::onWelderOffClicked);
+    connect(m_motionSpeed, qOverload<int>(&QSpinBox::valueChanged), this,
+            &ServicePanel::onMotionSpeedChanged);
     if (m_plc)
         connect(m_plc, &PlcClient::stateChanged, this, &ServicePanel::onPlcStateChanged);
 
     refreshBufferTable();
     syncServiceUiFromPlc();
+    publishMotionSpeed(m_motionSpeed->value());
 }
 
 bool ServicePanel::plcInMode(PlcClient::Mode mode) const
@@ -545,6 +583,29 @@ void ServicePanel::sendWeldCommand(const QByteArray &frame)
         return;
     m_plc->sendCommand(frame);
     m_plc->pollNow();
+}
+
+void ServicePanel::publishMotionSpeed(int percent)
+{
+    if (!m_nats || !m_nats->isConnected())
+        return;
+    QString err;
+    if (!m_nats->publishMotionSpeedPercent(percent, &err)) {
+        QMessageBox box(QMessageBox::Warning, tx("Скорость движения"),
+                        tx("Не удалось отправить скорость в Behaviour:\n%1").arg(err),
+                        QMessageBox::Ok, this);
+        box.setStyleSheet(QString::fromUtf8(kNoticeStyle));
+        box.exec();
+    }
+}
+
+void ServicePanel::onMotionSpeedChanged(int percent)
+{
+    ConnectionSettings cfg = ConnectionSettings::load();
+    cfg.motionSpeedPercent = qBound(ConnectionSettings::kMinMotionSpeedPercent, percent,
+                                     ConnectionSettings::kMaxMotionSpeedPercent);
+    cfg.save();
+    publishMotionSpeed(cfg.motionSpeedPercent);
 }
 
 void ServicePanel::onWeldSafeClicked()

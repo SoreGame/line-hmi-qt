@@ -12,6 +12,7 @@ class QFrame;
 class QLabel;
 class QPushButton;
 class QShowEvent;
+class QSpinBox;
 class QTableWidget;
 class QWidget;
 class RobotDataTable;
@@ -34,6 +35,7 @@ private slots:
     void onDoToggled(int n, bool on);
     void onWeldSafeClicked();
     void onWelderOffClicked();
+    void onMotionSpeedChanged(int percent);
 
 private:
     void leaveServiceIfNeeded();
@@ -46,6 +48,7 @@ private:
     void sendServiceMode(bool on);
     void sendDo(int n, bool on);
     void sendWeldCommand(const QByteArray &frame);
+    void publishMotionSpeed(int percent);
 
     static constexpr int kWidth = 1920;
     static constexpr int kHeight = 1080;
@@ -57,12 +60,14 @@ private:
     static constexpr int kDoCount = kDoRows * kDoCols;
 
     PlcClient *m_plc = nullptr;
+    NatsClient *m_nats = nullptr;
     RobotDataTable *m_robotTable = nullptr;
     QTableWidget *m_bufferTable = nullptr;
     QLabel *m_bufferStatus = nullptr;
     QPushButton *m_btnServiceMode = nullptr;
     QPushButton *m_btnWeldSafe = nullptr;
     QPushButton *m_btnWelderOff = nullptr;
+    QSpinBox *m_motionSpeed = nullptr;
     QLabel *m_doTitle = nullptr;
     QVector<QPushButton *> m_doButtons;
     bool m_fullScreenApplied = false;

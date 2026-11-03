@@ -39,6 +39,10 @@ struct ConnectionSettings {
     bool ignoreLoadCell = false;
     // Окошко текущего кадра ПЛК (как в сервисе) справа снизу на главном экране.
     bool companionLogs = false;
+    // Скорость moveL/moveB в Behaviour, % (5..110). 100 — как в скрипте; больше — быстрее.
+    static constexpr int kMinMotionSpeedPercent = 5;
+    static constexpr int kMaxMotionSpeedPercent = 110;
+    int motionSpeedPercent = 100;
     // COM-порт Arduino (пусто — не открывать). Порог уходит командой T <int>.
     QString arduinoPort = QStringLiteral("/dev/ttyUSB0");
     qint32 arduinoThreshold = 1100000;

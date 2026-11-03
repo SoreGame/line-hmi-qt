@@ -129,6 +129,8 @@ private:
     bool m_lastMainCompleted = false;
     // Успешные основные циклы с последней Extra (или с начала партии).
     int m_mainCyclesSinceExtra = 0;
+    // Сколько раз Extra уже запускали в этой партии (1-based в скрипте как extraRun).
+    int m_extraRunCount = 0;
 
     bool m_stopDoneSent = false;
     QElapsedTimer m_stopDoneTimer;
